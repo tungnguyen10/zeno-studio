@@ -15,6 +15,14 @@ const hydrated = ref(false)
 const currentUser = ref<{ name: string; email: string } | null>(null)
 const studio = ref<{ id: string; name: string; role: string } | null>(null)
 const studios = ref<Array<{ id: string; name: string; role: string }>>([])
+const albums = ref<Array<{ id: string; title: string; status: string; expiresAt: string; photoCount: number }>>([])
+const newAlbumTitle = ref('')
+const folderUrl = ref('')
+const albumLimit = ref(30)
+const albumDays = ref<15 | 30>(15)
+const albumBusy = ref(false)
+const albumFeedback = ref('')
+const publishedLink = ref('')
 const route = useRoute()
 const next = computed(() => {
   const candidate = route.query.next
@@ -31,9 +39,51 @@ async function loadStudio() {
       studios.value = [created.studio]
     }
     studio.value = studios.value[0] ?? null
+    if (studio.value) await loadAlbums()
   } catch (error) {
     feedback.value = error instanceof Error ? error.message : 'Không thể tải studio. Vui lòng thử lại.'
   }
+}
+
+async function loadAlbums() {
+  if (!studio.value) return
+  try { albums.value = (await $fetch<{ albums: typeof albums.value }>(`/api/studio/${studio.value.id}/albums`)).albums }
+  catch (error) { albumFeedback.value = error instanceof Error ? error.message : 'Không tải được album' }
+}
+
+async function createNewAlbum() {
+  if (!studio.value) return
+  albumBusy.value = true
+  albumFeedback.value = ''
+  try {
+    await $fetch(`/api/studio/${studio.value.id}/albums`, {
+      method: 'POST',
+      body: { title: newAlbumTitle.value, folderUrl: folderUrl.value, expiresInDays: albumDays.value, limit: { kind: 'maximum', count: albumLimit.value } },
+    })
+    newAlbumTitle.value = ''
+    folderUrl.value = ''
+    await loadAlbums()
+    albumFeedback.value = 'Đã tạo album nháp.'
+  } catch (error) { albumFeedback.value = error instanceof Error ? error.message : 'Không thể tạo album' }
+  finally { albumBusy.value = false }
+}
+
+async function publish(id: string) {
+  if (!studio.value) return
+  albumBusy.value = true
+  albumFeedback.value = ''
+  try {
+    const result = await $fetch<{ customerToken: string }>(`/api/studio/${studio.value.id}/albums/${id}/publish`, { method: 'POST' })
+    publishedLink.value = `${location.origin}/album/${id}?token=${result.customerToken}`
+    albumFeedback.value = 'Đã xuất bản. Hãy lưu và gửi link khách bên dưới.'
+    await loadAlbums()
+  } catch (error) { albumFeedback.value = error instanceof Error ? error.message : 'Không thể xuất bản' }
+  finally { albumBusy.value = false }
+}
+
+async function copyPublishedLink() {
+  await navigator.clipboard.writeText(publishedLink.value)
+  albumFeedback.value = 'Đã copy link khách hàng.'
 }
 
 onMounted(async () => {
@@ -76,6 +126,7 @@ async function signOut() {
   currentUser.value = null
   studio.value = null
   studios.value = []
+  albums.value = []
 }
 </script>
 
@@ -86,7 +137,7 @@ async function signOut() {
       <NuxtLink to="/tools/file-filter" class="text-sm font-semibold text-[#496446]">Lọc file trên máy ↗</NuxtLink>
     </header>
 
-    <main class="mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-2 lg:pt-28">
+    <main class="mx-auto grid max-w-7xl items-start gap-12 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-2 lg:pt-28">
       <div class="max-w-xl">
         <p class="text-xs font-bold uppercase tracking-[.2em] text-[#718a66]">Không gian làm việc cho studio</p>
         <h1 class="mt-4 text-5xl font-semibold leading-[1.1] tracking-[-.045em]">Mỗi bộ ảnh có một hành trình. <em class="font-serif font-normal text-[#78916e]">Quản lý trọn vẹn.</em></h1>
@@ -102,11 +153,38 @@ async function signOut() {
           <div v-if="studio" class="mt-7 space-y-3">
             <div v-for="item in studios" :key="item.id" class="rounded-2xl bg-[#f1f5ed] p-5 text-sm leading-6 text-[#526b4e]">
               <p class="font-semibold">{{ item.name }}</p>
-              <p class="mt-1">Vai trò: {{ item.role === 'owner' ? 'Chủ studio' : item.role }} · Album sẽ mở sau khi nguồn Google Drive được kiểm chứng.</p>
+              <p class="mt-1">Vai trò: {{ item.role === 'owner' ? 'Chủ studio' : item.role }}</p>
               <NuxtLink v-if="item.role === 'owner' || item.role === 'manager'" :to="`/studio/members?studio=${item.id}`" class="mt-3 inline-block font-semibold underline underline-offset-4">Quản lý thành viên</NuxtLink>
             </div>
           </div>
           <p v-else class="mt-7 rounded-2xl bg-[#f1f5ed] p-5 text-sm leading-6 text-[#526b4e]">Đang tải không gian studio…</p>
+          <div v-if="studio" class="mt-8 border-t border-[#e0e4d9] pt-7">
+            <h3 class="text-xl font-semibold">Album của studio</h3>
+            <p class="mt-2 text-sm text-[#687264]">Nguồn Google Drive cần được kiểm chứng trước khi tạo hoặc xuất bản album thật.</p>
+            <div v-if="albums.length" class="mt-4 space-y-2">
+              <div v-for="album in albums" :key="album.id" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e0e4d9] p-4 text-sm">
+                <div><p class="font-semibold">{{ album.title }}</p><p class="mt-1 text-[#687264]">{{ album.photoCount }} ảnh · {{ album.status }}</p></div>
+                <div class="flex gap-3">
+                  <NuxtLink :to="`/studio/albums/${album.id}?studio=${studio.id}`" class="font-semibold text-[#344732] underline">Chi tiết</NuxtLink>
+                  <button v-if="album.status === 'DRAFT' && (studio.role === 'owner' || studio.role === 'manager')" :disabled="albumBusy" class="font-semibold text-[#344732] underline" @click="publish(album.id)">Xuất bản</button>
+                  <NuxtLink v-if="album.status === 'FINALIZED' || album.status === 'DELIVERED'" :to="`/studio/albums/${album.id}/results?studio=${studio.id}`" class="font-semibold text-[#344732] underline">Kết quả</NuxtLink>
+                </div>
+              </div>
+            </div>
+            <p v-else class="mt-4 text-sm text-[#687264]">Chưa có album.</p>
+            <form v-if="studio.role === 'owner' || studio.role === 'manager'" class="mt-6 space-y-3" @submit.prevent="createNewAlbum">
+              <h4 class="font-semibold">Tạo album từ Google Drive</h4>
+              <label class="block text-sm">Tên album<input v-model="newAlbumTitle" required maxlength="150" class="mt-1 w-full rounded-xl border p-3" placeholder="Mai & Quang"></label>
+              <label class="block text-sm">Link folder Drive<input v-model="folderUrl" required type="url" class="mt-1 w-full rounded-xl border p-3" placeholder="https://drive.google.com/drive/folders/..."></label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="text-sm">Tối đa ảnh chọn<input v-model.number="albumLimit" required type="number" min="0" class="mt-1 w-full rounded-xl border p-3"></label>
+                <label class="text-sm">Hạn album<select v-model.number="albumDays" class="mt-1 w-full rounded-xl border p-3"><option :value="15">15 ngày</option><option :value="30">30 ngày</option></select></label>
+              </div>
+              <button :disabled="albumBusy" class="rounded-full bg-[#344732] px-5 py-3 font-semibold text-white disabled:opacity-50">Tạo album nháp</button>
+            </form>
+            <p v-if="albumFeedback" role="status" class="mt-3 text-sm text-[#526b4e]">{{ albumFeedback }}</p>
+            <div v-if="publishedLink" class="mt-3 rounded-xl bg-[#f1f5ed] p-4 text-sm"><p class="font-semibold">Link khách hàng</p><a :href="publishedLink" class="mt-2 block break-all text-[#344732] underline">{{ publishedLink }}</a><button class="mt-2 font-semibold underline" @click="copyPublishedLink">Copy link</button></div>
+          </div>
           <p v-if="feedback" class="mt-4 text-sm text-red-700" role="alert">{{ feedback }}</p>
           <button type="button" class="mt-6 rounded-full border border-[#cbd4c6] px-5 py-2.5 font-semibold" @click="signOut">Đăng xuất</button>
         </div>

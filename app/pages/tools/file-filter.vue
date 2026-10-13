@@ -29,7 +29,13 @@ const progress = ref({ done: 0, total: 0 })
 const report = ref<CopyResult | null>(null)
 const message = ref('')
 
-onMounted(() => { supported.value = typeof (window as BrowserWithDirectoryPicker).showDirectoryPicker === 'function' })
+onMounted(() => {
+  supported.value = typeof (window as BrowserWithDirectoryPicker).showDirectoryPicker === 'function'
+  if (useRoute().query.from === 'results') {
+    requestedText.value = sessionStorage.getItem('zeno-filter-filenames') ?? ''
+    sessionStorage.removeItem('zeno-filter-filenames')
+  }
+})
 
 const requestedNames = computed(() => requestedText.value.split(/\r?\n/).map(name => name.trim()).filter(Boolean))
 const selectedMatches = computed(() => {

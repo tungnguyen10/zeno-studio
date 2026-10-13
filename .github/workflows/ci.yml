@@ -27,3 +27,5 @@ jobs:
         if: env.NUXT_DATABASE_TEST_URL != '' && env.NUXT_BETTER_AUTH_SECRET != ''
       - run: npm run test:studio-http
         if: env.NUXT_DATABASE_TEST_URL != '' && env.NUXT_DATABASE_TEST_DIRECT_URL != '' && env.NUXT_BETTER_AUTH_SECRET != ''
+      - run: npm run test:album-neon
+        if: env.NUXT_DATABASE_TEST_URL != '' && env.NUXT_DATABASE_TEST_DIRECT_URL != ''

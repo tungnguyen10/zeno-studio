@@ -16,7 +16,8 @@
     "test:neon": "tsx db/check-neon.ts",
     "neon:build": "node scripts/build-neon-functions.mjs",
     "test:auth-neon": "tsx tests/live/auth-neon.ts",
-    "test:studio-http": "tsx tests/live/studio-http.ts"
+    "test:studio-http": "tsx tests/live/studio-http.ts",
+    "test:album-neon": "tsx tests/live/album-neon.ts"
   },
   "dependencies": {
     "@neon/config": "^1.9.1",

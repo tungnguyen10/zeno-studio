@@ -11,6 +11,7 @@ export default defineNuxtConfig({
     betterAuthSecret: '',
     betterAuthUrl: '',
     googleApiKey: '',
+    driveVerified: '',
     googleClientId: '',
     googleClientSecret: '',
   },

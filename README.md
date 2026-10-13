@@ -11,16 +11,16 @@ npm ci
 npm run dev
 ```
 
-Các trang hiện có: `/` (giới thiệu), `/studio` (đăng ký/đăng nhập/khôi phục mật khẩu và danh sách studio), `/studio/members` (mời và quản lý thành viên), `/studio/invite` (nhận lời mời) và `/tools/file-filter` (lọc và copy file cục bộ). Công cụ lọc file dùng File System Access API; browser không hỗ trợ sẽ hiện hướng dẫn chuyển sang Chrome/Edge desktop. Báo cáo CSV ghi kết quả so khớp, lựa chọn thủ công và kết quả copy.
+Các trang hiện có: `/` (giới thiệu), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ). Công cụ lọc file dùng File System Access API; browser không hỗ trợ sẽ hiện hướng dẫn chuyển sang Chrome/Edge desktop.
 
 ## Neon
 
 1. Tạo project/branch Neon cho development và một branch hoặc database **riêng** cho integration test. Không dùng production cho `test:neon`.
 2. Tạo database login role cho ứng dụng bằng SQL với `LOGIN NOBYPASSRLS NOCREATEROLE`, khác với role owner dùng migration. **Không dùng `neon roles create` trực tiếp cho runtime role:** role tạo từ CLI trên project này mặc định có `BYPASSRLS` và `CREATEROLE`. Điền URL pooled của role ứng dụng vào `NUXT_DATABASE_URL`, URL direct của role owner vào `NUXT_DATABASE_DIRECT_URL`.
 3. Chạy `npm run db:migrate`. Lệnh tạo schema, role `app_runtime`, RLS và cấp role đó cho login role trong URL ứng dụng. Migration lưu SHA-256 checksum và báo lỗi nếu nội dung một file đã chạy bị thay đổi.
-4. Điền URL tương ứng của branch test vào `NUXT_DATABASE_TEST_URL` (pooled) và `NUXT_DATABASE_TEST_DIRECT_URL` (direct), rồi chạy `npm run test:neon`. Script này tạo và xóa hai studio thử nghiệm, đồng thời kiểm tra hai request đồng thời và việc xóa ngữ cảnh RLS sau transaction. Đã chạy thành công trên nhánh `codex-v1-dev` ngày 2026-10-13.
+4. Điền URL tương ứng của branch test vào `NUXT_DATABASE_TEST_URL` (pooled) và `NUXT_DATABASE_TEST_DIRECT_URL` (direct), rồi chạy `npm run test:neon` và `npm run test:album-neon`. Các script tạo/xóa fixtures và kiểm tra pooled concurrency, chọn ảnh, ghi chú, snapshot, review và bàn giao. Đã chạy trên nhánh `codex-v1-dev` ngày 2026-10-14.
 
-Nitro chỉ dùng URL pooled. Migration chỉ dùng URL direct. Browser không nhận URL database. Các truy vấn tenant phải đi qua `withDatabaseContext`, đặt `app.studio_id`, `app.user_id`, `app.album_id` và `app.scope` trong **cùng transaction** với truy vấn. RLS kiểm tra user có thuộc studio trước khi chấp nhận `studio_id`; API xác thực session trước khi đặt context.
+Nitro chỉ dùng URL pooled. Migration chỉ dùng URL direct. Browser không nhận URL database. Các truy vấn tenant phải đi qua `withDatabaseContext`, đặt `app.studio_id`, `app.user_id`, `app.album_id`, `app.participant_id` và `app.scope` trong **cùng transaction** với truy vấn. RLS kiểm tra user có thuộc studio trước khi chấp nhận `studio_id`; API xác thực session hoặc token trước khi đặt context.
 
 ## Better Auth và email
 
@@ -30,7 +30,7 @@ Chủ studio hoặc quản lý có thể tạo lời mời theo email; link đư
 
 ## Google Drive
 
-`GoogleDrivePhotoSource` sử dụng Google Drive API chính thức để liệt kê file ảnh, phân trang và đọc nội dung ảnh. Điền `NUXT_GOOGLE_API_KEY` để thực hiện spike với folder public/shared có thật. Quyết định có cần OAuth dựa vào kết quả thực tế về quyền, quota, preview và album 1.000–3.000 ảnh. Chưa mở luồng tạo album trước khi gate Drive hoàn tất.
+`GoogleDrivePhotoSource` sử dụng Google Drive API chính thức để liệt kê file ảnh, phân trang và đọc nội dung ảnh. Điền `NUXT_GOOGLE_API_KEY` để thực hiện spike với folder public/shared có thật. Quyết định có cần OAuth dựa vào kết quả thực tế về quyền, quota, preview và album 1.000–3.000 ảnh. API tạo/xuất bản và phân phối ảnh thật yêu cầu cả API key lẫn `NUXT_DRIVE_VERIFIED=true`; giữ gate đóng cho đến khi spike đạt. Luồng backend được kiểm bằng adapter giả.
 
 ## Kiểm tra
 
@@ -42,7 +42,7 @@ npx playwright install chromium
 npm run test:e2e -- --project=chromium
 ```
 
-CI chạy các bước trên; `test:neon`, `test:auth-neon` và `test:studio-http` chạy thêm khi secret test được cấu hình. `npm audit` hiện báo advisory trong cây dependency Nuxt; kiểm tra và giải quyết trước release, không ép downgrade từ Nuxt 4 sang Nuxt 3.
+CI chạy các bước trên; `test:neon`, `test:auth-neon`, `test:studio-http` và `test:album-neon` chạy thêm khi secret test được cấu hình. `npm audit --omit=dev` còn 14 advisory trong cây Nuxt. Xem [tiến độ](docs/implementation-progress.md) trước release; không ép downgrade từ Nuxt 4 sang Nuxt 3.
 
 ## Triển khai
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exportNotesCsv, exportSelectionCsv, exportFilenamesTxt } from '../../shared/domain/export'
+import { exportNotesCsv, exportSelectionCsv, exportFilenamesTxt, exportNotesTxt } from '../../shared/domain/export'
 
 describe('selection exports', () => {
   const items = [
@@ -13,5 +13,6 @@ describe('selection exports', () => {
 
   it('exports requested filenames one per line', () => {
     expect(exportFilenamesTxt(items)).toBe('Ảnh,"đẹp".jpg\n')
+    expect(exportNotesTxt(items)).toBe('Ảnh,"đẹp".jpg\nLan: Sáng ảnh\nchỉnh da\n')
   })
 })

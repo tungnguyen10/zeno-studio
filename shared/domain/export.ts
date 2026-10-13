@@ -24,3 +24,7 @@ export function exportNotesCsv(items: ExportItem[]): string {
 export function exportFilenamesTxt(items: ExportItem[]): string {
   return items.map(item => item.filename).join('\n') + (items.length ? '\n' : '')
 }
+
+export function exportNotesTxt(items: ExportItem[]): string {
+  return items.flatMap(item => item.notes.map(note => `${item.filename}\n${note.participant}: ${note.text}\n`)).join('\n')
+}

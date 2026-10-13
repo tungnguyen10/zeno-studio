@@ -1,0 +1,1 @@
+DROP POLICY revision_requests_customer_insert ON revision_requests;
