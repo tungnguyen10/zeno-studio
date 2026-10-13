@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest'
+import { exportNotesCsv, exportSelectionCsv, exportFilenamesTxt } from '../../shared/domain/export'
+
+describe('selection exports', () => {
+  const items = [
+    { photoId: 'photo-1', filename: 'Ảnh,"đẹp".jpg', notes: [{ participant: 'Lan', text: 'Sáng ảnh\nchỉnh da' }] },
+  ]
+
+  it('escapes filenames and notes as UTF-8 CSV', () => {
+    expect(exportSelectionCsv(items)).toBe('photo_id,filename\r\nphoto-1,"Ảnh,""đẹp"".jpg"\r\n')
+    expect(exportNotesCsv(items)).toBe('photo_id,filename,participant,note\r\nphoto-1,"Ảnh,""đẹp"".jpg",Lan,"Sáng ảnh\nchỉnh da"\r\n')
+  })
+
+  it('exports requested filenames one per line', () => {
+    expect(exportFilenamesTxt(items)).toBe('Ảnh,"đẹp".jpg\n')
+  })
+})

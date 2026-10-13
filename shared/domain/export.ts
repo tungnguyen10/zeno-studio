@@ -1,0 +1,26 @@
+export interface ExportItem {
+  photoId: string
+  filename: string
+  notes: Array<{ participant: string; text: string }>
+}
+
+function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+}
+
+function csv(rows: string[][]): string {
+  return rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
+}
+
+export function exportSelectionCsv(items: ExportItem[]): string {
+  return csv([['photo_id', 'filename'], ...items.map(item => [item.photoId, item.filename])])
+}
+
+export function exportNotesCsv(items: ExportItem[]): string {
+  const rows = items.flatMap(item => item.notes.map(note => [item.photoId, item.filename, note.participant, note.text]))
+  return csv([['photo_id', 'filename', 'participant', 'note'], ...rows])
+}
+
+export function exportFilenamesTxt(items: ExportItem[]): string {
+  return items.map(item => item.filename).join('\n') + (items.length ? '\n' : '')
+}

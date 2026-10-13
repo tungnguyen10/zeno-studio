@@ -1,0 +1,47 @@
+{
+  "name": "photo-workflow-platform",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:migrate": "tsx db/migrate.cli.ts",
+    "test:neon": "tsx db/check-neon.ts",
+    "neon:build": "node scripts/build-neon-functions.mjs",
+    "test:auth-neon": "tsx tests/live/auth-neon.ts",
+    "test:studio-http": "tsx tests/live/studio-http.ts"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.1",
+    "@neon/env": "^1.6.1",
+    "@neon/functions": "^0.11.0",
+    "@pinia/nuxt": "^1.0.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "better-auth": "^1.7.7",
+    "nodemailer": "^10.1.0",
+    "nuxt": "^4.6.1",
+    "pg": "^8.23.1",
+    "pinia": "^4.0.3",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.43",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
+    "@playwright/test": "^1.64.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.4",
+    "vue-tsc": "^3.3.13"
+  }
+}
