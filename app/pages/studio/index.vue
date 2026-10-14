@@ -103,7 +103,7 @@ async function submit() {
     if (mode.value === 'register') {
       const result = await authClient.signUp.email({ name: name.value.trim(), email: email.value.trim(), password: password.value, callbackURL: next.value })
       if (result.error) throw new Error(result.error.message)
-      feedback.value = 'Kiểm tra email để xác minh tài khoản trước khi đăng nhập.'
+      feedback.value = 'Nếu email này có tài khoản chưa xác minh, bạn sẽ nhận được liên kết xác minh.'
     } else if (mode.value === 'recovery') {
       const result = await authClient.requestPasswordReset({ email: email.value.trim(), redirectTo: '/studio/reset-password' })
       if (result.error) throw new Error(result.error.message)
@@ -128,7 +128,7 @@ async function resendVerification() {
   try {
     const result = await authClient.sendVerificationEmail({ email: email.value.trim(), callbackURL: next.value })
     if (result.error) throw new Error(result.error.message)
-    feedback.value = 'Kiểm tra hộp thư và thư spam để tìm email xác minh mới.'
+    feedback.value = 'Nếu email này có tài khoản chưa xác minh, bạn sẽ nhận được liên kết xác minh. Hãy kiểm tra cả thư spam.'
   } catch {
     feedback.value = 'Không gửi được email xác minh. Vui lòng thử lại sau.'
   } finally { busy.value = false }
