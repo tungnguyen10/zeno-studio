@@ -8,6 +8,8 @@ test('customer opens album, saves a selection and an independent note', async ({
   let version = 0
   let note = ''
   let noteVersion = 0
+  let releaseNoteRead: () => void = () => {}
+  const noteRead = new Promise<void>(resolve => { releaseNoteRead = resolve })
   await page.route(`**/api/album/${albumId}/**`, async route => {
     const request = route.request()
     const url = new URL(request.url())
@@ -26,7 +28,10 @@ test('customer opens album, saves a selection and an independent note', async ({
       version++
       return json({ status: 'saved', version, selected, count: selected ? 1 : 0 })
     }
-    if (path.endsWith(`/notes/${photoId}`) && request.method() === 'GET') return json({ body: note, version: noteVersion })
+    if (path.endsWith(`/notes/${photoId}`) && request.method() === 'GET') {
+      await noteRead
+      return json({ body: note, version: noteVersion })
+    }
     if (path.endsWith(`/notes/${photoId}`)) {
       note = (request.postDataJSON() as { text: string }).text
       noteVersion++
@@ -42,6 +47,10 @@ test('customer opens album, saves a selection and an independent note', async ({
   await page.getByRole('button', { name: 'Chọn Ảnh A.JPG' }).click()
   await expect(page.getByText('1 ảnh đã chọn')).toBeVisible()
   await page.getByRole('button', { name: 'Mở ảnh Ảnh A.JPG' }).click()
+  await expect(page.getByLabel('Ghi chú chỉnh sửa')).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Lưu ghi chú' })).toBeDisabled()
+  releaseNoteRead()
+  await expect(page.getByLabel('Ghi chú chỉnh sửa')).toBeEnabled()
   await page.getByLabel('Ghi chú chỉnh sửa').fill('Chỉnh sáng')
   await page.getByRole('button', { name: 'Lưu ghi chú' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Đã lưu ghi chú' })).toBeVisible()

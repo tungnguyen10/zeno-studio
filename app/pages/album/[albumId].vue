@@ -16,6 +16,8 @@ const participantName = ref('')
 const focusPhoto = ref<Photo | null>(null)
 const noteText = ref('')
 const noteVersion = ref(0)
+const noteLoading = ref(false)
+const noteLoadError = ref(false)
 const view = ref<'grid' | 'list'>('grid')
 const filter = ref<'all' | 'selected'>('all')
 const busy = ref(false)
@@ -25,6 +27,7 @@ const status = ref('')
 const review = ref<{ roundNumber: number; driveUrl: string | null; deliveryUrl: string | null; status: string } | null>(null)
 const revisionText = ref('')
 let pollTimer: ReturnType<typeof setInterval> | undefined
+let noteReadRequest = 0
 
 useSeoMeta({ title: () => overview.value ? `${overview.value.title} — Zeno Studio` : 'Album — Zeno Studio' })
 const visiblePhotos = computed(() => filter.value === 'selected' ? photos.value.filter(photo => selectedIds.value.includes(photo.id)) : photos.value)
@@ -123,22 +126,39 @@ async function toggle(photo: Photo) {
 }
 
 async function openPhoto(photo: Photo) {
+  const request = ++noteReadRequest
   focusPhoto.value = photo
   noteText.value = ''
   noteVersion.value = 0
+  noteLoadError.value = false
+  noteLoading.value = !!overview.value?.participant
   if (!overview.value?.participant) return
   try {
     const note = await $fetch<{ body: string; version: number }>(`${root}/notes/${photo.id}`)
+    if (request !== noteReadRequest || focusPhoto.value?.id !== photo.id) return
     noteText.value = note.body
     noteVersion.value = note.version
-  } catch { status.value = 'Không tải được ghi chú. Vui lòng thử lại.' }
+  } catch {
+    if (request !== noteReadRequest || focusPhoto.value?.id !== photo.id) return
+    noteLoadError.value = true
+    status.value = 'Không tải được ghi chú. Vui lòng thử lại.'
+  } finally {
+    if (request === noteReadRequest) noteLoading.value = false
+  }
+}
+
+function closePhoto() {
+  noteReadRequest++
+  focusPhoto.value = null
 }
 
 async function saveNote() {
-  if (!focusPhoto.value || overview.value?.status !== 'PUBLISHED' || busy.value) return
+  if (!focusPhoto.value || overview.value?.status !== 'PUBLISHED' || busy.value || noteLoading.value || noteLoadError.value) return
   busy.value = true
+  const photoId = focusPhoto.value.id
   try {
-    const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string }>(`${root}/notes/${focusPhoto.value.id}`, { method: 'PUT', body: { text: noteText.value, expectedVersion: noteVersion.value } })
+    const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string }>(`${root}/notes/${photoId}`, { method: 'PUT', body: { text: noteText.value, expectedVersion: noteVersion.value } })
+    if (focusPhoto.value?.id !== photoId) return
     noteVersion.value = note.version
     noteText.value = note.body
     status.value = note.status === 'saved' ? 'Đã lưu ghi chú' : 'Ghi chú đã đổi ở thiết bị khác. Đã tải bản mới.'
@@ -217,10 +237,12 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
       <div class="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-auto rounded-t-3xl bg-white sm:flex-row sm:rounded-3xl">
         <div class="min-h-0 flex-1 bg-[#e9ede7]"><img :src="`${root}/photos/${focusPhoto.id}/image`" :alt="focusPhoto.filename" class="max-h-[60vh] w-full object-contain sm:max-h-[85vh]"></div>
         <aside class="w-full p-5 sm:w-80">
-          <div class="flex items-start justify-between gap-4"><h2 class="break-all font-semibold">{{ focusPhoto.filename }}</h2><button class="rounded-full border px-3 py-1" aria-label="Đóng ảnh" @click="focusPhoto = null">✕</button></div>
+          <div class="flex items-start justify-between gap-4"><h2 class="break-all font-semibold">{{ focusPhoto.filename }}</h2><button class="rounded-full border px-3 py-1" aria-label="Đóng ảnh" @click="closePhoto">✕</button></div>
           <button v-if="overview?.status === 'PUBLISHED'" :disabled="busy" class="mt-5 rounded-full border px-4 py-2 text-sm font-semibold" @click="toggle(focusPhoto)">{{ selectedIds.includes(focusPhoto.id) ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
-          <label v-if="overview?.status === 'PUBLISHED'" class="mt-7 block text-sm font-semibold">Ghi chú chỉnh sửa<textarea v-model="noteText" maxlength="5000" rows="5" class="mt-2 w-full rounded-xl border border-[#cbd4c6] p-3 font-normal" placeholder="Bạn muốn chỉnh gì ở ảnh này?"></textarea></label>
-          <button v-if="overview?.status === 'PUBLISHED'" :disabled="busy" class="mt-3 rounded-full bg-[#344732] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" @click="saveNote">Lưu ghi chú</button>
+          <label v-if="overview?.status === 'PUBLISHED'" class="mt-7 block text-sm font-semibold">Ghi chú chỉnh sửa<textarea v-model="noteText" :disabled="noteLoading || noteLoadError || busy" maxlength="5000" rows="5" class="mt-2 w-full rounded-xl border border-[#cbd4c6] p-3 font-normal disabled:opacity-50" placeholder="Bạn muốn chỉnh gì ở ảnh này?"></textarea></label>
+          <p v-if="noteLoading" class="mt-2 text-sm text-[#687264]" role="status">Đang tải ghi chú…</p>
+          <button v-if="noteLoadError" class="mt-3 rounded-full border px-5 py-2.5 text-sm font-semibold" @click="openPhoto(focusPhoto)">Thử tải lại ghi chú</button>
+          <button v-if="overview?.status === 'PUBLISHED'" :disabled="busy || noteLoading || noteLoadError" class="mt-3 rounded-full bg-[#344732] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" @click="saveNote">Lưu ghi chú</button>
         </aside>
       </div>
     </div>
