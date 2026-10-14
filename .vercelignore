@@ -1,0 +1,9 @@
+.env
+.env.*
+.neon
+.neon-build
+.nuxt
+.output
+.vercel
+playwright-report
+test-results

@@ -36,7 +36,7 @@ let authInstance: ReturnType<typeof createStudioAuth> | undefined
 export function getStudioAuth() {
   if (authInstance) return authInstance
   const databaseUrl = process.env.NUXT_DATABASE_URL
-  const baseURL = process.env.NUXT_BETTER_AUTH_URL
+  const baseURL = process.env.NUXT_BETTER_AUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
   const secret = process.env.NUXT_BETTER_AUTH_SECRET
   if (!databaseUrl || !baseURL || !secret) throw new Error('Neon and Better Auth environment variables are required')
   authInstance = createStudioAuth({ databaseUrl, baseURL, secret })

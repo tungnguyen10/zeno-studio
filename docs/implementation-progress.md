@@ -23,11 +23,11 @@ Cập nhật: 2026-10-14. `Dev Neon` nghĩa là đã chạy trên nhánh develop
 | T43–T47 | Một phần | Production state, review/revision rounds, link Drive ảnh chỉnh, khách duyệt và bàn giao theo snapshot có API/UI và test local + Neon; thiếu map ảnh chỉnh thủ công khi tên khác. |
 | T48–T49 | Chưa làm | Analytics events, daily aggregation và North Star. |
 | T50 | Dev Neon | Neon Function + schedule trigger đã chạy thật trên dev, khóa album và xóa metadata sau 30 ngày. Không dùng Vercel Cron. |
-| T51–T57 | Một phần | Error states, RLS tests, Chromium E2E, build; Safari/iOS/Android/Zalo WebView, gallery 1.000–3.000 ảnh, staging hosting, SMTP, backup/rollback và production release còn thiếu. |
+| T51–T57 | Một phần | Error states, RLS tests, Chromium E2E và Nitro Vercel preset build Node 24 đã kiểm tại máy. Project Vercel `prj_eq7G3KN4ClM2zsTG9uDHMqQTvy7T` đã liên kết local repo, đặt preset Nuxt/Node 24 và deploy Preview `dpl_C19AAnt5XCbAkFNKNyHCj33ZKpYi` Ready. HTTP smoke: `/`, `/studio` 200; Better Auth anonymous session 200/null, sign-in giả 401 sau truy vấn Neon pooled, `/api/studio` 401. Chưa nối Git; Drive live, SMTP, Safari/iOS/Android/Zalo WebView, gallery 1.000–3.000 ảnh, backup/rollback và production release còn thiếu. |
 
 ## Gate hiện tại
 
 1. **Drive:** cần `NUXT_GOOGLE_API_KEY` và folder public/shared mẫu. `NUXT_DRIVE_VERIFIED` giữ `false` cho tới khi liệt kê, preview, quota và album lớn đạt. Backend dùng adapter giả chỉ trong test.
 2. **Email:** cần SMTP thật để xác minh gửi/nhận email end to end.
-3. **Dependency:** `npm audit --omit=dev` ngày 2026-10-14 còn 14 advisory (12 high, 2 critical). `npm audit fix --omit=dev` không giảm số lượng. Nguồn là `simple-git` trong `@nuxt/devtools`, `node-forge` trong `nitropack/listhen`, và `braces` trong `micromatch`; bản Nuxt mới nhất hiện là 4.6.1. `npm audit fix --force` đề xuất Nuxt 3.7.4 nên chưa áp vì phá vỡ mục tiêu Nuxt 4. Cần theo dõi bản vá upstream và kiểm lại trước release.
+3. **Dependency:** `npm audit --omit=dev` ngày 2026-10-14 còn 14 advisory (12 high, 2 critical). `npm audit fix --omit=dev` không giảm số lượng. Nguồn là `simple-git` trong `@nuxt/devtools`, `node-forge` trong `nitropack/listhen`, và `braces` trong `micromatch`; bản Nuxt mới nhất hiện là 4.6.1. `node-forge@1.4.0` và `braces@3.0.3` vẫn là bản npm mới nhất nhưng nằm trong affected range; `simple-git@4.0.2` đã vá nhưng vượt major range của `@nuxt/devtools`. `npm audit fix --force` đề xuất Nuxt 3.7.4 nên chưa áp vì phá vỡ mục tiêu Nuxt 4. Cần theo dõi bản vá upstream và kiểm lại trước release.
 4. **Các task còn thiếu:** xem bảng trên. Chưa thể gọi V1 hoàn tất hoặc release chỉ vì ba phụ thuộc ngoài đã được nêu.
