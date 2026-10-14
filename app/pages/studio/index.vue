@@ -121,6 +121,19 @@ async function submit() {
   } finally { busy.value = false }
 }
 
+async function resendVerification() {
+  if (busy.value || !email.value.trim()) return
+  busy.value = true
+  feedback.value = ''
+  try {
+    const result = await authClient.sendVerificationEmail({ email: email.value.trim(), callbackURL: next.value })
+    if (result.error) throw new Error(result.error.message)
+    feedback.value = 'Kiểm tra hộp thư và thư spam để tìm email xác minh mới.'
+  } catch {
+    feedback.value = 'Không gửi được email xác minh. Vui lòng thử lại sau.'
+  } finally { busy.value = false }
+}
+
 async function signOut() {
   await authClient.signOut()
   currentUser.value = null
@@ -209,6 +222,7 @@ async function signOut() {
             <button type="submit" :disabled="busy || !hydrated" class="w-full rounded-full bg-[#344732] px-5 py-3.5 font-semibold text-white disabled:opacity-60">{{ busy ? 'Đang xử lý…' : mode === 'login' ? 'Đăng nhập' : mode === 'register' ? 'Tạo tài khoản' : 'Gửi liên kết' }}</button>
           </form>
           <p v-if="feedback" class="mt-4 rounded-xl bg-[#f1f5ed] p-4 text-sm text-[#51654e]" role="status">{{ feedback }}</p>
+          <button v-if="mode !== 'recovery'" type="button" :disabled="busy || !email.trim()" class="mt-4 block text-sm font-medium text-[#64815e] underline underline-offset-4 disabled:opacity-60" @click="resendVerification">Gửi lại email xác minh</button>
           <button type="button" class="mt-5 text-sm font-medium text-[#64815e] underline underline-offset-4" @click="mode = mode === 'recovery' ? 'login' : 'recovery'; feedback = ''">{{ mode === 'recovery' ? 'Quay lại đăng nhập' : 'Quên mật khẩu?' }}</button>
         </div>
       </section>
