@@ -1,13 +1,15 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFile } from 'node:fs/promises'
-import { createAlbum, getStudioAlbums, publishAlbum } from '../../server/albums/album'
+import { withDatabaseContext } from '../../server/db/context'
+import { createAlbum, createAlbumShareLink, getStudioAlbums, publishAlbum } from '../../server/albums/album'
+import { resolveAlbumAccess } from '../../server/albums/access'
 import { DriveSourceError } from '../../server/photo-sources/google-drive'
 import { ensureStudio } from '../../server/studios/studio'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 
 const db = await PGlite.create()
-for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql']) {
+for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql']) {
   await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'))
 }
 await db.exec('SET ROLE app_runtime')
@@ -46,6 +48,34 @@ describe('studio album lifecycle', () => {
   it('does not expose another studio album', async () => {
     const other = await ensureStudio(pool, 'other-album-owner', 'Other')
     expect(await getStudioAlbums(pool, other.id, 'other-album-owner')).toEqual([])
+  })
+
+  it('creates a fresh customer share link for a published album while earlier links remain valid', async () => {
+    const studio = await ensureStudio(pool, 'share-owner', 'Share studio')
+    const album = await createAlbum(pool, source, {
+      studioId: studio.id, userId: 'share-owner', folderUrl: 'https://drive.google.com/drive/folders/folder123',
+      title: 'Shareable', expiresInDays: 15, limit: { kind: 'unlimited' },
+    })
+    const published = await publishAlbum(pool, studio.id, 'share-owner', album.id)
+    const shared = await createAlbumShareLink(pool, studio.id, 'share-owner', album.id)
+    expect(shared.customerToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(shared.customerToken).not.toBe(published.customerToken)
+    expect(await resolveAlbumAccess(pool, published.customerToken)).toMatchObject({ albumId: album.id, scope: 'customer' })
+    expect(await resolveAlbumAccess(pool, shared.customerToken)).toMatchObject({ albumId: album.id, scope: 'customer' })
+  })
+
+  it('refuses to share a draft, expired album, or another studio member’s album', async () => {
+    const studio = await ensureStudio(pool, 'share-guard-owner', 'Share guard studio')
+    const album = await createAlbum(pool, source, {
+      studioId: studio.id, userId: 'share-guard-owner', folderUrl: 'https://drive.google.com/drive/folders/folder123',
+      title: 'Guarded', expiresInDays: 15, limit: { kind: 'unlimited' },
+    })
+    await expect(createAlbumShareLink(pool, studio.id, 'share-guard-owner', album.id)).rejects.toMatchObject({ statusCode: 409 })
+    await publishAlbum(pool, studio.id, 'share-guard-owner', album.id)
+    await expect(createAlbumShareLink(pool, studio.id, 'unrelated-user', album.id)).rejects.toMatchObject({ statusCode: 403 })
+    await withDatabaseContext(pool, { studioId: studio.id, userId: 'share-guard-owner', scope: 'member' }, client =>
+      client.query("UPDATE albums SET expires_at = now() - interval '1 day' WHERE id = $1", [album.id]))
+    await expect(createAlbumShareLink(pool, studio.id, 'share-guard-owner', album.id)).rejects.toMatchObject({ statusCode: 409 })
   })
 
   it('rejects an invalid Drive folder link with a client error', async () => {

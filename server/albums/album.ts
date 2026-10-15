@@ -152,3 +152,19 @@ export async function publishAlbum(pool: ConnectionPool, studioId: string, userI
     return { customerToken: token.token }
   })
 }
+
+export async function createAlbumShareLink(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<{ customerToken: string }> {
+  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
+    await requireAlbumPermission(client, studioId, userId, 'album.publish')
+    const album = await client.query<{ status: AlbumSummary['status']; active: boolean }>(
+      'SELECT status, expires_at > now() AS active FROM albums WHERE id = $1 AND studio_id = $2 FOR UPDATE', [albumId, studioId])
+    if (!album.rows[0]) throw new StudioOperationError('Album không tồn tại', 404)
+    if (!album.rows[0].active || !['PUBLISHED', 'FINALIZED', 'DELIVERED'].includes(album.rows[0].status)) {
+      throw new StudioOperationError('Album chưa xuất bản hoặc đã hết hạn', 409)
+    }
+    const token = issueAccessToken()
+    await client.query('INSERT INTO album_tokens (id, album_id, scope, token_hash) VALUES ($1, $2, $3, $4)',
+      [randomUUID(), albumId, 'customer', token.tokenHash])
+    return { customerToken: token.token }
+  })
+}

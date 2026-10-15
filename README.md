@@ -13,6 +13,8 @@ npm run dev
 
 Các trang hiện có: `/` (giới thiệu), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ). Công cụ lọc file dùng File System Access API; browser không hỗ trợ sẽ hiện hướng dẫn chuyển sang Chrome/Edge desktop.
 
+Trong danh sách album tại `/studio`, album đã xuất bản có nút **Chia sẻ link khách hàng**. Nút cấp link khách mới và hiển thị ngay dưới album để mở hoặc sao chép. Link khách đã gửi trước đó vẫn hợp lệ cho đến khi album hết hạn hoặc token bị thu hồi.
+
 ## Neon
 
 1. Tạo project/branch Neon cho development và một branch hoặc database **riêng** cho integration test. Không dùng production cho `test:neon`.

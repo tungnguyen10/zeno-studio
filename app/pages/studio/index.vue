@@ -24,7 +24,10 @@ const albumDays = ref<15 | 30>(15)
 const albumBusy = ref(false)
 const albumFeedback = ref('')
 const albumFeedbackIsError = ref(false)
-const publishedLink = ref('')
+const sharedLinks = ref<Record<string, string>>({})
+const openShareAlbumId = ref<string | null>(null)
+const shareBusyAlbumId = ref<string | null>(null)
+const shareMessage = ref<{ albumId: string; text: string; error: boolean } | null>(null)
 const route = useRoute()
 const next = computed(() => {
   const candidate = route.query.next
@@ -79,17 +82,41 @@ async function publish(id: string) {
   albumFeedbackIsError.value = false
   try {
     const result = await $fetch<{ customerToken: string }>(`/api/studio/${studio.value.id}/albums/${id}/publish`, { method: 'POST' })
-    publishedLink.value = `${location.origin}/album/${id}?token=${result.customerToken}`
-    albumFeedback.value = 'Đã xuất bản. Hãy lưu và gửi link khách bên dưới.'
+    sharedLinks.value = { ...sharedLinks.value, [id]: `${location.origin}/album/${id}?token=${result.customerToken}` }
+    openShareAlbumId.value = id
+    albumFeedback.value = 'Đã xuất bản. Link khách hàng nằm ngay dưới album.'
     await loadAlbums()
     albumFeedbackIsError.value = false
   } catch (error) { albumFeedbackIsError.value = true; albumFeedback.value = error instanceof Error ? error.message : 'Không thể xuất bản' }
   finally { albumBusy.value = false }
 }
 
-async function copyPublishedLink() {
-  await navigator.clipboard.writeText(publishedLink.value)
-  albumFeedback.value = 'Đã copy link khách hàng.'
+async function shareAlbum(id: string) {
+  if (!studio.value) return
+  if (sharedLinks.value[id]) {
+    openShareAlbumId.value = openShareAlbumId.value === id ? null : id
+    return
+  }
+  shareBusyAlbumId.value = id
+  shareMessage.value = null
+  try {
+    const result = await $fetch<{ customerToken: string }>(`/api/studio/${studio.value.id}/albums/${id}/share`, { method: 'POST' })
+    sharedLinks.value = { ...sharedLinks.value, [id]: `${location.origin}/album/${id}?token=${result.customerToken}` }
+    openShareAlbumId.value = id
+  } catch (error) {
+    shareMessage.value = { albumId: id, text: studioAlbumErrorMessage(error), error: true }
+  } finally { shareBusyAlbumId.value = null }
+}
+
+async function copySharedLink(id: string) {
+  const link = sharedLinks.value[id]
+  if (!link) return
+  try {
+    await navigator.clipboard.writeText(link)
+    shareMessage.value = { albumId: id, text: 'Đã sao chép link khách hàng.', error: false }
+  } catch {
+    shareMessage.value = { albumId: id, text: 'Không sao chép được link. Bạn có thể chọn và sao chép trực tiếp.', error: true }
+  }
 }
 
 onMounted(async () => {
@@ -146,6 +173,9 @@ async function signOut() {
   studio.value = null
   studios.value = []
   albums.value = []
+  sharedLinks.value = {}
+  openShareAlbumId.value = null
+  shareMessage.value = null
 }
 </script>
 
@@ -179,16 +209,25 @@ async function signOut() {
           <p v-else class="mt-7 rounded-2xl bg-[#f1f5ed] p-5 text-sm leading-6 text-[#526b4e]">Đang tải không gian studio…</p>
           <div v-if="studio" class="mt-8 border-t border-[#e0e4d9] pt-7">
             <h3 class="text-xl font-semibold">Album của studio</h3>
-            <p class="mt-2 text-sm text-[#687264]">Nguồn Google Drive cần được kiểm chứng trước khi tạo hoặc xuất bản album thật.</p>
+            <p class="mt-2 text-sm text-[#687264]">Album lấy ảnh từ folder Google Drive công khai; link khách hàng dùng để chia sẻ sau khi xuất bản.</p>
             <div v-if="albums.length" class="mt-4 space-y-2">
-              <div v-for="album in albums" :key="album.id" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e0e4d9] p-4 text-sm">
-                <div><p class="font-semibold">{{ album.title }}</p><p class="mt-1 text-[#687264]">{{ album.photoCount }} ảnh · {{ album.status }}</p></div>
-                <div class="flex gap-3">
-                  <NuxtLink :to="`/studio/albums/${album.id}?studio=${studio.id}`" class="font-semibold text-[#344732] underline">Chi tiết</NuxtLink>
-                  <button v-if="album.status === 'DRAFT' && (studio.role === 'owner' || studio.role === 'manager')" :disabled="albumBusy" class="font-semibold text-[#344732] underline" @click="publish(album.id)">Xuất bản</button>
-                  <NuxtLink v-if="album.status === 'FINALIZED' || album.status === 'DELIVERED'" :to="`/studio/albums/${album.id}/results?studio=${studio.id}`" class="font-semibold text-[#344732] underline">Kết quả</NuxtLink>
+              <article v-for="album in albums" :key="album.id" class="rounded-xl border border-[#e0e4d9] p-4 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="min-w-0"><p class="break-words font-semibold">{{ album.title }}</p><p class="mt-1 text-[#687264]">{{ album.photoCount }} ảnh · {{ album.status }}</p></div>
+                  <div class="flex flex-wrap gap-3">
+                    <NuxtLink :to="`/studio/albums/${album.id}?studio=${studio.id}`" class="font-semibold text-[#344732] underline underline-offset-4">Chi tiết</NuxtLink>
+                    <button v-if="album.status === 'DRAFT' && (studio.role === 'owner' || studio.role === 'manager')" type="button" :disabled="albumBusy" class="font-semibold text-[#344732] underline underline-offset-4 disabled:opacity-50" @click="publish(album.id)">Xuất bản</button>
+                    <button v-if="['PUBLISHED', 'FINALIZED', 'DELIVERED'].includes(album.status) && (studio.role === 'owner' || studio.role === 'manager' || studio.role === 'member')" type="button" :disabled="shareBusyAlbumId !== null" :aria-expanded="openShareAlbumId === album.id" class="min-h-11 rounded-lg px-2 font-semibold text-[#344732] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] disabled:opacity-50" @click="shareAlbum(album.id)">{{ shareBusyAlbumId === album.id ? 'Đang lấy link…' : 'Chia sẻ link khách hàng' }}</button>
+                    <NuxtLink v-if="album.status === 'FINALIZED' || album.status === 'DELIVERED'" :to="`/studio/albums/${album.id}/results?studio=${studio.id}`" class="font-semibold text-[#344732] underline underline-offset-4">Kết quả</NuxtLink>
+                  </div>
                 </div>
-              </div>
+                <div v-if="openShareAlbumId === album.id && sharedLinks[album.id]" :id="`share-link-${album.id}`" class="mt-4 rounded-xl bg-[#f1f5ed] p-4">
+                  <p class="font-semibold">Link khách hàng</p>
+                  <a :href="sharedLinks[album.id]" target="_blank" rel="noopener noreferrer" class="mt-2 block break-all text-[#344732] underline underline-offset-4">{{ sharedLinks[album.id] }}</a>
+                  <button type="button" class="mt-3 min-h-11 rounded-full border border-[#b8c8b3] px-4 font-semibold text-[#344732] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="copySharedLink(album.id)">Sao chép link</button>
+                </div>
+                <p v-if="shareMessage?.albumId === album.id" :role="shareMessage.error ? 'alert' : 'status'" class="mt-3" :class="shareMessage.error ? 'text-red-700' : 'text-[#526b4e]'">{{ shareMessage.text }}</p>
+              </article>
             </div>
             <p v-else class="mt-4 text-sm text-[#687264]">Chưa có album.</p>
             <form v-if="studio.role === 'owner' || studio.role === 'manager'" class="mt-6 space-y-3" @submit.prevent="createNewAlbum">
@@ -202,7 +241,6 @@ async function signOut() {
               <button :disabled="albumBusy" class="rounded-full bg-[#344732] px-5 py-3 font-semibold text-white disabled:opacity-50">Tạo album nháp</button>
             </form>
             <p v-if="albumFeedback" :role="albumFeedbackIsError ? 'alert' : 'status'" class="mt-3 text-sm" :class="albumFeedbackIsError ? 'text-red-700' : 'text-[#526b4e]'">{{ albumFeedback }}</p>
-            <div v-if="publishedLink" class="mt-3 rounded-xl bg-[#f1f5ed] p-4 text-sm"><p class="font-semibold">Link khách hàng</p><a :href="publishedLink" class="mt-2 block break-all text-[#344732] underline">{{ publishedLink }}</a><button class="mt-2 font-semibold underline" @click="copyPublishedLink">Copy link</button></div>
           </div>
           <p v-if="feedback" class="mt-4 text-sm text-red-700" role="alert">{{ feedback }}</p>
           <button type="button" class="mt-6 rounded-full border border-[#cbd4c6] px-5 py-2.5 font-semibold" @click="signOut">Đăng xuất</button>

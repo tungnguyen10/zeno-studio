@@ -30,7 +30,7 @@ Ngày 2026-10-15, folder mẫu 307 ảnh đã qua `test:drive-live`, HTTP local 
 
 1. Local repo đã được liên kết với project đã có bằng `vercel link --yes --team zenocorp --project prj_eq7G3KN4ClM2zsTG9uDHMqQTvy7T`; `.vercel/project.json` trỏ đúng ID và thư mục này đã được Git bỏ qua. Nếu cần triển khai tự động theo commit, kết nối đúng Git repository trong dashboard; thao tác đó cấp quyền đọc repo cho Vercel.
 2. Env Preview đã được cấu hình; không dùng local `.env` nguyên trạng vì nó chứa URL direct của owner và origin localhost.
-3. `vercel deploy` đã tạo [preview Drive](https://zeno-studio-h87wqw0m5-zenocorp.vercel.app) (`dpl_9cV4g4GzbKaLoxWmxofqBiKmfZPz`, Ready), không dùng `--prod`.
-4. Smoke qua `vercel curl` với deployment protection: Better Auth đăng nhập tài khoản fixture, POST album 307 ảnh, danh sách studio, publish, gallery đủ 307 ảnh và endpoint ảnh trả nội dung ảnh thật. Tài khoản fixture đã được xóa. Cần kiểm tiếp SMTP thật và gallery lớn. Không promote production trước khi các gate release còn lại đạt.
+3. `vercel deploy` đã tạo [preview Drive](https://zeno-studio-45uysrtq3-zenocorp.vercel.app) (`dpl_AaSpQJ1k6gcwWFC6VgH4kEf3ZojD`, Ready), không dùng `--prod`.
+4. Smoke qua `vercel curl` trên bản ngay trước chỉnh sửa accessibility cuối: Better Auth đăng nhập tài khoản fixture, POST album 307 ảnh, danh sách studio, publish, cấp link khách mới từ album đã xuất bản, gallery đủ 307 ảnh qua link mới và endpoint ảnh trả nội dung ảnh thật. Bản mới nhất đã build/deploy thành công; tài khoản fixture đã được xóa. Cần kiểm tiếp SMTP thật và gallery lớn. Không promote production trước khi các gate release còn lại đạt.
 
 Kiểm tra tại máy ngày 2026-10-15: `test:drive-live` đạt với 307 ảnh; local và Preview HTTP smoke đạt với cùng folder. Vercel Preview build và smoke HTTP ở trên đã chạy thật. Kết quả test/typecheck hiện tại ghi tại tiến độ triển khai.

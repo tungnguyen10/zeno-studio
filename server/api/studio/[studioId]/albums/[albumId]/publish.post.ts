@@ -10,5 +10,6 @@ export default defineEventHandler(async event => {
   requireVerifiedDriveSource()
   const albumId = getRouterParam(event, 'albumId')
   if (!albumId || !/^[0-9a-f-]{36}$/i.test(albumId)) throw createError({ statusCode: 400, statusMessage: 'Album ID không hợp lệ' })
+  setHeader(event, 'cache-control', 'no-store')
   return studioApi(() => publishAlbum(getAppPool(), studioId, user.id, albumId))
 })

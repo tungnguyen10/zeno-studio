@@ -2,7 +2,7 @@
 
 Cập nhật: 2026-10-15. `Dev Neon` nghĩa là đã chạy trên nhánh development `codex-v1-dev`; **chưa phải nghiệm thu production**.
 
-Kiểm tra mới nhất: `npm test` 56/56, `npm run typecheck` và `npm run build` đạt. Live Drive trả 307 ảnh/1 trang, 3 ảnh mẫu tải được; local và Preview HTTP smoke đều tạo/publish album, phân trang 307 ảnh và tải ảnh khách thành công.
+Kiểm tra mới nhất: `npm test` 58/58, `npm run typecheck` và `npm run build` đạt. Chromium desktop/mobile E2E cho nút chia sẻ đạt. Live Drive trả 307 ảnh/1 trang, 3 ảnh mẫu tải được; Preview HTTP smoke tạo/publish album, cấp link khách mới, phân trang 307 ảnh và tải ảnh khách thành công.
 
 | Task | Trạng thái | Đầu ra / phần chưa xong |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Kiểm tra mới nhất: `npm test` 56/56, `npm run typecheck` và `npm run buil
 | T11–T13 | Một phần | API key Drive hợp lệ; folder công khai 307 ảnh đã liệt kê và tải 3 ảnh mẫu thành công. Chưa kiểm ảnh có resource key. |
 | T14 | Một phần | Adapter Drive API chính thức, test giả và lệnh `test:drive-live`; live folder 307 ảnh đạt, chưa có thử tải 1.000–3.000 ảnh. |
 | T15–T16 | Chờ quyết định | Chỉ làm OAuth nếu T11–T13 cho thấy cần thiết. |
-| T17–T19 | Một phần | Tạo album 307 ảnh, catalog, publish và ảnh khách đã qua HTTP smoke trên local và Preview. Gate Drive mở ở local/Preview, Production vẫn khóa. Chưa có mật khẩu album và chia sẻ hệ thống/Zalo. |
+| T17–T19 | Một phần | Tạo album 307 ảnh, catalog, publish, cấp lại link khách từ danh sách và ảnh khách đã qua HTTP smoke trên Preview. Gate Drive mở ở local/Preview, Production vẫn khóa. Chưa có mật khẩu album và chia sẻ hệ thống/Zalo. |
 | T20–T22 | Một phần | Danh sách và trang chi tiết album cơ bản; tìm/lọc/sắp xếp, settings và nhắc hạn còn thiếu. |
 | T23–T30 | Một phần | Link khách, participant token, catalog phân trang, grid/list, chọn ảnh có giới hạn/version và polling 4 giây; thiếu password, masonry/justified, zoom/swipe, filter/sort phong phú, bulk và shortlist 2 vòng. |
 | T31–T32 | Dev Neon | Ghi chú riêng theo participant/photo, lịch sử phiên bản, conflict; UI focus panel cơ bản. |

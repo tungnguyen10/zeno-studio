@@ -107,7 +107,11 @@ async function main(): Promise<void> {
 
     const publish = await previewRequest(`/api/studio/${studioId}/albums/${album.id}/publish`, 'POST')
     expectStatus(publish, 200, 'Preview publish')
-    const token = (JSON.parse(publish.body.toString()) as { customerToken: string }).customerToken
+    const publishedToken = (JSON.parse(publish.body.toString()) as { customerToken: string }).customerToken
+    const share = await previewRequest(`/api/studio/${studioId}/albums/${album.id}/share`, 'POST')
+    expectStatus(share, 200, 'Preview share link')
+    const token = (JSON.parse(share.body.toString()) as { customerToken: string }).customerToken
+    if (token === publishedToken) throw new Error('Preview share không cấp link mới')
     process.stderr.write('Preview smoke: kiểm gallery và ảnh khách\n')
     let cursor: string | undefined
     let count = 0
