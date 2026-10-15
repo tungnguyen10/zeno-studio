@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { authClient } from '~/lib/auth-client'
+import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 
 useSeoMeta({ title: 'Studio — Zeno Studio' })
 
@@ -22,6 +23,7 @@ const albumLimit = ref(30)
 const albumDays = ref<15 | 30>(15)
 const albumBusy = ref(false)
 const albumFeedback = ref('')
+const albumFeedbackIsError = ref(false)
 const publishedLink = ref('')
 const route = useRoute()
 const next = computed(() => {
@@ -48,13 +50,14 @@ async function loadStudio() {
 async function loadAlbums() {
   if (!studio.value) return
   try { albums.value = (await $fetch<{ albums: typeof albums.value }>(`/api/studio/${studio.value.id}/albums`)).albums }
-  catch (error) { albumFeedback.value = error instanceof Error ? error.message : 'Không tải được album' }
+  catch (error) { albumFeedbackIsError.value = true; albumFeedback.value = error instanceof Error ? error.message : 'Không tải được album' }
 }
 
 async function createNewAlbum() {
   if (!studio.value) return
   albumBusy.value = true
   albumFeedback.value = ''
+  albumFeedbackIsError.value = false
   try {
     await $fetch(`/api/studio/${studio.value.id}/albums`, {
       method: 'POST',
@@ -63,8 +66,9 @@ async function createNewAlbum() {
     newAlbumTitle.value = ''
     folderUrl.value = ''
     await loadAlbums()
+    albumFeedbackIsError.value = false
     albumFeedback.value = 'Đã tạo album nháp.'
-  } catch (error) { albumFeedback.value = error instanceof Error ? error.message : 'Không thể tạo album' }
+  } catch (error) { albumFeedbackIsError.value = true; albumFeedback.value = studioAlbumErrorMessage(error) }
   finally { albumBusy.value = false }
 }
 
@@ -72,12 +76,14 @@ async function publish(id: string) {
   if (!studio.value) return
   albumBusy.value = true
   albumFeedback.value = ''
+  albumFeedbackIsError.value = false
   try {
     const result = await $fetch<{ customerToken: string }>(`/api/studio/${studio.value.id}/albums/${id}/publish`, { method: 'POST' })
     publishedLink.value = `${location.origin}/album/${id}?token=${result.customerToken}`
     albumFeedback.value = 'Đã xuất bản. Hãy lưu và gửi link khách bên dưới.'
     await loadAlbums()
-  } catch (error) { albumFeedback.value = error instanceof Error ? error.message : 'Không thể xuất bản' }
+    albumFeedbackIsError.value = false
+  } catch (error) { albumFeedbackIsError.value = true; albumFeedback.value = error instanceof Error ? error.message : 'Không thể xuất bản' }
   finally { albumBusy.value = false }
 }
 
@@ -195,7 +201,7 @@ async function signOut() {
               </div>
               <button :disabled="albumBusy" class="rounded-full bg-[#344732] px-5 py-3 font-semibold text-white disabled:opacity-50">Tạo album nháp</button>
             </form>
-            <p v-if="albumFeedback" role="status" class="mt-3 text-sm text-[#526b4e]">{{ albumFeedback }}</p>
+            <p v-if="albumFeedback" :role="albumFeedbackIsError ? 'alert' : 'status'" class="mt-3 text-sm" :class="albumFeedbackIsError ? 'text-red-700' : 'text-[#526b4e]'">{{ albumFeedback }}</p>
             <div v-if="publishedLink" class="mt-3 rounded-xl bg-[#f1f5ed] p-4 text-sm"><p class="font-semibold">Link khách hàng</p><a :href="publishedLink" class="mt-2 block break-all text-[#344732] underline">{{ publishedLink }}</a><button class="mt-2 font-semibold underline" @click="copyPublishedLink">Copy link</button></div>
           </div>
           <p v-if="feedback" class="mt-4 text-sm text-red-700" role="alert">{{ feedback }}</p>

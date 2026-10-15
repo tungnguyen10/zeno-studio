@@ -20,7 +20,10 @@
     "neon:build": "node scripts/build-neon-functions.mjs",
     "test:auth-neon": "tsx tests/live/auth-neon.ts",
     "test:studio-http": "tsx tests/live/studio-http.ts",
-    "test:album-neon": "tsx tests/live/album-neon.ts"
+    "test:album-neon": "tsx tests/live/album-neon.ts",
+    "test:drive-live": "node --env-file-if-exists=.env --import tsx scripts/check-drive-public.ts",
+    "test:drive-http": "node --env-file-if-exists=.env --import tsx tests/live/drive-album-http.ts",
+    "test:drive-preview-http": "node --env-file-if-exists=.env --import tsx tests/live/preview-drive-album-http.ts"
   },
   "dependencies": {
     "@neon/config": "^1.9.1",

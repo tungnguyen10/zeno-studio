@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { withDatabaseContext, type ConnectionPool, type QueryClient } from '../db/context'
-import { parseGoogleDriveFolderLink } from '../photo-sources/google-drive'
+import { DriveSourceError, InvalidDriveFolderLinkError, parseGoogleDriveFolderLink } from '../photo-sources/google-drive'
 import type { PhotoSourceAdapter, SourcePhoto } from '../photo-sources/photo-source'
 import { issueAccessToken } from '../security/access-token'
 import { StudioOperationError } from '../studios/error'
@@ -49,7 +49,25 @@ async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnType<type
   const seenPages = new Set<string>()
   let pageToken: string | undefined
   do {
-    const page = await source.listPhotos(folder, pageToken)
+    let page
+    try { page = await source.listPhotos(folder, pageToken) }
+    catch (error) {
+      if (!(error instanceof DriveSourceError)) throw error
+      const quotaReasons = new Set(['rateLimitExceeded', 'userRateLimitExceeded', 'dailyLimitExceeded', 'quotaExceeded', 'RESOURCE_EXHAUSTED'])
+      if (error.status === 429 || (error.reason && quotaReasons.has(error.reason))) {
+        throw new StudioOperationError('Google Drive đang giới hạn truy cập. Vui lòng thử lại sau.', 503)
+      }
+      if (error.reason?.startsWith('API_KEY_') || error.reason === 'SERVICE_DISABLED' || error.reason === 'accessNotConfigured') {
+        throw new StudioOperationError('Không kết nối được Google Drive. Cấu hình API key cần được kiểm tra.', 503)
+      }
+      if (error.status === 403 || error.status === 404) {
+        throw new StudioOperationError('Không đọc được thư mục Drive. Hãy kiểm tra quyền “Bất kỳ ai có đường liên kết” và thử lại.', 422)
+      }
+      if (error.status === 400 || error.status === 401) {
+        throw new StudioOperationError('Không kết nối được Google Drive. Cấu hình API key cần được kiểm tra.', 503)
+      }
+      throw new StudioOperationError('Google Drive tạm thời không phản hồi. Vui lòng thử lại sau.', 502)
+    }
     for (const photo of page.items) {
       if (!seenIds.has(photo.id)) { seenIds.add(photo.id); photos.push(photo) }
       if (photos.length > 3000) throw new StudioOperationError('Album vượt giới hạn 3.000 ảnh của V1', 400)
@@ -66,7 +84,12 @@ async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnType<type
 
 export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapter, input: CreateAlbumInput): Promise<AlbumSummary> {
   validateInput(input)
-  const folder = parseGoogleDriveFolderLink(input.folderUrl)
+  let folder: ReturnType<typeof parseGoogleDriveFolderLink>
+  try { folder = parseGoogleDriveFolderLink(input.folderUrl) }
+  catch (error) {
+    if (error instanceof InvalidDriveFolderLinkError) throw new StudioOperationError(error.message, 400)
+    throw error
+  }
   await withDatabaseContext(pool, { studioId: input.studioId, userId: input.userId, scope: 'member' },
     client => requireAlbumPermission(client, input.studioId, input.userId, 'album.create'))
   const photos = await collectPhotos(source, folder)
@@ -86,11 +109,18 @@ export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapt
     )
     await client.query('INSERT INTO photo_sources (id, album_id, kind, folder_id, resource_key, sync_status, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, now())',
       [sourceId, id, 'google_drive', folder.folderId, folder.resourceKey ?? null, 'READY'])
-    for (let index = 0; index < photos.length; index++) {
-      const photo = photos[index]!
+    for (let start = 0; start < photos.length; start += 250) {
+      const batch = photos.slice(start, start + 250)
+      const values: unknown[] = []
+      const placeholders = batch.map((photo, offset) => {
+        const base = offset * 10
+        values.push(randomUUID(), id, sourceId, photo.id, photo.filename, photo.mimeType,
+          photo.resourceKey ?? null, photo.width ?? null, photo.height ?? null, start + offset)
+        return `(${Array.from({ length: 10 }, (_, column) => `$${base + column + 1}`).join(', ')})`
+      })
       await client.query(
-        'INSERT INTO photos (id, album_id, source_id, source_file_id, filename, mime_type, resource_key, width, height, sort_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
-        [randomUUID(), id, sourceId, photo.id, photo.filename, photo.mimeType, photo.resourceKey ?? null, photo.width ?? null, photo.height ?? null, index],
+        `INSERT INTO photos (id, album_id, source_id, source_file_id, filename, mime_type, resource_key, width, height, sort_order) VALUES ${placeholders.join(', ')}`,
+        values,
       )
     }
     await client.query('INSERT INTO selection_rounds (id, album_id, round_number) VALUES ($1, $2, 1)', [roundId, id])

@@ -1,5 +1,5 @@
 export class StudioOperationError extends Error {
-  constructor(message: string, readonly statusCode: 400 | 403 | 404 | 409 | 410) {
+  constructor(message: string, readonly statusCode: 400 | 403 | 404 | 409 | 410 | 422 | 502 | 503) {
     super(message)
   }
 }
