@@ -71,7 +71,15 @@ async function claim() {
     <section class="mx-auto max-w-5xl px-5 pt-10">
       <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Quản trị bằng link bí mật</p>
       <h1 class="mt-2 text-3xl font-semibold">Album của bạn</h1>
-      <p v-if="!ready && !error" role="status" class="mt-5">Đang kiểm tra link quản trị…</p>
+      <div v-if="!ready && !error" role="status" aria-busy="true" aria-label="Đang kiểm tra link quản trị" class="mt-6 rounded-2xl border border-[#d8e0d2] bg-white p-5">
+        <UiSkeleton class="h-4 w-full max-w-lg" />
+        <UiSkeleton class="mt-2 h-4 w-2/3" />
+        <div class="mt-4 flex flex-wrap gap-3">
+          <UiSkeleton class="h-11 w-44 rounded-full" />
+          <UiSkeleton class="h-11 w-52 rounded-full" />
+        </div>
+        <span class="sr-only">Đang kiểm tra link quản trị…</span>
+      </div>
       <p v-if="error" role="alert" class="mt-5 rounded-xl bg-white p-4 text-red-700">{{ error }}</p>
       <div v-if="ready" class="mt-6 rounded-2xl border border-[#d8e0d2] bg-white p-5">
         <p class="text-sm text-[#687264]">Link quản trị cho phép xem kết quả và quản lý album. Hãy giữ link này riêng tư.</p>

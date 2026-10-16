@@ -7,7 +7,7 @@ import { ensureStudio } from '../../server/studios/studio'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 
 const db = await PGlite.create()
-for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql']) {
+for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql', '019_shared_customer_participant.sql']) {
   await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'))
 }
 await db.exec('SET ROLE app_runtime')
@@ -26,14 +26,18 @@ describe('customer album access', () => {
     const { customerToken } = await publishAlbum(pool, studio.id, 'gallery-owner', album.id)
     const access = await resolveAlbumAccess(pool, customerToken)
     expect(access).toEqual({ albumId: album.id, scope: 'customer', participantId: null })
-    expect((await getAlbumOverview(pool, access!)).settings.collaborationMode).toBe('shared')
+    expect(await getAlbumOverview(pool, access!)).toMatchObject({ joined: false, canJoin: true, settings: { limitKind: 'unlimited' } })
     const first = await listAlbumPhotos(pool, access!, 2)
     expect(first.items.map(item => item.filename)).toEqual(['0.JPG', '1.JPG'])
     expect(first.nextCursor).toBeTruthy()
     const second = await listAlbumPhotos(pool, access!, 2, first.nextCursor!)
     expect(second.items.map(item => item.filename)).toEqual(['2.JPG'])
-    const joined = await joinAlbum(pool, access!, 'Lan')
-    expect(joined.participant.displayName).toBe('Lan')
-    expect(await resolveAlbumAccess(pool, joined.token)).toEqual({ albumId: album.id, scope: 'customer', participantId: joined.participant.id })
+    const joined = await joinAlbum(pool, access!)
+    const participant = await resolveAlbumAccess(pool, joined.token)
+    expect(participant).toMatchObject({ albumId: album.id, scope: 'customer' })
+    expect(participant!.participantId).toBeTruthy()
+    expect(await getAlbumOverview(pool, participant!)).toMatchObject({ joined: true, canJoin: false })
+    const otherDevice = await resolveAlbumAccess(pool, (await joinAlbum(pool, access!)).token)
+    expect(otherDevice!.participantId).toBe(participant!.participantId)
   })
 })

@@ -33,6 +33,13 @@ export function driveGridSrcset(fileId: string, width: number | null, height: nu
   return GRID_WIDTHS.map(candidate => `${driveThumbnailUrl(fileId, 'w', scaledWidth(candidate, scale))} ${candidate}w`).join(', ')
 }
 
+const FIT_WIDTHS = [240, 320, 480, 640, 960, 1280]
+
+// For uncropped tiles (justified/masonry) the rendered box already has the photo's ratio.
+export function driveFitSrcset(fileId: string): string {
+  return FIT_WIDTHS.map(width => `${driveThumbnailUrl(fileId, 'w', width)} ${width}w`).join(', ')
+}
+
 interface NetworkInformation { saveData?: boolean; effectiveType?: string }
 
 export function focusWidthCap(): number {

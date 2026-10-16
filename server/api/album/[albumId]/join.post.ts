@@ -6,9 +6,8 @@ import { studioApi } from '../../../utils/studio-api'
 export default defineEventHandler(async event => {
   const albumId = albumIdParam(event)
   const access = await requireAlbumAccess(event)
-  const body = await readBody<{ name?: string }>(event)
-  if (typeof body?.name !== 'string') throw createError({ statusCode: 400, statusMessage: 'Cần nhập tên trước khi chọn ảnh' })
-  const joined = await studioApi(() => joinAlbum(getAppPool(), access, body.name!))
+  const joined = await studioApi(() => joinAlbum(getAppPool(), access))
   setAlbumCookie(event, albumId, joined.token)
-  return joined
+  setHeader(event, 'cache-control', 'no-store')
+  return { joined: true }
 })

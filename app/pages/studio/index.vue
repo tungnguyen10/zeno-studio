@@ -13,6 +13,9 @@ const name = ref('')
 const busy = ref(false)
 const feedback = ref('')
 const hydrated = ref(false)
+const sessionChecked = ref(false)
+const studioLoading = ref(false)
+const albumsLoading = ref(false)
 const currentUser = ref<{ name: string; email: string } | null>(null)
 const studio = ref<{ id: string; name: string; role: string } | null>(null)
 const studios = ref<Array<{ id: string; name: string; role: string }>>([])
@@ -36,6 +39,7 @@ const next = computed(() => {
 const heading = computed(() => mode.value === 'login' ? 'Chào mừng trở lại' : mode.value === 'register' ? 'Bắt đầu với studio của bạn' : 'Lấy lại mật khẩu')
 
 async function loadStudio() {
+  studioLoading.value = true
   try {
     const result = await $fetch<{ studios: Array<{ id: string; name: string; role: string }> }>('/api/studio')
     studios.value = result.studios
@@ -47,13 +51,15 @@ async function loadStudio() {
     if (studio.value) await loadAlbums()
   } catch (error) {
     feedback.value = error instanceof Error ? error.message : 'Không thể tải studio. Vui lòng thử lại.'
-  }
+  } finally { studioLoading.value = false }
 }
 
 async function loadAlbums() {
   if (!studio.value) return
+  albumsLoading.value = true
   try { albums.value = (await $fetch<{ albums: typeof albums.value }>(`/api/studio/${studio.value.id}/albums`)).albums }
   catch (error) { albumFeedbackIsError.value = true; albumFeedback.value = error instanceof Error ? error.message : 'Không tải được album' }
+  finally { albumsLoading.value = false }
 }
 
 async function createNewAlbum() {
@@ -124,9 +130,11 @@ onMounted(async () => {
   try {
     const { data } = await authClient.getSession()
     currentUser.value = data?.user ? { name: data.user.name, email: data.user.email } : null
+    sessionChecked.value = true
     if (currentUser.value && next.value !== '/studio') await navigateTo(next.value)
     else if (currentUser.value) await loadStudio()
   } catch { /* Login form remains available when auth is not configured yet. */ }
+  finally { sessionChecked.value = true }
 })
 
 async function submit() {
@@ -195,7 +203,17 @@ async function signOut() {
       </div>
 
       <section class="w-full max-w-lg rounded-[2rem] border border-[#e0e3d8] bg-white p-7 shadow-[0_30px_80px_-35px_rgba(39,55,35,.25)] sm:p-10">
-        <div v-if="currentUser">
+        <div v-if="!sessionChecked" role="status" aria-busy="true" aria-label="Đang kiểm tra đăng nhập">
+          <UiSkeleton class="h-12 w-full rounded-full" />
+          <UiSkeleton class="mt-8 h-9 w-3/4" />
+          <UiSkeleton class="mt-3 h-4 w-full" />
+          <div class="mt-7 space-y-4">
+            <UiSkeleton v-for="n in 2" :key="n" class="h-[4.5rem] w-full rounded-xl" />
+          </div>
+          <UiSkeleton class="mt-4 h-[3.25rem] w-full rounded-full" />
+          <span class="sr-only">Đang kiểm tra đăng nhập…</span>
+        </div>
+        <div v-else-if="currentUser">
           <p class="text-sm font-semibold text-[#708967]">Đã đăng nhập</p>
           <h2 class="mt-2 text-3xl font-semibold">Xin chào, {{ currentUser.name }}</h2>
           <p class="mt-3 text-[#72766c]">{{ currentUser.email }}</p>
@@ -206,11 +224,27 @@ async function signOut() {
               <NuxtLink v-if="item.role === 'owner' || item.role === 'manager'" :to="`/studio/members?studio=${item.id}`" class="mt-3 inline-block font-semibold underline underline-offset-4">Quản lý thành viên</NuxtLink>
             </div>
           </div>
-          <p v-else class="mt-7 rounded-2xl bg-[#f1f5ed] p-5 text-sm leading-6 text-[#526b4e]">Đang tải không gian studio…</p>
+          <div v-else-if="studioLoading" role="status" aria-busy="true" aria-label="Đang tải không gian studio" class="mt-7">
+            <div class="rounded-2xl bg-[#f1f5ed] p-5">
+              <UiSkeleton class="h-4 w-1/2" />
+              <UiSkeleton class="mt-2 h-4 w-1/3" />
+            </div>
+            <div class="mt-8 space-y-2 border-t border-[#e0e4d9] pt-7">
+              <UiSkeleton class="h-6 w-40" />
+              <UiSkeleton v-for="n in 3" :key="n" class="h-[4.5rem] w-full rounded-xl" />
+            </div>
+            <span class="sr-only">Đang tải không gian studio…</span>
+          </div>
           <div v-if="studio" class="mt-8 border-t border-[#e0e4d9] pt-7">
             <h3 class="text-xl font-semibold">Album của studio</h3>
             <p class="mt-2 text-sm text-[#687264]">Album lấy ảnh từ folder Google Drive công khai; link khách hàng dùng để chia sẻ sau khi xuất bản.</p>
-            <div v-if="albums.length" class="mt-4 space-y-2">
+            <div v-if="albumsLoading && !albums.length" role="status" aria-busy="true" aria-label="Đang tải album" class="mt-4 space-y-2">
+              <div v-for="n in 3" :key="n" class="rounded-xl border border-[#e0e4d9] p-4">
+                <UiSkeleton class="h-4 w-1/2" />
+                <UiSkeleton class="mt-2 h-3 w-1/3" />
+              </div>
+            </div>
+            <div v-else-if="albums.length" class="mt-4 space-y-2">
               <article v-for="album in albums" :key="album.id" class="rounded-xl border border-[#e0e4d9] p-4 text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <div class="min-w-0"><p class="break-words font-semibold">{{ album.title }}</p><p class="mt-1 text-[#687264]">{{ album.photoCount }} ảnh · {{ album.status }}</p></div>

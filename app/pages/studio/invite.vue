@@ -30,7 +30,12 @@ onMounted(async () => {
     <section class="w-full rounded-2xl border border-[#e0e3d8] bg-white p-8 shadow-sm">
       <NuxtLink to="/" class="text-sm font-semibold text-[#496446]">Zeno Studio</NuxtLink>
       <h1 class="mt-6 text-3xl font-semibold">Lời mời vào studio</h1>
-      <p v-if="state === 'loading'" class="mt-4 text-[#667060]" role="status">Đang kiểm tra lời mời…</p>
+      <div v-if="state === 'loading'" role="status" aria-busy="true" aria-label="Đang kiểm tra lời mời" class="mt-4">
+        <UiSkeleton class="h-4 w-full" />
+        <UiSkeleton class="mt-2 h-4 w-3/4" />
+        <UiSkeleton class="mt-6 h-12 w-48 rounded-full" />
+        <span class="sr-only">Đang kiểm tra lời mời…</span>
+      </div>
       <template v-else-if="state === 'login'">
         <p class="mt-4 text-[#667060]">Đăng nhập hoặc tạo tài khoản bằng đúng email được mời để tiếp tục.</p>
         <NuxtLink :to="{ path: '/studio', query: { next: route.fullPath } }" class="mt-6 inline-block rounded-full bg-[#344732] px-5 py-3 font-semibold text-white">Đăng nhập / tạo tài khoản</NuxtLink>

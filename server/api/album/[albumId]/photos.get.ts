@@ -1,13 +1,14 @@
 import { getAppPool } from '../../../db/pool'
 import { listAlbumPhotos } from '../../../albums/access'
+import { readPhotoPageQuery } from '../../../albums/photo-page'
 import { requireAlbumAccess } from '../../../utils/album-api'
 import { studioApi } from '../../../utils/studio-api'
 
 export default defineEventHandler(async event => {
   const access = await requireAlbumAccess(event)
-  const query = getQuery(event)
-  const cursor = typeof query.cursor === 'string' ? query.cursor : undefined
-  const requestedSize = typeof query.limit === 'string' ? Number(query.limit) : 60
   setHeader(event, 'cache-control', 'no-store')
-  return studioApi(() => listAlbumPhotos(getAppPool(), access, requestedSize, cursor))
+  return studioApi(async () => {
+    const options = readPhotoPageQuery(getQuery(event))
+    return listAlbumPhotos(getAppPool(), access, options.limit, options.cursor, options.filter)
+  })
 })

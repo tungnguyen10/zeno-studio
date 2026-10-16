@@ -1,35 +1,82 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { driveFitSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl } from '~/lib/drive-image'
+import type { GalleryLayout } from '~/lib/gallery-layout'
+import { usePagedPhotos, type PhotoFilter, type PhotoPageResponse } from '~/composables/usePagedPhotos'
+import { useGalleryLayout } from '~/composables/useGalleryLayout'
+import GalleryLayoutSwitch from './GalleryLayoutSwitch.vue'
+import PhotoGallery from './PhotoGallery.vue'
+import PhotoTile from './PhotoTile.vue'
 
-type Photo = { id: string; filename: string; sortOrder: number; selectedBy: string[] }
-type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null; collaborationMode: string }; photos: Photo[] }
+type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; sortOrder: number; selected: boolean }
+type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; photoCount: number; selectedCount: number }
 const props = defineProps<{ apiRoot: string; backTo: string; resultsTo: string }>()
 const workspace = ref<Workspace | null>(null)
-const chosen = ref<string[]>([])
+// Studio edits are stored as differences from the customer's list so huge albums never ship full id arrays.
+const included = ref(new Set<string>())
+const excluded = ref(new Set<string>())
+const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
-const showOnlyMarked = ref(false)
-const markedPhotos = computed(() => workspace.value?.photos.filter(photo => !showOnlyMarked.value || photo.selectedBy.length > 0) ?? [])
-async function load() {
-  busy.value = true
-  try {
-    workspace.value = await $fetch<Workspace>(props.apiRoot)
-    if (workspace.value.status === 'PUBLISHED') chosen.value = workspace.value.photos.filter(photo => photo.selectedBy.length > 0).map(photo => photo.id)
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không tải được album' }
-  finally { busy.value = false }
+const failedThumbnails = ref<Record<string, true>>({})
+const layout = useGalleryLayout('zeno-studio-gallery-layout')
+const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`${props.apiRoot}/photos`, { query: { limit: params.limit, filter: params.filter, ...(params.cursor ? { cursor: params.cursor } : {}) } }))
+const filter = computed<PhotoFilter>({ get: () => paged.filter.value, set: value => { if (value !== paged.filter.value) void paged.reset(value) } })
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Bản nháp', PUBLISHED: 'Khách đang chọn', FINALIZED: 'Đã chốt', DELIVERED: 'Đã bàn giao', EXPIRED: 'Hết hạn',
 }
 
-function toggle(id: string) { chosen.value = chosen.value.includes(id) ? chosen.value.filter(item => item !== id) : [...chosen.value, id] }
+const canChoose = computed(() => workspace.value?.status === 'PUBLISHED' && workspace.value.canFinalize)
+const chosenCount = computed(() => (workspace.value?.selectedCount ?? 0) - excluded.value.size + included.value.size)
+const statusLabel = computed(() => workspace.value ? STATUS_LABELS[workspace.value.status] ?? workspace.value.status : '')
+const limitLabel = computed(() => {
+  const s = workspace.value?.settings
+  if (!s || s.limitKind === 'unlimited') return 'Không giới hạn'
+  if (s.limitKind === 'range') return `${s.limitMin}–${s.limitMax} ảnh`
+  if (s.limitKind === 'minimum') return `Tối thiểu ${s.limitMin} ảnh`
+  if (s.limitKind === 'maximum') return `Tối đa ${s.limitMax} ảnh`
+  return `${s.limitMax ?? s.limitMin} ảnh`
+})
+
+function isChosen(photo: Photo) {
+  return photo.selected ? !excluded.value.has(photo.id) : included.value.has(photo.id)
+}
+
+function toggle(photo: Photo) {
+  const target = photo.selected ? excluded : included
+  const next = new Set(target.value)
+  if (next.has(photo.id)) next.delete(photo.id)
+  else next.add(photo.id)
+  target.value = next
+}
+
+async function load() {
+  error.value = ''
+  try {
+    workspace.value = await $fetch<Workspace>(props.apiRoot)
+    included.value = new Set()
+    excluded.value = new Set()
+    await paged.reset()
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không tải được album' }
+  finally { loading.value = false }
+}
+
+function retry() {
+  loading.value = true
+  void load()
+}
 
 async function finalize() {
   if (!workspace.value || busy.value) return
   busy.value = true
   message.value = ''
+  error.value = ''
   try {
-    const result = await $fetch<{ versionNumber: number }>(`${props.apiRoot}/finalize`, { method: 'POST', body: { photoIds: chosen.value } })
-    message.value = `Đã chốt phiên bản ${result.versionNumber}.`
+    const result = await $fetch<{ versionNumber: number }>(`${props.apiRoot}/finalize`, { method: 'POST', body: { include: [...included.value], exclude: [...excluded.value] } })
     await load()
+    message.value = `Đã chốt phiên bản ${result.versionNumber}.`
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể chốt ảnh' }
   finally { busy.value = false }
 }
@@ -37,9 +84,19 @@ async function finalize() {
 async function reopen() {
   if (busy.value) return
   busy.value = true
+  message.value = ''
+  error.value = ''
   try { await $fetch(`${props.apiRoot}/reopen`, { method: 'POST' }); await load(); message.value = 'Đã mở vòng chọn mới.' }
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể mở lại album' }
   finally { busy.value = false }
+}
+
+function tileSrc(photo: Photo, mode: GalleryLayout) {
+  return mode === 'grid' ? driveGridSrc(photo.sourceFileId, photo.width, photo.height) : driveThumbnailUrl(photo.sourceFileId, 'w', 480)
+}
+
+function tileSrcset(photo: Photo, mode: GalleryLayout) {
+  return mode === 'grid' ? driveGridSrcset(photo.sourceFileId, photo.width, photo.height) : driveFitSrcset(photo.sourceFileId)
 }
 
 onMounted(() => { void load() })
@@ -47,27 +104,127 @@ onMounted(() => { void load() })
 
 <template>
   <div class="min-h-screen bg-[#f8f7f3] text-[#24231f]">
-    <header class="border-b border-[#e2e5dc] bg-white px-5 py-5"><div class="mx-auto max-w-5xl"><NuxtLink :to="backTo" class="font-bold text-[#344732]">← Quay lại</NuxtLink></div></header>
-    <main class="mx-auto max-w-5xl px-5 py-12">
-      <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Album Detail</p>
-      <h1 class="mt-3 text-4xl font-semibold">{{ workspace?.title ?? 'Album' }}</h1>
-      <p v-if="busy && !workspace" role="status" class="mt-8">Đang tải album…</p>
-      <p v-if="error" role="alert" class="mt-5 rounded-xl bg-white p-4 text-red-700">{{ error }}</p>
-      <template v-if="workspace">
-        <p class="mt-3 text-sm text-[#667461]">{{ workspace.status }} · {{ workspace.photos.length }} ảnh · {{ workspace.settings.collaborationMode }}</p>
-        <div class="mt-7 flex flex-wrap items-center gap-3">
-          <NuxtLink v-if="workspace.hasResults" :to="resultsTo" class="rounded-full bg-[#344732] px-5 py-3 font-semibold text-white">Xem kết quả đã chốt</NuxtLink>
-          <button v-if="workspace.status === 'FINALIZED' && workspace.canFinalize" :disabled="busy" class="rounded-full border px-5 py-3 font-semibold" @click="reopen">Mở vòng chọn mới</button>
-          <button v-if="workspace.status === 'PUBLISHED' && workspace.canFinalize" :disabled="busy" class="rounded-full bg-[#344732] px-5 py-3 font-semibold text-white" @click="finalize">Chốt {{ chosen.length }} ảnh</button>
-          <label class="ml-auto flex items-center gap-2 text-sm"><input v-model="showOnlyMarked" type="checkbox"> Chỉ ảnh được chọn/nhận phiếu</label>
+    <header class="sticky top-0 z-20 border-b border-[#e2e5dc] bg-[#f8f7f3]/95 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <NuxtLink :to="backTo" class="-ml-2 inline-flex min-h-11 items-center rounded-full px-3 font-semibold text-[#344732] hover:bg-[#eef2ea] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">← Quay lại</NuxtLink>
+        <span v-if="workspace" class="min-w-0 truncate text-sm text-[#667461]">{{ workspace.title }}</span>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-10 lg:px-8">
+      <div v-if="loading" role="status" aria-label="Đang tải album" aria-busy="true">
+        <div class="space-y-3 motion-safe:animate-pulse">
+          <div class="h-3 w-24 rounded-full bg-[#e3e8de]" />
+          <div class="h-9 w-2/3 max-w-sm rounded-xl bg-[#e3e8de]" />
+          <div class="flex flex-wrap gap-2 pt-1">
+            <div v-for="n in 3" :key="n" class="h-7 w-28 rounded-full bg-[#e3e8de]" />
+          </div>
         </div>
-        <p class="mt-3 text-sm text-[#61735d]" role="status">{{ message }}</p>
-        <p v-if="workspace.status === 'PUBLISHED'" class="mt-3 text-sm text-[#687264]">Kiểm tra từng ảnh rồi chọn bộ cuối. Hệ thống kiểm tra giới hạn khi chốt; ghi chú được đóng băng trong phiên bản kết quả.</p>
-        <div class="mt-6 grid gap-3 sm:grid-cols-2">
-          <label v-for="photo in markedPhotos" :key="photo.id" class="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#e0e4d9] bg-white p-4">
-            <input v-if="workspace.status === 'PUBLISHED' && workspace.canFinalize" type="checkbox" class="mt-1 size-5" :checked="chosen.includes(photo.id)" :aria-label="`Chốt ${photo.filename}`" @change="toggle(photo.id)">
-            <div class="min-w-0"><p class="break-all font-semibold">{{ photo.filename }}</p><p class="mt-1 text-sm text-[#687264]">{{ photo.selectedBy.length }} lựa chọn/phiếu<span v-if="photo.selectedBy.length"> · {{ photo.selectedBy.join(', ') }}</span></p></div>
-          </label>
+        <div class="mt-8 h-11 w-60 rounded-full bg-[#e3e8de] motion-safe:animate-pulse" />
+        <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          <div v-for="n in 10" :key="n" class="overflow-hidden rounded-2xl border border-[#e2e5dc] bg-white motion-safe:animate-pulse">
+            <UiPhotoSkeleton class="aspect-[.8] rounded-none" />
+            <div class="space-y-2 p-3">
+              <div class="h-3 w-4/5 rounded-full bg-[#e3e8de]" />
+              <div class="h-3 w-1/2 rounded-full bg-[#eef1ea]" />
+            </div>
+          </div>
+        </div>
+        <span class="sr-only">Đang tải album…</span>
+      </div>
+
+      <div v-else-if="!workspace" role="alert" class="mx-auto max-w-md rounded-2xl border border-[#ead6d6] bg-white p-6 text-center">
+        <p class="font-semibold text-red-700">{{ error || 'Không tải được album' }}</p>
+        <button type="button" class="mt-4 min-h-11 rounded-full border border-[#cbd4c6] px-5 font-semibold hover:bg-[#f1f5ed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="retry">Thử lại</button>
+      </div>
+
+      <template v-else>
+        <section aria-labelledby="album-title">
+          <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Chi tiết album</p>
+          <h1 id="album-title" class="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{{ workspace.title }}</h1>
+          <ul class="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Thông tin album">
+            <li class="rounded-full bg-[#344732] px-3 py-1 font-semibold text-white">{{ statusLabel }}</li>
+            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">{{ workspace.photoCount }} ảnh</li>
+            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Khách chọn {{ workspace.selectedCount }}</li>
+            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Giới hạn: {{ limitLabel }}</li>
+            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Hạn {{ new Date(workspace.expiresAt).toLocaleDateString('vi-VN') }}</li>
+          </ul>
+        </section>
+
+        <p v-if="error" role="alert" class="mt-5 rounded-xl border border-[#ead6d6] bg-white p-4 text-sm text-red-700">{{ error }}</p>
+        <p v-if="message" role="status" class="mt-5 rounded-xl bg-[#eef4e8] p-4 text-sm font-medium text-[#344732]">{{ message }}</p>
+
+        <div class="mt-7 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="inline-flex w-full rounded-full border border-[#dfe4d8] bg-white p-1 sm:w-auto" role="group" aria-label="Lọc ảnh">
+              <button type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'all' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'all'" @click="filter = 'all'">Tất cả ({{ workspace.photoCount }})</button>
+              <button type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'selected' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'selected'" @click="filter = 'selected'">Khách đã chọn ({{ workspace.selectedCount }})</button>
+            </div>
+            <GalleryLayoutSwitch v-model="layout" />
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <NuxtLink v-if="workspace.hasResults" :to="resultsTo" class="inline-flex min-h-11 items-center rounded-full border border-[#cbd4c6] bg-white px-5 font-semibold text-[#344732] hover:bg-[#f1f5ed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">Xem kết quả đã chốt</NuxtLink>
+            <button v-if="workspace.status === 'FINALIZED' && workspace.canFinalize" type="button" :disabled="busy" :aria-busy="busy" class="min-h-11 rounded-full bg-[#344732] px-5 font-semibold text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="reopen">{{ busy ? 'Đang mở…' : 'Mở vòng chọn mới' }}</button>
+          </div>
+        </div>
+
+        <p v-if="canChoose" class="mt-4 text-sm text-[#687264]">Bấm vào ảnh để thêm hoặc bỏ khỏi bộ chốt. Ảnh khách đã chọn được đánh dấu sẵn; ghi chú được đóng băng trong phiên bản kết quả.</p>
+
+        <div class="mt-5">
+          <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+            <UiPhotoSkeleton v-for="n in 10" :key="n" class="aspect-[.8]" />
+          </div>
+          <div v-else-if="!paged.items.value.length && !paged.loading.value" class="rounded-2xl border border-dashed border-[#d6ddd0] bg-white p-10 text-center text-[#687264]">
+            {{ paged.error.value || (filter === 'selected' ? 'Khách chưa chọn ảnh nào.' : 'Album chưa có ảnh.') }}
+          </div>
+          <ClientOnly v-else>
+            <PhotoGallery
+              :items="paged.items.value"
+              :layout="layout"
+              :total="paged.total.value"
+              :has-more="paged.hasMore.value"
+              :loading="paged.loading.value"
+              :caption-height="44"
+              label="Ảnh trong album"
+              @end="paged.loadMore"
+            >
+              <template #default="{ item: photo, box, layout: mode, eager }">
+                <PhotoTile
+                  :filename="photo.filename"
+                  :layout="mode"
+                  :box="box"
+                  :src="tileSrc(photo, mode)"
+                  :srcset="tileSrcset(photo, mode)"
+                  :eager="eager"
+                  :failed="!!failedThumbnails[photo.id]"
+                  :action-label="canChoose ? `Chốt ${photo.filename}` : photo.filename"
+                  :pressed="canChoose ? isChosen(photo) : undefined"
+                  :highlighted="canChoose && isChosen(photo)"
+                  :caption-height="44"
+                  @activate="canChoose && toggle(photo)"
+                  @error="failedThumbnails[photo.id] = true"
+                >
+                  <template v-if="photo.selected" #badge>
+                    <span class="grid size-7 place-items-center rounded-full bg-[#fff0f2]/95 text-sm text-[#b55364] shadow-sm" title="Khách chọn"><span aria-hidden="true">♥</span><span class="sr-only">Khách chọn</span></span>
+                  </template>
+                  <template v-if="canChoose" #action>
+                    <span aria-hidden="true" class="grid size-7 shrink-0 place-items-center rounded-full border-2 text-sm font-bold shadow-sm" :class="isChosen(photo) ? 'border-[#344732] bg-[#344732] text-white' : 'border-[#cbd4c6] bg-white/80 text-transparent'">✓</span>
+                  </template>
+                </PhotoTile>
+              </template>
+            </PhotoGallery>
+          </ClientOnly>
+          <div v-if="paged.error.value && paged.items.value.length" role="alert" class="mt-6 text-center text-sm text-red-700">
+            {{ paged.error.value }}
+            <button type="button" class="ml-2 rounded-full border px-4 py-2 font-semibold" @click="paged.loadMore">Thử lại</button>
+          </div>
+        </div>
+
+        <div v-if="canChoose" class="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-[#e2e5dc] bg-[#f8f7f3]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div class="flex items-center justify-between gap-3">
+            <p class="min-w-0 text-sm text-[#4f5d4b]"><strong class="text-[#24231f]">{{ chosenCount }}</strong> ảnh sẽ chốt · {{ limitLabel }}</p>
+            <button type="button" :disabled="busy" :aria-busy="busy" class="min-h-11 shrink-0 rounded-full bg-[#344732] px-6 font-semibold text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="finalize">{{ busy ? 'Đang chốt…' : `Chốt ${chosenCount} ảnh` }}</button>
+          </div>
         </div>
       </template>
     </main>

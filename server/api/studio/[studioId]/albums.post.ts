@@ -11,13 +11,12 @@ export default defineEventHandler(async event => {
   const source = requireVerifiedDriveSource()
   const body = await readBody<{
     folderUrl?: string; title?: string; expiresInDays?: 15 | 30; limit?: SelectionLimit
-    collaborationMode?: 'shared' | 'individual' | 'voting'; shortlistRounds?: 1 | 2
   }>(event)
   if (typeof body?.folderUrl !== 'string' || typeof body?.title !== 'string') {
     throw createError({ statusCode: 400, statusMessage: 'Thiếu link Drive hoặc tên album' })
   }
   return studioApi(async () => ({ album: await createAlbum(getAppPool(), source, {
     studioId, userId: user.id, folderUrl: body.folderUrl!, title: body.title!, expiresInDays: body.expiresInDays ?? 15,
-    limit: body.limit ?? { kind: 'unlimited' }, collaborationMode: body.collaborationMode, shortlistRounds: body.shortlistRounds,
+    limit: body.limit ?? { kind: 'unlimited' },
   }) }))
 })

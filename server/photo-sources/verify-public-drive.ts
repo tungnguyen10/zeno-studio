@@ -32,7 +32,7 @@ export async function verifyPublicDrive(source: PhotoSourceAdapter, folderUrl: s
       if (seenIds.has(photo.id)) throw new DriveVerificationError('Google Drive trả ID ảnh trùng giữa các trang')
       seenIds.add(photo.id)
       photos.push(photo)
-      if (photos.length > 3000) throw new DriveVerificationError('Folder mẫu vượt giới hạn 3.000 ảnh')
+      if (photos.length > 10000) throw new DriveVerificationError('Folder mẫu vượt giới hạn 10.000 ảnh')
     }
     pageToken = page.nextPageToken
     if (pageToken) {

@@ -35,14 +35,14 @@ Nền tảng giúp studio/photographer **tạo album từ Google Drive → gửi
 - **Collaborator:** tham gia qua link/token riêng; quyền xem/chọn/chốt được cấu hình.
 - **Retoucher:** xem selection snapshot và notes, cập nhật tiến độ xử lý.
 
-**Bắt buộc:** Link khách và link quản trị tách biệt; token có phạm vi quyền riêng, lưu dạng hash và thu hồi được; tenant isolation/RLS; không dựa vào URL khó đoán như lớp bảo mật duy nhất. Studio đăng nhập bằng email/mật khẩu qua Better Auth; khách không cần tài khoản. Mỗi participant nhập tên một lần và nhận token riêng để tiếp tục trên thiết bị khác.
+**Bắt buộc:** Link khách và link quản trị tách biệt; token có phạm vi quyền riêng, lưu dạng hash và thu hồi được; tenant isolation/RLS; không dựa vào URL khó đoán như lớp bảo mật duy nhất. Studio đăng nhập bằng email/mật khẩu qua Better Auth; khách không cần tài khoản và không phải nhập tên. Mọi thiết bị dùng cùng link khách đều vào chung một danh sách chọn và chung ghi chú.
 
 ## 4. Luồng chính (end-to-end)
 
 1. **Tạo album:** Dán Google Drive folder link → kiểm tra quyền & ảnh → tên album (gợi ý từ folder), giới hạn chọn (mặc định không giới hạn), hạn 15 ngày (tùy chọn 30) → xuất bản.
 2. **Chia sẻ:** Copy link / chia sẻ Zalo; khách mở trực tiếp không đăng nhập, nhập mật khẩu nếu được bật.
 3. **Chọn ảnh:** ♥ trên thumbnail hoặc Focus Viewer; 💬 ghi chú yêu cầu chỉnh sửa; autosave, hiển thị `Đang lưu / Đã lưu / Lỗi đồng bộ`.
-4. **Cộng tác (tùy chọn):** Shared mặc định; Individual/Voting bật trong Settings; danh tính participant và quyền chốt rõ ràng.
+4. **Cộng tác:** Một link khách là một danh sách chọn chung và một ghi chú chung cho mỗi ảnh; không còn chế độ Individual/Voting, không phân biệt người chọn.
 5. **Kiểm tra & chốt:** Selected Photos → kiểm tra giới hạn, ảnh có notes → xác nhận → tạo **immutable selection snapshot** gồm file và ghi chú.
 6. **Studio nhận kết quả:** xem filename + notes; copy filenames / xuất TXT, CSV; mở Local File Filter ngay từ album.
 7. **Hậu kỳ:** match filename với RAW/JPEG trên máy → xem matched/missing/ambiguous → **Copy** sang thư mục đích (không Move).
@@ -84,7 +84,7 @@ Nền tảng giúp studio/photographer **tạo album từ Google Drive → gửi
 | **Focus** | Xem lớn, swipe, zoom, chọn/note | Fullscreen | Viewer / side panel |
 
 - Tất cả view dùng chung photo data và selection state; chuyển view **không làm mất lựa chọn hoặc đổi thứ tự logic**.
-- Filters: **Tất cả / Đã chọn / Chưa chọn**; nâng cao: Có ghi chú, Theo người chọn, Shortlist, Nhiều phiếu.
+- Filters: **Tất cả / Đã chọn / Chưa chọn**; nâng cao: Có ghi chú.
 - Sort: Studio default, filename A–Z/Z–A, ngày file (nếu có), chọn gần đây, nhiều phiếu.
 - Lưu view, số cột, filter trong local preferences; không yêu cầu user đăng nhập.
 - Gallery hàng nghìn ảnh phải lazy-load/virtualize hợp lý, không tải tất cả preview cùng lúc.
@@ -95,14 +95,13 @@ Nền tảng giúp studio/photographer **tạo album từ Google Drive → gửi
 - ♥ / ♡ độc lập với 💬; tap vào ảnh mở Focus, tap vào icon thực hiện hành động trực tiếp.
 - Selection limit: Unlimited (default), Exact, Maximum, Minimum, Range.
 - Multi-select: desktop Shift/Cmd/Ctrl; mobile bật chế độ checkbox riêng; **bulk marked items** tách khỏi danh sách yêu thích chính thức.
-- Shortlist: Single round mặc định; Two rounds tùy chọn.
-- Shared mặc định; Individual/Voting tùy chọn; chỉ participant được cấp quyền mới finalize. Individual giữ danh sách riêng cho từng người; người có quyền tổng hợp và chọn bộ cuối. Voting tính một phiếu cho mỗi participant trên mỗi ảnh; người có quyền chọn bộ cuối dựa trên số phiếu, kể cả khi hòa phiếu hoặc vượt giới hạn.
+- Một vòng chọn; danh sách chọn chung cho cả link khách. Studio chốt bộ cuối, có thể chọn lại bộ ảnh khi chốt.
 - Có thể bỏ/chọn lại trước finalize; sau finalize muốn sửa phải **reopen → new snapshot**.
 
 ### Photo Notes (bắt buộc V1)
 - Mỗi ảnh có **♥ Chọn** và **💬 Ghi chú** ở Grid, List, Focus.
 - Note editor: **một textarea** mặc định; gợi ý nhanh: sáng ảnh, chỉnh da, xóa vật thể/người, màu, bố cục, khác.
-- Một note chính cho **mỗi participant + photo**; ghi người tạo, thời gian và các thay đổi; không ghi đè note của người khác.
+- Một note chính cho **mỗi ảnh**, dùng chung cho mọi thiết bị mở cùng link khách; ghi thời gian và các thay đổi, xung đột được phát hiện theo phiên bản.
 - Note **không tự chọn ảnh**. Bỏ chọn vẫn giữ note nháp; trước khi chốt cảnh báo nếu có note ở ảnh không chọn.
 - Selected Photos có filter **Có ghi chú / Chưa ghi chú** và số lượng ảnh có notes.
 - Finalize lưu **snapshot ảnh đã chọn + filename tại thời điểm chốt + nội dung notes**; studio không làm thay đổi yêu cầu gốc khi cập nhật trạng thái hậu kỳ.
@@ -176,7 +175,7 @@ Nền tảng giúp studio/photographer **tạo album từ Google Drive → gửi
 - Nhiều người cùng chọn không mất thay đổi; snapshot chốt chính xác cả **notes**.
 - Drive folder lỗi/quyền đổi/ảnh hỏng phải có fallback UI và thông báo có thể hành động.
 - Local filter xử lý đúng mọi bộ test filename và duplicate, không xóa file nguồn.
-- Kiểm thử album 1.000–3.000 ảnh, Chrome/Edge/Safari, iOS/Android/Zalo WebView; performance, Neon pooled-connection RLS, access-token, accessibility, cleanup.
+- Kiểm thử album 1.000–10.000 ảnh (gallery phân trang theo cursor, chỉ vẽ ảnh trong màn hình), Chrome/Edge/Safari, iOS/Android/Zalo WebView; performance, Neon pooled-connection RLS, access-token, accessibility, cleanup.
 - Mục tiêu đo lường ban đầu: p75 LCP ≤ 2,5s và p75 INP ≤ 200ms **trong điều kiện kiểm thử xác định**; điều chỉnh theo kết quả thực tế.
 
 ## 13. Thứ tự phát triển (cùng phạm vi V1)

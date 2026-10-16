@@ -31,6 +31,7 @@
     "@neon/functions": "^0.11.0",
     "@pinia/nuxt": "^1.0.2",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/vue-virtual": "^3.13.47",
     "better-auth": "^1.7.7",
     "nodemailer": "^10.1.0",
     "nuxt": "^4.6.1",

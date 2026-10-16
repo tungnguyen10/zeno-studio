@@ -13,13 +13,13 @@ Kiểm tra mới nhất cho nhánh làm việc: `npm test` 79/79, `npm run typec
 | T09 | Local | Tạo album guest không cần login, link quản trị bí mật, cookie, quản lý vòng đời, rate limit và claim vào studio sở hữu; RLS/HTTP và Chromium desktop/mobile test đạt. Chưa smoke trên Neon test/Preview. |
 | T10 | Dev Neon | Mời, đổi vai trò, thu hồi thành viên và lời mời; HTTP + pooled test. |
 | T11–T13 | Một phần | API key Drive hợp lệ; folder công khai hiện trả 326 ảnh, ảnh gốc và thumbnail mẫu tải được. Chưa kiểm ảnh có resource key. |
-| T14 | Một phần | Adapter Drive API chính thức; gallery dùng thumbnail Drive qua API Zeno và Focus dùng ảnh gốc, có test giả và E2E. Đã tải 5 thumbnail Drive thật; chưa đo tải toàn trang hoặc thử 1.000–3.000 ảnh. |
+| T14 | Một phần | Adapter Drive API chính thức; gallery dùng thumbnail Drive qua API Zeno và Focus dùng ảnh gốc, có test giả và E2E. Đã tải 5 thumbnail Drive thật; giới hạn album nâng lên 10.000 ảnh; gallery khách/studio/kết quả phân trang cursor + virtualization (E2E giả lập 10.000 ảnh), 4 layout (hàng đều, lưới, so le, danh sách). Chưa đo với folder Drive thật 1.000–10.000 ảnh. |
 | T15–T16 | Chờ quyết định | Chỉ làm OAuth nếu T11–T13 cho thấy cần thiết. |
 | T17–T19 | Một phần | Tạo album 307 ảnh, catalog, publish, cấp lại link khách từ danh sách và ảnh khách đã qua HTTP smoke trên Preview. Gate Drive mở ở local/Preview, Production vẫn khóa. Chưa có mật khẩu album và chia sẻ hệ thống/Zalo. |
 | T20–T22 | Một phần | Danh sách và trang chi tiết album cơ bản; tìm/lọc/sắp xếp, settings và nhắc hạn còn thiếu. |
-| T23–T30 | Một phần | Link khách, participant token, catalog phân trang, grid/list, chọn ảnh có giới hạn/version và polling 4 giây; thiếu password, masonry/justified, zoom/swipe, filter/sort phong phú, bulk và shortlist 2 vòng. |
-| T31–T32 | Dev Neon | Ghi chú riêng theo participant/photo, lịch sử phiên bản, conflict; UI focus panel cơ bản. |
-| T33–T34 | Một phần | Shared/Individual/Voting lưu và xử lý phiếu; studio chọn bộ cuối. Thiếu mời/thu hồi link participant riêng và UI cộng tác đầy đủ. |
+| T23–T30 | Một phần | Link khách tự vào album (không nhập tên; mọi thiết bị dùng chung một danh sách chọn), catalog phân trang, grid/list, chọn ảnh có giới hạn/version và polling 4 giây; thiếu password, masonry/justified, zoom/swipe, filter/sort phong phú và bulk. |
+| T31–T32 | Dev Neon | Ghi chú chung cho mỗi ảnh, lịch sử phiên bản, conflict; UI focus panel cơ bản. |
+| T33–T34 | Một phần | Danh sách chọn chung; studio chọn bộ cuối. Đã bỏ chế độ Individual/Voting và shortlist 2 vòng khỏi code (cột DB còn lại, chưa xóa). |
 | T35–T37 | Dev Neon | Studio xem danh sách/phiếu, chốt snapshot bất biến, mở cycle mới; test local và pooled Neon. |
 | T38–T42 | Một phần | Results, filename TXT/CSV, notes TXT/CSV, local matching/copy/report đã nối UI; còn vài option xuất. |
 | T43–T47 | Một phần | Production state, review/revision rounds, link Drive ảnh chỉnh, khách duyệt và bàn giao theo snapshot có API/UI và test local + Neon; thiếu map ảnh chỉnh thủ công khi tên khác. |

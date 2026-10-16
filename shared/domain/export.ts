@@ -1,7 +1,7 @@
 export interface ExportItem {
   photoId: string
   filename: string
-  notes: Array<{ participant: string; text: string }>
+  notes: Array<{ text: string }>
 }
 
 function csvCell(value: string): string {
@@ -17,8 +17,8 @@ export function exportSelectionCsv(items: ExportItem[]): string {
 }
 
 export function exportNotesCsv(items: ExportItem[]): string {
-  const rows = items.flatMap(item => item.notes.map(note => [item.photoId, item.filename, note.participant, note.text]))
-  return csv([['photo_id', 'filename', 'participant', 'note'], ...rows])
+  const rows = items.flatMap(item => item.notes.map(note => [item.photoId, item.filename, note.text]))
+  return csv([['photo_id', 'filename', 'note'], ...rows])
 }
 
 export function exportFilenamesTxt(items: ExportItem[]): string {
@@ -26,5 +26,5 @@ export function exportFilenamesTxt(items: ExportItem[]): string {
 }
 
 export function exportNotesTxt(items: ExportItem[]): string {
-  return items.flatMap(item => item.notes.map(note => `${item.filename}\n${note.participant}: ${note.text}\n`)).join('\n')
+  return items.flatMap(item => item.notes.map(note => `${item.filename}\n${note.text}\n`)).join('\n')
 }

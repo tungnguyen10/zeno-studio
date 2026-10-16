@@ -26,7 +26,7 @@ async function main() {
     studioId = studio.id
     const album = await createAlbum(runtime, source, { studioId, userId: actor, title: 'Album thử', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'exact', count: 1 } })
     const { customerToken } = await publishAlbum(runtime, studioId, actor, album.id)
-    const joined = await joinAlbum(runtime, (await resolveAlbumAccess(runtime, customerToken))!, 'Khách')
+    const joined = await joinAlbum(runtime, (await resolveAlbumAccess(runtime, customerToken))!)
     const access = (await resolveAlbumAccess(runtime, joined.token))!
     const photos = (await listAlbumPhotos(runtime, access)).items
     if (photos.length !== 2) throw new Error('Photo catalog incomplete')
@@ -55,7 +55,7 @@ async function main() {
     if (await resolveAlbumAccess(runtime, joined.token)) throw new Error('Revoked token still resolves')
     const deliveryAlbum = await createAlbum(runtime, source, { studioId, userId: actor, title: 'Delivery test', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'exact', count: 1 } })
     const deliveryToken = (await publishAlbum(runtime, studioId, actor, deliveryAlbum.id)).customerToken
-    const deliveryAccess = (await resolveAlbumAccess(runtime, (await joinAlbum(runtime, (await resolveAlbumAccess(runtime, deliveryToken))!, 'Review customer')).token))!
+    const deliveryAccess = (await resolveAlbumAccess(runtime, (await joinAlbum(runtime, (await resolveAlbumAccess(runtime, deliveryToken))!)).token))!
     const deliveryPhoto = (await listAlbumPhotos(runtime, deliveryAccess)).items[0]!
     await setPhotoSelection(runtime, deliveryAccess, deliveryPhoto.id, true, 0)
     await finalizeStudioSelection(runtime, studioId, actor, deliveryAlbum.id)

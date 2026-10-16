@@ -9,7 +9,7 @@ import { ensureStudio } from '../../server/studios/studio'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 
 const db = await PGlite.create()
-for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '014_review_delivery.sql', '015_review_policy_lockdown.sql', '016_photo_thumbnails.sql']) {
+for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '014_review_delivery.sql', '015_review_policy_lockdown.sql', '016_photo_thumbnails.sql', '019_shared_customer_participant.sql']) {
   await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'))
 }
 await db.exec('SET ROLE app_runtime')
@@ -22,7 +22,7 @@ describe('production, review, and delivery', () => {
     const studio = await ensureStudio(pool, 'production-owner', 'Production Studio')
     const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'production-owner', title: 'Production', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'exact', count: 1 } })
     const { customerToken } = await publishAlbum(pool, studio.id, 'production-owner', album.id)
-    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, customerToken))!, 'Lan')).token))!
+    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, customerToken))!)).token))!
     const photo = (await listAlbumPhotos(pool, access)).items[0]!
     await setPhotoSelection(pool, access, photo.id, true, 0)
     await finalizeStudioSelection(pool, studio.id, 'production-owner', album.id)

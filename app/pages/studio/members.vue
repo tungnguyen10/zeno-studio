@@ -14,6 +14,7 @@ const inviteEmail = ref('')
 const inviteRole = ref<'manager' | 'member' | 'retoucher'>('member')
 const inviteLink = ref('')
 const busy = ref(false)
+const loaded = ref(false)
 const feedback = ref('')
 const canManage = computed(() => studio.value?.role === 'owner' || studio.value?.role === 'manager')
 
@@ -33,7 +34,7 @@ async function load() {
     members.value = memberResult.members
     invitations.value = invitationResult.invitations
   } catch (error) { feedback.value = error instanceof Error ? error.message : 'Không thể tải thành viên.' }
-  finally { busy.value = false }
+  finally { busy.value = false; loaded.value = true }
 }
 
 async function createInvitation() {
@@ -95,8 +96,27 @@ onMounted(load)
     <NuxtLink to="/studio" class="text-sm font-semibold text-[#496446]">← Studio</NuxtLink>
     <h1 class="mt-8 text-4xl font-semibold tracking-tight">Thành viên studio</h1>
     <p v-if="studio" class="mt-2 text-[#667060]">{{ studio.name }}</p>
+    <div v-if="!loaded" role="status" aria-busy="true" aria-label="Đang tải thành viên" class="mt-8 grid gap-7 lg:grid-cols-2">
+      <section class="rounded-2xl border border-[#e0e3d8] bg-white p-6">
+        <UiSkeleton class="h-6 w-40" />
+        <UiSkeleton class="mt-3 h-4 w-full" />
+        <UiSkeleton class="mt-6 h-[4.5rem] w-full rounded-xl" />
+        <UiSkeleton class="mt-4 h-[4.5rem] w-full rounded-xl" />
+        <UiSkeleton class="mt-4 h-12 w-36 rounded-full" />
+      </section>
+      <section v-for="n in 2" :key="n" class="rounded-2xl border border-[#e0e3d8] bg-white p-6">
+        <UiSkeleton class="h-6 w-32" />
+        <div class="mt-5 space-y-3">
+          <div v-for="row in 3" :key="row" class="flex items-center justify-between gap-3">
+            <UiSkeleton class="h-4 w-1/2" />
+            <UiSkeleton class="h-9 w-28 rounded-full" />
+          </div>
+        </div>
+      </section>
+      <span class="sr-only">Đang tải thành viên…</span>
+    </div>
     <p v-if="feedback" class="mt-5 rounded-xl bg-[#f1f5ed] p-4 text-sm" role="status">{{ feedback }}</p>
-    <div v-if="canManage" class="mt-8 grid gap-7 lg:grid-cols-2">
+    <div v-if="canManage && loaded" class="mt-8 grid gap-7 lg:grid-cols-2">
       <section class="rounded-2xl border border-[#e0e3d8] bg-white p-6">
         <h2 class="text-xl font-semibold">Mời người mới</h2>
         <p class="mt-2 text-sm text-[#667060]">Liên kết chỉ dùng cho email được mời và hết hạn sau 7 ngày.</p>

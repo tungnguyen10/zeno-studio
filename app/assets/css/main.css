@@ -10,3 +10,26 @@ body { margin: 0; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 ::selection { background: #dfedc8; }
+
+/* Placeholder shown wherever a photo has not arrived yet. */
+.photo-placeholder {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(145deg, #bfc9b2, #f4e6d5 54%, #d9baa0);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .photo-placeholder[data-loading]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / 0.4) 50%, transparent 75%);
+    transform: translateX(-100%);
+    animation: photo-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes photo-shimmer {
+  to { transform: translateX(100%); }
+}

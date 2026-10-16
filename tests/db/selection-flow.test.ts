@@ -3,14 +3,14 @@ import { PGlite } from '@electric-sql/pglite'
 import { readFile } from 'node:fs/promises'
 import { createAlbum, publishAlbum } from '../../server/albums/album'
 import { joinAlbum, listAlbumPhotos, resolveAlbumAccess } from '../../server/albums/access'
-import { getSelectionState, setPhotoSelection, savePhotoNote, finalizeStudioSelection, reopenStudioSelection, getSelectionResults } from '../../server/albums/selection'
-import { getStudioAlbumWorkspace } from '../../server/albums/workspace'
+import { getPhotoNote, getSelectionState, setPhotoSelection, savePhotoNote, finalizeStudioSelection, reopenStudioSelection, getSelectionResults } from '../../server/albums/selection'
+import { getStudioAlbumWorkspace, listManagedAlbumPhotos } from '../../server/albums/workspace'
 import { ensureStudio } from '../../server/studios/studio'
 import { withDatabaseContext } from '../../server/db/context'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 
 const db = await PGlite.create()
-for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql']) {
+for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql', '019_shared_customer_participant.sql']) {
   await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'))
 }
 await db.exec('SET ROLE app_runtime')
@@ -26,7 +26,7 @@ describe('selection workflow', () => {
     const studio = await ensureStudio(pool, 'selection-owner', 'Selection Studio')
     const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'selection-owner', title: 'Wedding', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'exact', count: 1 } })
     const { customerToken } = await publishAlbum(pool, studio.id, 'selection-owner', album.id)
-    const joined = await joinAlbum(pool, (await resolveAlbumAccess(pool, customerToken))!, 'Lan')
+    const joined = await joinAlbum(pool, (await resolveAlbumAccess(pool, customerToken))!)
     const access = (await resolveAlbumAccess(pool, joined.token))!
     const photos = (await listAlbumPhotos(pool, access)).items
     const first = await setPhotoSelection(pool, access, photos[0]!.id, true, 0)
@@ -40,39 +40,79 @@ describe('selection workflow', () => {
     const finalized = await finalizeStudioSelection(pool, studio.id, 'selection-owner', album.id)
     expect(finalized.versionNumber).toBe(1)
     expect((await getSelectionResults(pool, studio.id, 'selection-owner', album.id)).items).toMatchObject([
-      { photoId: photos[0]!.id, filename: 'A.JPG', notes: [{ participant: 'Lan', text: 'Chỉnh sáng' }] },
+      { photoId: photos[0]!.id, filename: 'A.JPG', notes: [{ text: 'Chỉnh sáng' }] },
     ])
     await reopenStudioSelection(pool, studio.id, 'selection-owner', album.id)
     expect((await getSelectionState(pool, access)).selectedPhotoIds).toEqual([])
     expect((await getSelectionResults(pool, studio.id, 'selection-owner', album.id)).versionNumber).toBe(1)
   })
 
-  it('keeps voting lists per participant and lets the studio choose the final set', async () => {
-    const studio = await ensureStudio(pool, 'vote-owner', 'Vote Studio')
-    const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'vote-owner', title: 'Vote', folderUrl: 'https://drive.google.com/drive/folders/folder456', expiresInDays: 15, limit: { kind: 'exact', count: 1 }, collaborationMode: 'voting' })
-    const { customerToken } = await publishAlbum(pool, studio.id, 'vote-owner', album.id)
+  it('shares one selection list and note across devices using the same customer link', async () => {
+    const studio = await ensureStudio(pool, 'shared-owner', 'Shared Studio')
+    const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'shared-owner', title: 'Shared', folderUrl: 'https://drive.google.com/drive/folders/folder456', expiresInDays: 15, limit: { kind: 'unlimited' } })
+    const { customerToken } = await publishAlbum(pool, studio.id, 'shared-owner', album.id)
     const customer = (await resolveAlbumAccess(pool, customerToken))!
-    const lan = (await resolveAlbumAccess(pool, (await joinAlbum(pool, customer, 'Lan')).token))!
-    const minh = (await resolveAlbumAccess(pool, (await joinAlbum(pool, customer, 'Minh')).token))!
-    const photos = (await listAlbumPhotos(pool, lan)).items
-    expect((await setPhotoSelection(pool, lan, photos[0]!.id, true, 0)).status).toBe('saved')
-    expect((await setPhotoSelection(pool, lan, photos[1]!.id, true, 1)).status).toBe('saved')
-    expect((await setPhotoSelection(pool, minh, photos[1]!.id, true, 0)).status).toBe('saved')
-    await savePhotoNote(pool, lan, photos[0]!.id, 'Lan note', 0)
-    await savePhotoNote(pool, minh, photos[0]!.id, 'Minh note', 0)
-    const visible = await withDatabaseContext(pool, { albumId: album.id, scope: 'customer', participantId: lan.participantId! },
-      client => client.query<{ body: string }>('SELECT body FROM photo_notes WHERE album_id = $1 ORDER BY body', [album.id]))
-    expect(visible.rows.map(row => row.body)).toEqual(['Lan note'])
-    const roundWrite = await withDatabaseContext(pool, { albumId: album.id, scope: 'customer', participantId: lan.participantId! },
+    const phone = (await resolveAlbumAccess(pool, (await joinAlbum(pool, customer)).token))!
+    const laptop = (await resolveAlbumAccess(pool, (await joinAlbum(pool, customer)).token))!
+    expect(laptop.participantId).toBe(phone.participantId)
+    const photos = (await listAlbumPhotos(pool, phone)).items
+    expect((await setPhotoSelection(pool, phone, photos[0]!.id, true, 0)).status).toBe('saved')
+    expect((await getSelectionState(pool, laptop)).selectedPhotoIds).toEqual([photos[0]!.id])
+    expect((await setPhotoSelection(pool, laptop, photos[1]!.id, true, 1)).status).toBe('saved')
+    expect((await getSelectionState(pool, phone)).selectedPhotoIds).toEqual([photos[0]!.id, photos[1]!.id])
+    await savePhotoNote(pool, phone, photos[0]!.id, 'Từ điện thoại', 0)
+    expect(await getPhotoNote(pool, laptop, photos[0]!.id)).toEqual({ body: 'Từ điện thoại', version: 1 })
+    const roundWrite = await withDatabaseContext(pool, { albumId: album.id, scope: 'customer', participantId: phone.participantId! },
       client => client.query<{ id: string }>("UPDATE selection_rounds SET status = 'CLOSED' WHERE album_id = $1 RETURNING id", [album.id]))
     expect(roundWrite.rows).toEqual([])
-    await expect(withDatabaseContext(pool, { albumId: album.id, scope: 'customer', participantId: lan.participantId! },
-      client => client.query('INSERT INTO photo_notes (album_id, photo_id, participant_id, body) VALUES ($1, $2, $3, $4)',
-        [album.id, photos[1]!.id, minh.participantId, 'forged']))).rejects.toThrow()
-    expect((await getSelectionState(pool, minh)).selectedPhotoIds).toEqual([photos[1]!.id])
-    const workspace = await getStudioAlbumWorkspace(pool, studio.id, 'vote-owner', album.id)
-    expect(workspace.photos.find(photo => photo.id === photos[1]!.id)?.selectedBy).toEqual(['Lan', 'Minh'])
-    expect((await finalizeStudioSelection(pool, studio.id, 'vote-owner', album.id, [photos[1]!.id])).count).toBe(1)
-    expect((await getSelectionResults(pool, studio.id, 'vote-owner', album.id)).items[0]?.filename).toBe('B.JPG')
+    const workspace = await getStudioAlbumWorkspace(pool, studio.id, 'shared-owner', album.id)
+    expect(workspace).toMatchObject({ photoCount: 2, selectedCount: 2 })
+    const selectedPage = await listAlbumPhotos(pool, laptop, 1, undefined, 'selected')
+    expect(selectedPage).toMatchObject({ total: 2, selectedCount: 2 })
+    expect(selectedPage.items.map(photo => photo.selected)).toEqual([true])
+    expect(selectedPage.nextCursor).toBeTruthy()
+    const state = await getSelectionState(pool, phone)
+    expect(await getSelectionState(pool, phone, state.version)).toEqual({ version: state.version })
+  })
+
+  it('pages and filters managed photos and finalizes with include/exclude adjustments', async () => {
+    const studio = await ensureStudio(pool, 'adjust-owner', 'Adjust Studio')
+    const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'adjust-owner', title: 'Adjust', folderUrl: 'https://drive.google.com/drive/folders/folderadj', expiresInDays: 15, limit: { kind: 'unlimited' } })
+    const { customerToken } = await publishAlbum(pool, studio.id, 'adjust-owner', album.id)
+    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, customerToken))!)).token))!
+    const photos = (await listAlbumPhotos(pool, access)).items
+    await setPhotoSelection(pool, access, photos[0]!.id, true, 0)
+    const manager = { kind: 'member' as const, studioId: studio.id, userId: 'adjust-owner' }
+    const page = await listManagedAlbumPhotos(pool, manager, album.id, { limit: 10, filter: 'selected' })
+    expect(page.items.map(photo => photo.id)).toEqual([photos[0]!.id])
+    await expect(finalizeStudioSelection(pool, studio.id, 'adjust-owner', album.id, { include: ['not-a-uuid'] })).rejects.toMatchObject({ statusCode: 400 })
+    const finalized = await finalizeStudioSelection(pool, studio.id, 'adjust-owner', album.id, { include: [photos[1]!.id], exclude: [photos[0]!.id] })
+    expect(finalized.count).toBe(1)
+    const firstPage = await getSelectionResults(pool, studio.id, 'adjust-owner', album.id, { limit: 1 })
+    expect(firstPage).toMatchObject({ total: 1, nextCursor: null })
+    expect(firstPage.items.map(item => item.photoId)).toEqual([photos[1]!.id])
+  })
+
+  it('only accepts notes on selected photos, keeps them hidden after unselect, and snapshots only selected notes', async () => {
+    const studio = await ensureStudio(pool, 'note-owner', 'Note Studio')
+    const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'note-owner', title: 'Notes', folderUrl: 'https://drive.google.com/drive/folders/folder789', expiresInDays: 15, limit: { kind: 'unlimited' } })
+    const { customerToken } = await publishAlbum(pool, studio.id, 'note-owner', album.id)
+    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, customerToken))!)).token))!
+    const photos = (await listAlbumPhotos(pool, access)).items
+    await expect(savePhotoNote(pool, access, photos[0]!.id, 'Chưa chọn', 0)).rejects.toMatchObject({ statusCode: 409 })
+    await setPhotoSelection(pool, access, photos[0]!.id, true, 0)
+    await setPhotoSelection(pool, access, photos[1]!.id, true, 1)
+    expect((await savePhotoNote(pool, access, photos[0]!.id, 'Chỉnh sáng', 0)).status).toBe('saved')
+    expect((await savePhotoNote(pool, access, photos[1]!.id, 'Chỉnh da', 0)).status).toBe('saved')
+    await setPhotoSelection(pool, access, photos[0]!.id, false, 2)
+    await expect(savePhotoNote(pool, access, photos[0]!.id, 'Sau khi bỏ chọn', 1)).rejects.toMatchObject({ statusCode: 409 })
+    expect(await getPhotoNote(pool, access, photos[0]!.id)).toEqual({ body: 'Chỉnh sáng', version: 1 })
+    await setPhotoSelection(pool, access, photos[0]!.id, true, 3)
+    expect((await savePhotoNote(pool, access, photos[0]!.id, 'Chỉnh sáng hơn', 1)).status).toBe('saved')
+    await setPhotoSelection(pool, access, photos[0]!.id, false, 4)
+    await finalizeStudioSelection(pool, studio.id, 'note-owner', album.id, { include: [photos[0]!.id] })
+    const results = (await getSelectionResults(pool, studio.id, 'note-owner', album.id)).items
+    expect(results.find(item => item.photoId === photos[0]!.id)?.notes).toEqual([])
+    expect(results.find(item => item.photoId === photos[1]!.id)?.notes).toEqual([{ text: 'Chỉnh da' }])
   })
 })

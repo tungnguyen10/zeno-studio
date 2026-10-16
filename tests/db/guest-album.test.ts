@@ -5,7 +5,7 @@ import { withDatabaseContext } from '../../server/db/context'
 import { createGuestAlbum, createGuestShareLink, claimGuestAlbum } from '../../server/albums/guest'
 import { joinAlbum, resolveAlbumAccess } from '../../server/albums/access'
 import { ensureStudio, getStudiosForUser } from '../../server/studios/studio'
-import { getManagedAlbumWorkspace } from '../../server/albums/workspace'
+import { getManagedAlbumWorkspace, listManagedAlbumPhotos } from '../../server/albums/workspace'
 import { finalizeManagedSelection, getManagedSelectionResults, getSelectionState, setPhotoSelection } from '../../server/albums/selection'
 import { completeManagedDelivery, getCustomerReview, listManagedProductionTasks, startManagedReviewRound, submitCustomerReview, updateManagedProductionTask } from '../../server/albums/production'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
@@ -48,8 +48,8 @@ describe('guest album ownership', () => {
     })
     const studio = await ensureStudio(pool, 'claim-owner', 'Claim Studio')
     const unrelated = await ensureStudio(pool, 'other-owner', 'Other Studio')
-    const participant = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, first.customerToken))!, 'Claim customer')).token))!
-    const firstPhotoId = (await getManagedAlbumWorkspace(pool, { kind: 'guest', albumId: first.id, token: first.adminToken }, first.id)).photos[0]!.id
+    const participant = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, first.customerToken))!)).token))!
+    const firstPhotoId = (await listManagedAlbumPhotos(pool, { kind: 'guest', albumId: first.id, token: first.adminToken }, first.id, { limit: 10, filter: 'all' })).items[0]!.id
     await setPhotoSelection(pool, participant, firstPhotoId, true, 0)
     await withDatabaseContext(pool, { albumId: first.id, scope: 'guest_admin' }, client =>
       client.query("INSERT INTO audit_logs (studio_id, album_id, actor_kind, action) SELECT studio_id, id, 'guest_admin', 'guest.created' FROM albums WHERE id = $1", [first.id]))
@@ -77,9 +77,9 @@ describe('guest album ownership', () => {
     const manager = { kind: 'guest' as const, albumId: created.id, token: created.adminToken }
     const workspace = await getManagedAlbumWorkspace(pool, manager, created.id)
     expect(workspace.canFinalize).toBe(true)
-    expect(workspace.photos).toHaveLength(1)
-    const photoId = workspace.photos[0]!.id
-    const result = await finalizeManagedSelection(pool, manager, created.id, [photoId])
+    expect(workspace.photoCount).toBe(1)
+    const photoId = (await listManagedAlbumPhotos(pool, manager, created.id, { limit: 10, filter: 'all' })).items[0]!.id
+    const result = await finalizeManagedSelection(pool, manager, created.id, { include: [photoId] })
     expect(result).toMatchObject({ versionNumber: 1, count: 1 })
     expect((await getManagedAlbumWorkspace(pool, manager, created.id)).hasResults).toBe(true)
     expect((await getManagedSelectionResults(pool, manager, created.id)).items[0]?.filename).toBe('01.jpg')
@@ -90,7 +90,7 @@ describe('guest album ownership', () => {
     await updateManagedProductionTask(pool, manager, created.id, tasks.items[0]!.id, 'WAITING_REVIEW')
     const review = await startManagedReviewRound(pool, manager, created.id, 'https://drive.google.com/drive/folders/edited')
     expect(review.roundNumber).toBe(1)
-    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, created.customerToken))!, 'Guest customer')).token))!
+    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, created.customerToken))!)).token))!
     expect((await getCustomerReview(pool, access))?.status).toBe('WAITING_REVIEW')
     expect((await submitCustomerReview(pool, access, 'approve', '')).status).toBe('APPROVED')
     expect((await completeManagedDelivery(pool, manager, created.id, 'https://drive.google.com/drive/folders/final')).versionNumber).toBe(1)

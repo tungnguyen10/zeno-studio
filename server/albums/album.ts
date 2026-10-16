@@ -22,8 +22,6 @@ export interface CreateAlbumInput {
   title: string
   expiresInDays: 15 | 30
   limit: SelectionLimit
-  collaborationMode?: 'shared' | 'individual' | 'voting'
-  shortlistRounds?: 1 | 2
 }
 
 async function requireAlbumPermission(client: QueryClient, studioId: string, userId: string, action: 'album.create' | 'album.view' | 'album.publish'): Promise<void> {
@@ -31,11 +29,9 @@ async function requireAlbumPermission(client: QueryClient, studioId: string, use
   if (!result.rows[0] || !canPerform(result.rows[0].role, action)) throw new StudioOperationError('Không có quyền thao tác album', 403)
 }
 
-export function validateAlbumInput(input: Pick<CreateAlbumInput, 'title' | 'expiresInDays' | 'limit' | 'collaborationMode' | 'shortlistRounds'>): void {
+export function validateAlbumInput(input: Pick<CreateAlbumInput, 'title' | 'expiresInDays' | 'limit'>): void {
   if (!input.title.trim() || input.title.trim().length > 150) throw new StudioOperationError('Tên album phải dài 1–150 ký tự', 400)
   if (input.expiresInDays !== 15 && input.expiresInDays !== 30) throw new StudioOperationError('Hạn album phải là 15 hoặc 30 ngày', 400)
-  if (input.shortlistRounds !== undefined && input.shortlistRounds !== 1 && input.shortlistRounds !== 2) throw new StudioOperationError('Số vòng shortlist không hợp lệ', 400)
-  if (input.collaborationMode && !['shared', 'individual', 'voting'].includes(input.collaborationMode)) throw new StudioOperationError('Chế độ cộng tác không hợp lệ', 400)
   const limit = input.limit
   if (!limit || !['unlimited', 'maximum', 'minimum', 'exact', 'range'].includes(limit.kind)) {
     throw new StudioOperationError('Giới hạn chọn không hợp lệ', 400)
@@ -73,7 +69,7 @@ export async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnTy
     }
     for (const photo of page.items) {
       if (!seenIds.has(photo.id)) { seenIds.add(photo.id); photos.push(photo) }
-      if (photos.length > 3000) throw new StudioOperationError('Album vượt giới hạn 3.000 ảnh của V1', 400)
+      if (photos.length > 10000) throw new StudioOperationError('Album vượt giới hạn 10.000 ảnh', 400)
     }
     pageToken = page.nextPageToken
     if (pageToken) {
@@ -108,7 +104,7 @@ export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapt
 
 export async function insertAlbumRecords(
   client: QueryClient, studioId: string, albumId: string, folder: ReturnType<typeof parseGoogleDriveFolderLink>,
-  photos: SourcePhoto[], input: Pick<CreateAlbumInput, 'title' | 'expiresInDays' | 'limit' | 'collaborationMode' | 'shortlistRounds'>,
+  photos: SourcePhoto[], input: Pick<CreateAlbumInput, 'title' | 'expiresInDays' | 'limit'>,
   published: boolean,
 ): Promise<Date> {
   const sourceId = randomUUID()
@@ -120,8 +116,8 @@ export async function insertAlbumRecords(
   await client.query('INSERT INTO albums (id, studio_id, title, status, expires_at, published_at) VALUES ($1, $2, $3, $4, $5, $6)',
     [albumId, studioId, input.title.trim(), published ? 'PUBLISHED' : 'DRAFT', expiresAt, published ? new Date() : null])
   await client.query(
-    'INSERT INTO album_settings (album_id, limit_kind, limit_min, limit_max, collaboration_mode, shortlist_rounds, duration_days) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [albumId, limit.kind, minimum, maximum, input.collaborationMode ?? 'shared', input.shortlistRounds ?? 1, input.expiresInDays],
+    'INSERT INTO album_settings (album_id, limit_kind, limit_min, limit_max, duration_days) VALUES ($1, $2, $3, $4, $5)',
+    [albumId, limit.kind, minimum, maximum, input.expiresInDays],
   )
   await client.query('INSERT INTO photo_sources (id, album_id, kind, folder_id, resource_key, sync_status, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, now())',
     [sourceId, albumId, 'google_drive', folder.folderId, folder.resourceKey ?? null, 'READY'])
@@ -141,9 +137,7 @@ export async function insertAlbumRecords(
     )
   }
   await client.query('INSERT INTO selection_rounds (id, album_id, round_number) VALUES ($1, $2, 1)', [roundId, albumId])
-  if ((input.collaborationMode ?? 'shared') === 'shared') {
-    await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
-  }
+  await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
   return expiresAt
 }
 

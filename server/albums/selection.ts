@@ -7,8 +7,8 @@ import type { AlbumAccess } from './access'
 import { withManagedAlbum, type AlbumManager } from './manager'
 
 type SaveStatus = 'saved' | 'conflict' | 'limit_reached'
-type LimitRow = { limit_kind: SelectionLimit['kind']; limit_min: number | null; limit_max: number | null; collaboration_mode: 'shared' | 'individual' | 'voting' }
-type WorkingAlbum = { status: string; current_cycle: number; round_id: string; limit_kind: SelectionLimit['kind']; limit_min: number | null; limit_max: number | null; collaboration_mode: LimitRow['collaboration_mode'] }
+type LimitRow = { limit_kind: SelectionLimit['kind']; limit_min: number | null; limit_max: number | null }
+type WorkingAlbum = { status: string; current_cycle: number; round_id: string; limit_kind: SelectionLimit['kind']; limit_min: number | null; limit_max: number | null }
 
 function selectionLimit(row: LimitRow): SelectionLimit {
   switch (row.limit_kind) {
@@ -43,28 +43,19 @@ async function requirePhoto(client: QueryClient, albumId: string, photoId: strin
   if (!result.rows[0]) throw new StudioOperationError('Ảnh không thuộc album', 404)
 }
 
-async function selectionList(client: QueryClient, album: WorkingAlbum, albumId: string, participantId: string, create: boolean): Promise<{ id: string; version: number } | null> {
-  const kind = album.collaboration_mode === 'shared' ? 'shared' : 'individual'
-  if (create && kind !== 'shared') {
-    await client.query(
-      `INSERT INTO selection_lists (id, album_id, round_id, participant_id, kind)
-       VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-      [randomUUID(), albumId, album.round_id, participantId, kind],
-    )
-  }
+async function selectionList(client: QueryClient, album: WorkingAlbum, lock: boolean): Promise<{ id: string; version: number } | null> {
   const result = await client.query<{ id: string; version: number }>(
-    `SELECT id, version FROM selection_lists WHERE round_id = $1 AND kind = $2
-     AND ($2 = 'shared' OR participant_id = $3)${create ? ' FOR UPDATE' : ''}`,
-    [album.round_id, kind, participantId])
+    `SELECT id, version FROM selection_lists WHERE round_id = $1 AND kind = 'shared'${lock ? ' FOR UPDATE' : ''}`, [album.round_id])
   return result.rows[0] ?? null
 }
 
-export async function getSelectionState(pool: ConnectionPool, access: AlbumAccess): Promise<{ version: number; selectedPhotoIds: string[] }> {
+export async function getSelectionState(pool: ConnectionPool, access: AlbumAccess, knownVersion?: number): Promise<{ version: number; selectedPhotoIds?: string[] }> {
   const participantId = requireParticipant(access)
   return withDatabaseContext(pool, { albumId: access.albumId, scope: access.scope, participantId }, async client => {
     const album = await workingAlbum(client, access.albumId)
-    const list = await selectionList(client, album, access.albumId, participantId, false)
+    const list = await selectionList(client, album, false)
     if (!list) return { version: 0, selectedPhotoIds: [] }
+    if (knownVersion === list.version) return { version: list.version }
     const selected = await client.query<{ photo_id: string }>(
       'SELECT s.photo_id FROM selections s JOIN photos p ON p.id = s.photo_id WHERE s.list_id = $1 ORDER BY p.sort_order, p.id', [list.id])
     return { version: list.version, selectedPhotoIds: selected.rows.map(row => row.photo_id) }
@@ -78,14 +69,14 @@ export async function setPhotoSelection(pool: ConnectionPool, access: AlbumAcces
     const album = await workingAlbum(client, access.albumId)
     if (album.status !== 'PUBLISHED') throw new StudioOperationError('Album không nhận lựa chọn mới', 409)
     await requirePhoto(client, access.albumId, photoId)
-    const list = await selectionList(client, album, access.albumId, participantId, true)
+    const list = await selectionList(client, album, true)
     if (!list) throw new StudioOperationError('Không thể tạo danh sách chọn', 409)
     const current = await client.query<{ photo_id: string }>('SELECT photo_id FROM selections WHERE list_id = $1', [list.id])
     const currentIds = new Set(current.rows.map(row => row.photo_id))
     const isSelected = currentIds.has(photoId)
     if (list.version !== expectedVersion) return { status: 'conflict', version: list.version, selected: isSelected, count: currentIds.size }
     if (selected === isSelected) return { status: 'saved', version: list.version, selected, count: currentIds.size }
-    if (selected && album.collaboration_mode !== 'voting' && !canSelectAnother(selectionLimit(album), currentIds.size)) {
+    if (selected && !canSelectAnother(selectionLimit(album), currentIds.size)) {
       return { status: 'limit_reached', version: list.version, selected: false, count: currentIds.size }
     }
     if (selected) await client.query('INSERT INTO selections (album_id, list_id, photo_id, selected_by) VALUES ($1, $2, $3, $4)', [access.albumId, list.id, photoId, participantId])
@@ -102,6 +93,10 @@ export async function savePhotoNote(pool: ConnectionPool, access: AlbumAccess, p
     const album = await workingAlbum(client, access.albumId)
     if (album.status !== 'PUBLISHED') throw new StudioOperationError('Album không nhận ghi chú mới', 409)
     await requirePhoto(client, access.albumId, photoId)
+    const chosen = await client.query(
+      `SELECT 1 FROM selections s JOIN selection_lists l ON l.id = s.list_id
+       WHERE l.round_id = $1 AND l.kind = 'shared' AND s.photo_id = $2`, [album.round_id, photoId])
+    if (!chosen.rows[0]) throw new StudioOperationError('Hãy chọn ảnh trước khi ghi chú chỉnh sửa', 409)
     const active = await client.query<{ id: string }>('SELECT id FROM participants WHERE id = $1 AND album_id = $2 AND revoked_at IS NULL', [participantId, access.albumId])
     if (!active.rows[0]) throw new StudioOperationError('Người tham gia không còn quyền truy cập', 403)
     const note = await client.query<{ id: string; body: string; version: number }>(
@@ -137,37 +132,57 @@ export async function getPhotoNote(pool: ConnectionPool, access: AlbumAccess, ph
   })
 }
 
-export async function finalizeStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string, chosenPhotoIds?: string[]): Promise<{ versionNumber: number; count: number }> {
-  return finalizeManagedSelection(pool, { kind: 'member', studioId, userId }, albumId, chosenPhotoIds)
+export interface FinalizeAdjustments { include?: string[]; exclude?: string[] }
+const MAX_ADJUSTED_PHOTOS = 10000
+
+function adjustmentIds(value: unknown): string[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > MAX_ADJUSTED_PHOTOS || value.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) {
+    throw new StudioOperationError('Danh sách ảnh không hợp lệ', 400)
+  }
+  return value as string[]
 }
 
-export async function finalizeManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string, chosenPhotoIds?: string[]): Promise<{ versionNumber: number; count: number }> {
+export async function finalizeStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string, adjustments?: FinalizeAdjustments): Promise<{ versionNumber: number; count: number }> {
+  return finalizeManagedSelection(pool, { kind: 'member', studioId, userId }, albumId, adjustments)
+}
+
+// The final set is the customer's shared list plus `include`, minus `exclude`, so 10k-photo albums never ship full id lists.
+export async function finalizeManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string, adjustments: FinalizeAdjustments = {}): Promise<{ versionNumber: number; count: number }> {
+  const include = adjustmentIds(adjustments.include)
+  const exclude = adjustmentIds(adjustments.exclude)
   return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async client => {
     const album = await workingAlbum(client, albumId, true)
     if (album.status !== 'PUBLISHED') throw new StudioOperationError('Album không ở trạng thái có thể chốt', 409)
-    const selected = chosenPhotoIds ?? (await client.query<{ photo_id: string }>(
+    const customer = await client.query<{ photo_id: string }>(
       `SELECT s.photo_id FROM selections s JOIN selection_lists l ON l.id = s.list_id
-       WHERE l.round_id = $1 AND l.kind = 'shared' ORDER BY s.selected_at, s.photo_id`, [album.round_id])).rows.map(row => row.photo_id)
-    if (new Set(selected).size !== selected.length) throw new StudioOperationError('Danh sách ảnh bị trùng', 400)
-    if (album.collaboration_mode !== 'shared' && !chosenPhotoIds) throw new StudioOperationError('Cần chọn bộ ảnh cuối từ các danh sách hoặc phiếu', 400)
+       WHERE l.round_id = $1 AND l.kind = 'shared'`, [album.round_id])
+    const chosen = new Set([...customer.rows.map(row => row.photo_id), ...include])
+    for (const id of exclude) chosen.delete(id)
+    const selected = [...chosen]
     if (!canFinalizeSelection(selectionLimit(album), selected.length)) throw new StudioOperationError('Số ảnh chưa đáp ứng giới hạn chốt', 409)
-    const photos = selected.length ? await client.query<{ id: string; filename: string }>(
-      'SELECT id, filename FROM photos WHERE album_id = $1 AND id = ANY($2::uuid[])', [albumId, selected]) : { rows: [] }
-    const byId = new Map(photos.rows.map(photo => [photo.id, photo]))
-    if (byId.size !== selected.length) throw new StudioOperationError('Có ảnh không thuộc album', 400)
+    const owned = await client.query<{ count: number }>(
+      'SELECT count(*)::integer AS count FROM photos WHERE album_id = $1 AND id = ANY($2::uuid[])', [albumId, selected])
+    if (owned.rows[0]!.count !== selected.length) throw new StudioOperationError('Có ảnh không thuộc album', 400)
     const latest = await client.query<{ version_number: number }>('SELECT coalesce(max(version_number), 0)::integer AS version_number FROM selection_versions WHERE album_id = $1', [albumId])
     const versionNumber = latest.rows[0]!.version_number + 1
     const versionId = randomUUID()
     await client.query('INSERT INTO selection_versions (id, album_id, version_number, cycle) VALUES ($1, $2, $3, $4)', [versionId, albumId, versionNumber, album.current_cycle])
-    for (const photoId of selected) {
-      const notes = await client.query<{ participant: string; text: string }>(
-        `SELECT p.display_name AS participant, n.body AS text FROM photo_notes n JOIN participants p ON p.id = n.participant_id
-         WHERE n.album_id = $1 AND n.photo_id = $2 AND n.body <> '' ORDER BY n.created_at, n.id`, [albumId, photoId])
-      const itemId = randomUUID()
-      await client.query('INSERT INTO selection_version_items (id, album_id, selection_version_id, photo_id, filename, notes) VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
-        [itemId, albumId, versionId, photoId, byId.get(photoId)!.filename, JSON.stringify(notes.rows)])
-      await client.query('INSERT INTO production_tasks (id, album_id, selection_version_item_id) VALUES ($1, $2, $3)', [randomUUID(), albumId, itemId])
-    }
+    // Notes are frozen only for photos the customer still has selected; hidden notes of unselected photos stay out.
+    await client.query(
+      `WITH items AS (
+         INSERT INTO selection_version_items (id, album_id, selection_version_id, photo_id, filename, notes)
+         SELECT gen_random_uuid(), $1, $2, p.id, p.filename,
+           COALESCE((SELECT jsonb_agg(jsonb_build_object('text', n.body) ORDER BY n.created_at, n.id)
+             FROM photo_notes n
+             WHERE n.album_id = $1 AND n.photo_id = p.id AND n.body <> ''
+               AND EXISTS (SELECT 1 FROM selections s JOIN selection_lists l ON l.id = s.list_id
+                 WHERE l.round_id = $4 AND l.kind = 'shared' AND s.photo_id = p.id)), '[]'::jsonb)
+         FROM photos p WHERE p.album_id = $1 AND p.id = ANY($3::uuid[])
+         RETURNING id
+       )
+       INSERT INTO production_tasks (id, album_id, selection_version_item_id) SELECT gen_random_uuid(), $1, id FROM items`,
+      [albumId, versionId, selected, album.round_id])
     await client.query("UPDATE selection_rounds SET status = 'CLOSED' WHERE id = $1", [album.round_id])
     await client.query("UPDATE albums SET status = 'FINALIZED', updated_at = now() WHERE id = $1", [albumId])
     return { versionNumber, count: selected.length }
@@ -180,28 +195,55 @@ export async function reopenStudioSelection(pool: ConnectionPool, studioId: stri
 
 export async function reopenManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string): Promise<{ cycle: number }> {
   return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async client => {
-    const current = await client.query<{ status: string; current_cycle: number; collaboration_mode: string }>(
-      'SELECT a.status, a.current_cycle, s.collaboration_mode FROM albums a JOIN album_settings s ON s.album_id = a.id WHERE a.id = $1 FOR UPDATE OF a', [albumId])
+    const current = await client.query<{ status: string; current_cycle: number }>(
+      'SELECT status, current_cycle FROM albums WHERE id = $1 FOR UPDATE', [albumId])
     if (current.rows[0]?.status !== 'FINALIZED') throw new StudioOperationError('Chỉ mở lại album đã chốt', 409)
     const cycle = current.rows[0].current_cycle + 1
     const roundId = randomUUID()
     await client.query('INSERT INTO selection_rounds (id, album_id, cycle, round_number) VALUES ($1, $2, $3, 1)', [roundId, albumId, cycle])
-    if (current.rows[0].collaboration_mode === 'shared') await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
+    await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
     await client.query("UPDATE albums SET status = 'PUBLISHED', current_cycle = $1, updated_at = now() WHERE id = $2", [cycle, albumId])
     return { cycle }
   })
 }
 
-export async function getSelectionResults(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<{ versionNumber: number; items: { photoId: string; filename: string; notes: { participant: string; text: string }[] }[] }> {
-  return getManagedSelectionResults(pool, { kind: 'member', studioId, userId }, albumId)
+export interface SelectionResultItem { photoId: string; filename: string; notes: { text: string }[] }
+export interface SelectionResults { versionNumber: number; total: number; items: SelectionResultItem[]; nextCursor: string | null }
+export interface ResultPageOptions { limit: number; cursor?: string }
+
+function parseResultCursor(value: string): { filename: string; id: string } {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { filename: string; id: string }
+    if (typeof parsed.filename === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.id)) return parsed
+  } catch { /* Invalid cursor is reported below. */ }
+  throw new StudioOperationError('Cursor kết quả không hợp lệ', 400)
 }
 
-export async function getManagedSelectionResults(pool: ConnectionPool, manager: AlbumManager, albumId: string): Promise<{ versionNumber: number; items: { photoId: string; filename: string; notes: { participant: string; text: string }[] }[] }> {
+export async function getSelectionResults(pool: ConnectionPool, studioId: string, userId: string, albumId: string, page?: ResultPageOptions): Promise<SelectionResults> {
+  return getManagedSelectionResults(pool, { kind: 'member', studioId, userId }, albumId, page)
+}
+
+// Without `page` every item is returned; exports rely on that.
+export async function getManagedSelectionResults(pool: ConnectionPool, manager: AlbumManager, albumId: string, page?: ResultPageOptions): Promise<SelectionResults> {
+  if (page && (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 200)) throw new StudioOperationError('Kích thước trang không hợp lệ', 400)
+  const after = page?.cursor ? parseResultCursor(page.cursor) : null
   return withManagedAlbum(pool, manager, albumId, 'album.view', async client => {
-    const version = await client.query<{ id: string; version_number: number }>('SELECT id, version_number FROM selection_versions WHERE album_id = $1 ORDER BY version_number DESC LIMIT 1', [albumId])
+    const version = await client.query<{ id: string; version_number: number; total: number }>(
+      `SELECT v.id, v.version_number, (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id) AS total
+       FROM selection_versions v WHERE v.album_id = $1 ORDER BY v.version_number DESC LIMIT 1`, [albumId])
     if (!version.rows[0]) throw new StudioOperationError('Album chưa được chốt', 404)
-    const items = await client.query<{ photo_id: string; filename: string; notes: { participant: string; text: string }[] }>(
-      'SELECT photo_id, filename, notes FROM selection_version_items WHERE selection_version_id = $1 ORDER BY filename, photo_id', [version.rows[0].id])
-    return { versionNumber: version.rows[0].version_number, items: items.rows.map(row => ({ photoId: row.photo_id, filename: row.filename, notes: row.notes })) }
+    const items = await client.query<{ photo_id: string; filename: string; notes: { text: string }[] }>(
+      `SELECT photo_id, filename, notes FROM selection_version_items
+       WHERE selection_version_id = $1 AND ($2::text IS NULL OR (filename, photo_id) > ($2::text, $3::uuid))
+       ORDER BY filename, photo_id LIMIT $4`,
+      [version.rows[0].id, after?.filename ?? null, after?.id ?? null, page ? page.limit + 1 : null])
+    const hasMore = page ? items.rows.length > page.limit : false
+    const rows = page ? items.rows.slice(0, page.limit) : items.rows
+    const mapped = rows.map(row => ({ photoId: row.photo_id, filename: row.filename, notes: row.notes.map(note => ({ text: note.text })) }))
+    const last = mapped.at(-1)
+    return {
+      versionNumber: version.rows[0].version_number, total: version.rows[0].total, items: mapped,
+      nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ filename: last.filename, id: last.photoId })).toString('base64url') : null,
+    }
   })
 }

@@ -29,7 +29,10 @@ test('exchanges a guest admin link, shares a new customer link, and claims into 
   })
   await page.route(`**/api/guest/albums/${albumId}`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ id: albumId, title: 'Guest album', status: 'PUBLISHED', expiresAt: '2026-10-30T00:00:00.000Z', canFinalize: true, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null, collaborationMode: 'shared' }, photos: [] }),
+    body: JSON.stringify({ id: albumId, title: 'Guest album', status: 'PUBLISHED', expiresAt: '2026-10-30T00:00:00.000Z', canFinalize: true, hasResults: false, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null }, photoCount: 0, selectedCount: 0 }),
+  }))
+  await page.route(/\/api\/(guest|studio\/[^/]+)\/albums\/[^/]+\/photos/, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], nextCursor: null, total: 0, selectedCount: 0 }),
   }))
   await page.route(`**/api/guest/albums/${albumId}/share`, route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ customerToken }),
@@ -46,7 +49,7 @@ test('exchanges a guest admin link, shares a new customer link, and claims into 
   }))
   await page.route(`**/api/studio/${studioId}/albums/${albumId}`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ id: albumId, title: 'Guest album', status: 'PUBLISHED', expiresAt: '2026-10-30T00:00:00.000Z', canFinalize: true, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null, collaborationMode: 'shared' }, photos: [] }),
+    body: JSON.stringify({ id: albumId, title: 'Guest album', status: 'PUBLISHED', expiresAt: '2026-10-30T00:00:00.000Z', canFinalize: true, hasResults: false, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null }, photoCount: 0, selectedCount: 0 }),
   }))
   await page.goto(`/guest/albums/${albumId}#admin-${adminToken}`)
   await expect(page.getByRole('button', { name: 'Cấp link khách mới' })).toBeVisible()
@@ -61,9 +64,12 @@ test('exchanges a guest admin link, shares a new customer link, and claims into 
 test('exports guest results and sends review and delivery from the management page', async ({ page }) => {
   let reviewRequests = 0
   let deliveryRequests = 0
-  await page.route(`**/api/guest/albums/${albumId}/results`, route => route.fulfill({
+  await page.route(`**/api/guest/albums/${albumId}/results?*`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ versionNumber: 1, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] }),
+    body: JSON.stringify({ versionNumber: 1, total: 1, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] }),
+  }))
+  await page.route(url => url.pathname === `/api/guest/albums/${albumId}/results/export` && url.searchParams.get('format') === 'selection-csv', route => route.fulfill({
+    status: 200, headers: { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="selection.csv"' }, body: 'photo_id,filename\r\nphoto-1,01.jpg\r\n',
   }))
   await page.route(`**/api/guest/albums/${albumId}/production`, route => route.fulfill({
     status: 200, contentType: 'application/json',
