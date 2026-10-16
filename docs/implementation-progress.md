@@ -2,18 +2,18 @@
 
 Cập nhật: 2026-10-15. `Dev Neon` nghĩa là đã chạy trên nhánh development `codex-v1-dev`; **chưa phải nghiệm thu production**.
 
-Kiểm tra mới nhất: `npm test` 58/58, `npm run typecheck` và `npm run build` đạt. Chromium desktop/mobile E2E cho nút chia sẻ đạt. Live Drive trả 307 ảnh/1 trang, 3 ảnh mẫu tải được; Preview HTTP smoke tạo/publish album, cấp link khách mới, phân trang 307 ảnh và tải ảnh khách thành công.
+Kiểm tra mới nhất cho nhánh làm việc: `npm test` 79/79, `npm run typecheck` và `npm run build` đạt; toàn bộ Chromium desktop/mobile E2E đạt 28/28. Migration 016–017 đã áp lên nhánh Neon development sau khi xác minh connection string. Folder Drive mẫu hiện trả 326 ảnh; 5 thumbnail mẫu và ảnh gốc của album đang báo lỗi tải được. Chưa đo thời gian/dung lượng toàn trang gallery hoặc chạy HTTP smoke trên Neon test/Preview vì thiếu Neon test URL.
 
 | Task | Trạng thái | Đầu ra / phần chưa xong |
 | --- | --- | --- |
 | T00–T02 | Dev Neon | Spec Neon, Nuxt 4, TypeScript, Tailwind, Pinia, Vitest, Playwright, CI và lockfile. CI cần secret Neon test. |
 | T03–T04 | Một phần | UI responsive cơ bản và domain rules có test; design system/a11y đầy đủ chưa kiểm. |
-| T05–T07 | Dev Neon | 16 migration đã áp trên nhánh dev; RLS tenant và participant, test pooled concurrency/context. Production chưa migrate. |
+| T05–T07 | Dev Neon | 18 migration đã áp trên nhánh dev; migration 016–017 cho thumbnail và guest album kiểm bằng PGlite và đã áp lên Neon development. Production chưa migrate. |
 | T08 | Dev Neon | Better Auth signup, verify, login, reset; mail transport trong bộ nhớ đạt. Chưa có SMTP thật. |
-| T09 | Chưa làm | Guest admin link và claim album. |
+| T09 | Local | Tạo album guest không cần login, link quản trị bí mật, cookie, quản lý vòng đời, rate limit và claim vào studio sở hữu; RLS/HTTP và Chromium desktop/mobile test đạt. Chưa smoke trên Neon test/Preview. |
 | T10 | Dev Neon | Mời, đổi vai trò, thu hồi thành viên và lời mời; HTTP + pooled test. |
-| T11–T13 | Một phần | API key Drive hợp lệ; folder công khai 307 ảnh đã liệt kê và tải 3 ảnh mẫu thành công. Chưa kiểm ảnh có resource key. |
-| T14 | Một phần | Adapter Drive API chính thức, test giả và lệnh `test:drive-live`; live folder 307 ảnh đạt, chưa có thử tải 1.000–3.000 ảnh. |
+| T11–T13 | Một phần | API key Drive hợp lệ; folder công khai hiện trả 326 ảnh, ảnh gốc và thumbnail mẫu tải được. Chưa kiểm ảnh có resource key. |
+| T14 | Một phần | Adapter Drive API chính thức; gallery dùng thumbnail Drive qua API Zeno và Focus dùng ảnh gốc, có test giả và E2E. Đã tải 5 thumbnail Drive thật; chưa đo tải toàn trang hoặc thử 1.000–3.000 ảnh. |
 | T15–T16 | Chờ quyết định | Chỉ làm OAuth nếu T11–T13 cho thấy cần thiết. |
 | T17–T19 | Một phần | Tạo album 307 ảnh, catalog, publish, cấp lại link khách từ danh sách và ảnh khách đã qua HTTP smoke trên Preview. Gate Drive mở ở local/Preview, Production vẫn khóa. Chưa có mật khẩu album và chia sẻ hệ thống/Zalo. |
 | T20–T22 | Một phần | Danh sách và trang chi tiết album cơ bản; tìm/lọc/sắp xếp, settings và nhắc hạn còn thiếu. |
@@ -29,7 +29,7 @@ Kiểm tra mới nhất: `npm test` 58/58, `npm run typecheck` và `npm run buil
 
 ## Gate hiện tại
 
-1. **Drive:** `NUXT_GOOGLE_API_KEY` đã là API key hợp lệ; `test:drive-live` và HTTP local/Preview đạt với folder 307 ảnh. `NUXT_DRIVE_VERIFIED=true` ở local/Preview; Production giữ `false`. Cần folder 1.000–3.000 ảnh và ảnh có resource key để kiểm thêm tải lớn và quyền trước production. Backend unit/database test dùng adapter giả.
+1. **Drive:** `NUXT_GOOGLE_API_KEY` đã là API key hợp lệ; `test:drive-live` hiện đạt với folder 326 ảnh, thumbnail mẫu và ảnh gốc của album lỗi tải được. HTTP local/Preview với 307 ảnh là kết quả trước thay đổi thumbnail. `NUXT_DRIVE_VERIFIED=true` ở local/Preview; Production giữ `false`. Cần đo toàn trang gallery, thử folder 1.000–3.000 ảnh và ảnh có resource key trước production. Backend unit/database test dùng adapter giả.
 2. **Email:** cần SMTP thật để xác minh gửi/nhận email end to end.
 3. **Dependency:** `npm audit --omit=dev` ngày 2026-10-14 còn 14 advisory (12 high, 2 critical). `npm audit fix --omit=dev` không giảm số lượng. Nguồn là `simple-git` trong `@nuxt/devtools`, `node-forge` trong `nitropack/listhen`, và `braces` trong `micromatch`; bản Nuxt mới nhất hiện là 4.6.1. `node-forge@1.4.0` và `braces@3.0.3` vẫn là bản npm mới nhất nhưng nằm trong affected range; `simple-git@4.0.2` đã vá nhưng vượt major range của `@nuxt/devtools`. `npm audit fix --force` đề xuất Nuxt 3.7.4 nên chưa áp vì phá vỡ mục tiêu Nuxt 4. Cần theo dõi bản vá upstream và kiểm lại trước release.
 4. **Các task còn thiếu:** xem bảng trên. Chưa thể gọi V1 hoàn tất hoặc release chỉ vì ba phụ thuộc ngoài đã được nêu.

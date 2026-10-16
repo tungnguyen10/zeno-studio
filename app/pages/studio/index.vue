@@ -31,7 +31,7 @@ const shareMessage = ref<{ albumId: string; text: string; error: boolean } | nul
 const route = useRoute()
 const next = computed(() => {
   const candidate = route.query.next
-  return typeof candidate === 'string' && candidate.startsWith('/studio/') && !candidate.startsWith('//') ? candidate : '/studio'
+  return typeof candidate === 'string' && (candidate.startsWith('/studio/') || candidate.startsWith('/guest/albums/')) && !candidate.startsWith('//') ? candidate : '/studio'
 })
 const heading = computed(() => mode.value === 'login' ? 'Chào mừng trở lại' : mode.value === 'register' ? 'Bắt đầu với studio của bạn' : 'Lấy lại mật khẩu')
 

@@ -11,6 +11,7 @@ export interface AlbumAccess {
 
 export interface GalleryPhoto {
   id: string
+  sourceFileId: string
   filename: string
   width: number | null
   height: number | null
@@ -63,13 +64,13 @@ export async function listAlbumPhotos(pool: ConnectionPool, access: AlbumAccess,
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new StudioOperationError('Kích thước trang không hợp lệ', 400)
   const after = cursor ? parseCursor(cursor) : null
   return withDatabaseContext(pool, { albumId: access.albumId, scope: access.scope }, async client => {
-    const result = await client.query<{ id: string; filename: string; width: number | null; height: number | null; status: GalleryPhoto['status']; sort_order: number }>(
-      `SELECT id, filename, width, height, status, sort_order FROM photos
+    const result = await client.query<{ id: string; source_file_id: string; filename: string; width: number | null; height: number | null; status: GalleryPhoto['status']; sort_order: number }>(
+      `SELECT id, source_file_id, filename, width, height, status, sort_order FROM photos
        WHERE album_id = $1 AND ($2::integer IS NULL OR (sort_order, id) > ($2::integer, $3::uuid))
        ORDER BY sort_order, id LIMIT $4`, [access.albumId, after?.sortOrder ?? null, after?.id ?? null, pageSize + 1])
     const hasMore = result.rows.length > pageSize
     const rows = result.rows.slice(0, pageSize)
-    const items = rows.map(row => ({ id: row.id, filename: row.filename, width: row.width, height: row.height, status: row.status, sortOrder: row.sort_order }))
+    const items = rows.map(row => ({ id: row.id, sourceFileId: row.source_file_id, filename: row.filename, width: row.width, height: row.height, status: row.status, sortOrder: row.sort_order }))
     const last = items.at(-1)
     return { items, nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ sortOrder: last.sortOrder, id: last.id })).toString('base64url') : null }
   })

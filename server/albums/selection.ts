@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { withDatabaseContext, type ConnectionPool, type QueryClient } from '../db/context'
 import { StudioOperationError } from '../studios/error'
-import { canPerform, type Role } from '../../shared/domain/workflow'
+import { canPerform } from '../../shared/domain/workflow'
 import { canFinalizeSelection, canSelectAnother, type SelectionLimit } from '../../shared/domain/selection'
 import type { AlbumAccess } from './access'
+import { withManagedAlbum, type AlbumManager } from './manager'
 
 type SaveStatus = 'saved' | 'conflict' | 'limit_reached'
 type LimitRow = { limit_kind: SelectionLimit['kind']; limit_min: number | null; limit_max: number | null; collaboration_mode: 'shared' | 'individual' | 'voting' }
@@ -136,14 +137,12 @@ export async function getPhotoNote(pool: ConnectionPool, access: AlbumAccess, ph
   })
 }
 
-async function requireStudioFinalizer(client: QueryClient, studioId: string, userId: string): Promise<void> {
-  const member = await client.query<{ role: Role }>('SELECT role FROM studio_members WHERE studio_id = $1 AND user_id = $2', [studioId, userId])
-  if (!member.rows[0] || !canPerform(member.rows[0].role, 'selection.finalize')) throw new StudioOperationError('Không có quyền chốt ảnh', 403)
+export async function finalizeStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string, chosenPhotoIds?: string[]): Promise<{ versionNumber: number; count: number }> {
+  return finalizeManagedSelection(pool, { kind: 'member', studioId, userId }, albumId, chosenPhotoIds)
 }
 
-export async function finalizeStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string, chosenPhotoIds?: string[]): Promise<{ versionNumber: number; count: number }> {
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    await requireStudioFinalizer(client, studioId, userId)
+export async function finalizeManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string, chosenPhotoIds?: string[]): Promise<{ versionNumber: number; count: number }> {
+  return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async client => {
     const album = await workingAlbum(client, albumId, true)
     if (album.status !== 'PUBLISHED') throw new StudioOperationError('Album không ở trạng thái có thể chốt', 409)
     const selected = chosenPhotoIds ?? (await client.query<{ photo_id: string }>(
@@ -176,10 +175,13 @@ export async function finalizeStudioSelection(pool: ConnectionPool, studioId: st
 }
 
 export async function reopenStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<{ cycle: number }> {
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    await requireStudioFinalizer(client, studioId, userId)
+  return reopenManagedSelection(pool, { kind: 'member', studioId, userId }, albumId)
+}
+
+export async function reopenManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string): Promise<{ cycle: number }> {
+  return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async client => {
     const current = await client.query<{ status: string; current_cycle: number; collaboration_mode: string }>(
-      'SELECT a.status, a.current_cycle, s.collaboration_mode FROM albums a JOIN album_settings s ON s.album_id = a.id WHERE a.id = $1 AND a.studio_id = $2 FOR UPDATE OF a', [albumId, studioId])
+      'SELECT a.status, a.current_cycle, s.collaboration_mode FROM albums a JOIN album_settings s ON s.album_id = a.id WHERE a.id = $1 FOR UPDATE OF a', [albumId])
     if (current.rows[0]?.status !== 'FINALIZED') throw new StudioOperationError('Chỉ mở lại album đã chốt', 409)
     const cycle = current.rows[0].current_cycle + 1
     const roundId = randomUUID()
@@ -191,11 +193,11 @@ export async function reopenStudioSelection(pool: ConnectionPool, studioId: stri
 }
 
 export async function getSelectionResults(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<{ versionNumber: number; items: { photoId: string; filename: string; notes: { participant: string; text: string }[] }[] }> {
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    const member = await client.query<{ role: Role }>('SELECT role FROM studio_members WHERE studio_id = $1 AND user_id = $2', [studioId, userId])
-    if (!member.rows[0] || !canPerform(member.rows[0].role, 'album.view')) throw new StudioOperationError('Không có quyền xem kết quả', 403)
-    const album = await client.query<{ id: string }>('SELECT id FROM albums WHERE id = $1 AND studio_id = $2', [albumId, studioId])
-    if (!album.rows[0]) throw new StudioOperationError('Album không tồn tại', 404)
+  return getManagedSelectionResults(pool, { kind: 'member', studioId, userId }, albumId)
+}
+
+export async function getManagedSelectionResults(pool: ConnectionPool, manager: AlbumManager, albumId: string): Promise<{ versionNumber: number; items: { photoId: string; filename: string; notes: { participant: string; text: string }[] }[] }> {
+  return withManagedAlbum(pool, manager, albumId, 'album.view', async client => {
     const version = await client.query<{ id: string; version_number: number }>('SELECT id, version_number FROM selection_versions WHERE album_id = $1 ORDER BY version_number DESC LIMIT 1', [albumId])
     if (!version.rows[0]) throw new StudioOperationError('Album chưa được chốt', 404)
     const items = await client.query<{ photo_id: string; filename: string; notes: { participant: string; text: string }[] }>(

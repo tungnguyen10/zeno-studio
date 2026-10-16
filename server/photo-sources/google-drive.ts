@@ -2,6 +2,13 @@ import type { FolderReference, PhotoPage, PhotoSourceAdapter, SourcePhoto } from
 
 const driveId = /^[A-Za-z0-9_-]{3,}$/
 
+function isTrustedThumbnailLink(input: string): boolean {
+  try {
+    const url = new URL(input)
+    return url.protocol === 'https:' && (url.hostname === 'drive.google.com' || url.hostname === 'googleusercontent.com' || url.hostname.endsWith('.googleusercontent.com'))
+  } catch { return false }
+}
+
 export class DriveSourceError extends Error {
   constructor(public status: number, message: string, public reason?: string) { super(message) }
 }
@@ -34,14 +41,15 @@ interface DriveFile {
   name?: string
   mimeType?: string
   resourceKey?: string
+  thumbnailLink?: string
   imageMediaMetadata?: { width?: number; height?: number }
 }
 
 export class GoogleDriveAdapter implements PhotoSourceAdapter {
   constructor(private apiKey: string, private fetcher: typeof fetch = fetch) {}
 
-  private async request(url: string, headers: Record<string, string>): Promise<Response> {
-    try { return await this.fetcher(url, { headers }) }
+  private async request(url: string, headers: Record<string, string>, redirect?: RequestRedirect): Promise<Response> {
+    try { return await this.fetcher(url, { headers, ...(redirect ? { redirect } : {}) }) }
     catch (error) {
       if (error instanceof TypeError || (error instanceof DOMException && error.name === 'AbortError')) {
         throw new DriveSourceError(502, 'Google Drive request failed', 'NETWORK_ERROR')
@@ -54,7 +62,7 @@ export class GoogleDriveAdapter implements PhotoSourceAdapter {
     if (!driveId.test(folder.folderId)) throw new Error('Invalid Google Drive folder ID')
     const url = new URL('https://www.googleapis.com/drive/v3/files')
     url.searchParams.set('q', `'${folder.folderId}' in parents and trashed = false`)
-    url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,resourceKey,imageMediaMetadata(width,height))')
+    url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,resourceKey,thumbnailLink,imageMediaMetadata(width,height))')
     url.searchParams.set('pageSize', '1000')
     url.searchParams.set('supportsAllDrives', 'true')
     url.searchParams.set('includeItemsFromAllDrives', 'true')
@@ -69,6 +77,7 @@ export class GoogleDriveAdapter implements PhotoSourceAdapter {
       .map(file => ({
         id: file.id!, filename: file.name!, mimeType: file.mimeType!,
         ...(file.resourceKey ? { resourceKey: file.resourceKey } : {}),
+        ...(file.thumbnailLink ? { thumbnailLink: file.thumbnailLink } : {}),
         ...(file.imageMediaMetadata?.width ? { width: file.imageMediaMetadata.width } : {}),
         ...(file.imageMediaMetadata?.height ? { height: file.imageMediaMetadata.height } : {}),
       }))
@@ -87,5 +96,47 @@ export class GoogleDriveAdapter implements PhotoSourceAdapter {
       throw new DriveSourceError(502, 'Google Drive did not return image content')
     }
     return response
+  }
+
+  async readThumbnail(fileId: string, resourceKey?: string, cachedThumbnailLink?: string): Promise<{ response: Response; thumbnailLink: string; refreshed: boolean }> {
+    if (!driveId.test(fileId)) throw new Error('Invalid Google Drive file ID')
+
+    const fetchImage = async (link: string): Promise<Response> => {
+      if (!isTrustedThumbnailLink(link)) throw new DriveSourceError(502, 'Google Drive returned an invalid thumbnail link')
+      let url = link
+      for (let redirects = 0; redirects < 4; redirects++) {
+        const response = await this.request(url, {}, 'manual')
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location')
+          if (!location) throw new DriveSourceError(502, 'Google Drive thumbnail redirect missing')
+          url = new URL(location, url).toString()
+          if (!isTrustedThumbnailLink(url)) throw new DriveSourceError(502, 'Google Drive thumbnail redirect invalid')
+          continue
+        }
+        if (!response.ok || !response.headers.get('content-type')?.toLowerCase().startsWith('image/')) {
+          throw new DriveSourceError(502, 'Google Drive thumbnail request failed')
+        }
+        return response
+      }
+      throw new DriveSourceError(502, 'Google Drive thumbnail redirected too many times')
+    }
+
+    if (cachedThumbnailLink && isTrustedThumbnailLink(cachedThumbnailLink)) {
+      try {
+        return { response: await fetchImage(cachedThumbnailLink), thumbnailLink: cachedThumbnailLink, refreshed: false }
+      } catch (error) {
+        if (!(error instanceof DriveSourceError)) throw error
+      }
+    }
+
+    const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`)
+    url.searchParams.set('fields', 'thumbnailLink')
+    const headers: Record<string, string> = { Accept: 'application/json', 'x-goog-api-key': this.apiKey }
+    if (resourceKey) headers['X-Goog-Drive-Resource-Keys'] = `${fileId}/${resourceKey}`
+    const metadata = await this.request(url.toString(), headers)
+    if (!metadata.ok) throw new DriveSourceError(metadata.status, `Google Drive thumbnail metadata request failed (${metadata.status})`, await errorReason(metadata))
+    const body = await metadata.json() as { thumbnailLink?: string }
+    if (!body.thumbnailLink || !isTrustedThumbnailLink(body.thumbnailLink)) throw new DriveSourceError(502, 'Google Drive thumbnail unavailable')
+    return { response: await fetchImage(body.thumbnailLink), thumbnailLink: body.thumbnailLink, refreshed: true }
   }
 }

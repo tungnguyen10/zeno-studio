@@ -1,13 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { withDatabaseContext, type ConnectionPool, type QueryClient } from '../db/context'
 import { StudioOperationError } from '../studios/error'
-import { canPerform, canTransitionProduction, type ProductionStatus, type Role } from '../../shared/domain/workflow'
+import { canTransitionProduction, type ProductionStatus } from '../../shared/domain/workflow'
 import type { AlbumAccess } from './access'
-
-async function requirePermission(client: QueryClient, studioId: string, userId: string, action: 'production.update' | 'delivery.manage') {
-  const result = await client.query<{ role: Role }>('SELECT role FROM studio_members WHERE studio_id = $1 AND user_id = $2', [studioId, userId])
-  if (!result.rows[0] || !canPerform(result.rows[0].role, action)) throw new StudioOperationError('Không có quyền hậu kỳ/bàn giao', 403)
-}
+import { withManagedAlbum, type AlbumManager } from './manager'
 
 async function latestVersion(client: QueryClient, albumId: string): Promise<{ id: string; version_number: number }> {
   const result = await client.query<{ id: string; version_number: number }>(
@@ -17,35 +13,41 @@ async function latestVersion(client: QueryClient, albumId: string): Promise<{ id
 }
 
 export async function listProductionTasks(pool: ConnectionPool, studioId: string, userId: string, albumId: string) {
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    await requirePermission(client, studioId, userId, 'production.update')
-    const member = await client.query<{ role: Role }>('SELECT role FROM studio_members WHERE studio_id = $1 AND user_id = $2', [studioId, userId])
+  return listManagedProductionTasks(pool, { kind: 'member', studioId, userId }, albumId)
+}
+
+export async function listManagedProductionTasks(pool: ConnectionPool, manager: AlbumManager, albumId: string) {
+  return withManagedAlbum(pool, manager, albumId, 'production.update', async (client, session) => {
     const version = await latestVersion(client, albumId)
     const tasks = await client.query<{ id: string; photo_id: string; filename: string; status: ProductionStatus; assigned_user_id: string | null }>(
       `SELECT t.id, i.photo_id, i.filename, t.status, t.assigned_user_id FROM production_tasks t
        JOIN selection_version_items i ON i.id = t.selection_version_item_id
        WHERE i.selection_version_id = $1 ORDER BY i.filename, i.photo_id`, [version.id])
-    return { versionNumber: version.version_number, canDeliver: canPerform(member.rows[0]!.role, 'delivery.manage'), items: tasks.rows.map(row => ({ id: row.id, photoId: row.photo_id, filename: row.filename, status: row.status, assignedUserId: row.assigned_user_id })) }
+    return { versionNumber: version.version_number, canDeliver: session.canDeliver, items: tasks.rows.map(row => ({ id: row.id, photoId: row.photo_id, filename: row.filename, status: row.status, assignedUserId: row.assigned_user_id })) }
   })
 }
 
 export async function updateProductionTask(pool: ConnectionPool, studioId: string, userId: string, albumId: string, taskId: string, status: ProductionStatus, assignedUserId?: string | null) {
+  return updateManagedProductionTask(pool, { kind: 'member', studioId, userId }, albumId, taskId, status, assignedUserId)
+}
+
+export async function updateManagedProductionTask(pool: ConnectionPool, manager: AlbumManager, albumId: string, taskId: string, status: ProductionStatus, assignedUserId?: string | null) {
   if (status !== 'RETOUCHING' && status !== 'WAITING_REVIEW') throw new StudioOperationError('Trạng thái này chỉ đổi qua duyệt hoặc bàn giao', 400)
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    await requirePermission(client, studioId, userId, 'production.update')
+  if (manager.kind === 'guest' && assignedUserId !== undefined) throw new StudioOperationError('Guest không thể phân công thành viên', 400)
+  return withManagedAlbum(pool, manager, albumId, 'production.update', async (client, session) => {
     const task = await client.query<{ id: string; status: ProductionStatus; assigned_user_id: string | null }>(
       'SELECT id, status, assigned_user_id FROM production_tasks WHERE id = $1 AND album_id = $2 FOR UPDATE', [taskId, albumId])
     if (!task.rows[0]) throw new StudioOperationError('Công việc hậu kỳ không tồn tại', 404)
     if (status !== task.rows[0].status && !canTransitionProduction(task.rows[0].status, status)) throw new StudioOperationError('Chuyển trạng thái hậu kỳ không hợp lệ', 409)
     if (assignedUserId) {
-      const assignee = await client.query<{ user_id: string }>('SELECT user_id FROM studio_members WHERE studio_id = $1 AND user_id = $2', [studioId, assignedUserId])
+      const assignee = await client.query<{ user_id: string }>('SELECT user_id FROM studio_members WHERE studio_id = $1 AND user_id = $2', [session.studioId, assignedUserId])
       if (!assignee.rows[0]) throw new StudioOperationError('Người xử lý không thuộc studio', 400)
     }
     const result = await client.query<{ status: ProductionStatus; assigned_user_id: string | null }>(
       'UPDATE production_tasks SET status = $1, assigned_user_id = $2, updated_at = now() WHERE id = $3 RETURNING status, assigned_user_id',
       [status, assignedUserId === undefined ? task.rows[0].assigned_user_id : assignedUserId, taskId])
     await client.query('INSERT INTO audit_logs (studio_id, album_id, actor_kind, actor_id, action, details) VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
-      [studioId, albumId, 'member', userId, 'production.updated', JSON.stringify({ taskId, from: task.rows[0].status, to: status })])
+      [session.studioId, albumId, session.actorKind, session.actorId, 'production.updated', JSON.stringify({ taskId, from: task.rows[0].status, to: status })])
     return { id: taskId, status: result.rows[0]!.status, assignedUserId: result.rows[0]!.assigned_user_id }
   })
 }
@@ -58,10 +60,13 @@ function driveUrl(value: string): string {
 }
 
 export async function startReviewRound(pool: ConnectionPool, studioId: string, userId: string, albumId: string, editedDriveUrl: string) {
+  return startManagedReviewRound(pool, { kind: 'member', studioId, userId }, albumId, editedDriveUrl)
+}
+
+export async function startManagedReviewRound(pool: ConnectionPool, manager: AlbumManager, albumId: string, editedDriveUrl: string) {
   const url = driveUrl(editedDriveUrl)
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    await requirePermission(client, studioId, userId, 'production.update')
-    const album = await client.query<{ id: string; status: string }>('SELECT id, status FROM albums WHERE id = $1 AND studio_id = $2 FOR UPDATE', [albumId, studioId])
+  return withManagedAlbum(pool, manager, albumId, 'production.update', async client => {
+    const album = await client.query<{ id: string; status: string }>('SELECT id, status FROM albums WHERE id = $1 FOR UPDATE', [albumId])
     if (album.rows[0]?.status !== 'FINALIZED') throw new StudioOperationError('Album chưa ở giai đoạn duyệt', 409)
     const version = await latestVersion(client, albumId)
     const count = await client.query<{ total: number; ready: number }>(
@@ -106,10 +111,13 @@ export async function submitCustomerReview(pool: ConnectionPool, access: AlbumAc
 }
 
 export async function completeDelivery(pool: ConnectionPool, studioId: string, userId: string, albumId: string, deliveryUrl: string) {
+  return completeManagedDelivery(pool, { kind: 'member', studioId, userId }, albumId, deliveryUrl)
+}
+
+export async function completeManagedDelivery(pool: ConnectionPool, manager: AlbumManager, albumId: string, deliveryUrl: string) {
   const url = driveUrl(deliveryUrl)
-  return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
-    await requirePermission(client, studioId, userId, 'delivery.manage')
-    const album = await client.query<{ status: string }>('SELECT status FROM albums WHERE id = $1 AND studio_id = $2 FOR UPDATE', [albumId, studioId])
+  return withManagedAlbum(pool, manager, albumId, 'delivery.manage', async client => {
+    const album = await client.query<{ status: string }>('SELECT status FROM albums WHERE id = $1 FOR UPDATE', [albumId])
     if (album.rows[0]?.status !== 'FINALIZED') throw new StudioOperationError('Album không ở trạng thái có thể bàn giao', 409)
     const version = await latestVersion(client, albumId)
     const round = await client.query<{ id: string; status: string }>('SELECT id, status FROM review_rounds WHERE album_id = $1 AND selection_version_id = $2 ORDER BY round_number DESC LIMIT 1', [albumId, version.id])

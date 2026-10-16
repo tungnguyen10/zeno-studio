@@ -15,13 +15,13 @@ describe('Google Drive adapter', () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       nextPageToken: 'next',
       files: [
-        { id: 'image-1', name: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key' },
+        { id: 'image-1', name: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key', thumbnailLink: 'https://lh3.googleusercontent.com/image-1' },
         { id: 'text-1', name: 'notes.txt', mimeType: 'text/plain' },
       ],
     }), { status: 200 }))
     const adapter = new GoogleDriveAdapter('api-key', fetcher)
     const page = await adapter.listPhotos({ folderId: 'abc_123', resourceKey: '0-secret' })
-    expect(page.items).toEqual([{ id: 'image-1', filename: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key' }])
+    expect(page.items).toEqual([{ id: 'image-1', filename: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key', thumbnailLink: 'https://lh3.googleusercontent.com/image-1' }])
     expect(page.nextPageToken).toBe('next')
     const [url, init] = fetcher.mock.calls[0]!
     expect(new URL(url).searchParams.get('q')).toBe("'abc_123' in parents and trashed = false")
@@ -46,6 +46,62 @@ describe('Google Drive adapter', () => {
     expect(new URL(url).searchParams.get('alt')).toBe('media')
     expect(new URL(url).searchParams.has('key')).toBe(false)
     expect(init?.headers).toMatchObject({ 'X-Goog-Drive-Resource-Keys': 'image-123/image-key', 'x-goog-api-key': 'api-key' })
+  })
+
+  it('refreshes the short-lived thumbnail link and returns image bytes', async () => {
+    const fetcher = vi.fn(async (url: string, _init?: RequestInit) => url.includes('www.googleapis.com')
+      ? new Response(JSON.stringify({ thumbnailLink: 'https://lh3.googleusercontent.com/drive-thumb' }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      : new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/webp' } }))
+    const adapter = new GoogleDriveAdapter('api-key', fetcher as typeof fetch)
+    const result = await adapter.readThumbnail('image-123', 'image-key')
+    expect(result.refreshed).toBe(true)
+    expect(result.thumbnailLink).toBe('https://lh3.googleusercontent.com/drive-thumb')
+    expect(result.response.headers.get('content-type')).toBe('image/webp')
+    expect(Array.from(new Uint8Array(await result.response.arrayBuffer()))).toEqual([1, 2, 3])
+    const [metadataUrl, metadataInit] = fetcher.mock.calls[0]!
+    expect(new URL(metadataUrl).searchParams.get('fields')).toBe('thumbnailLink')
+    expect(metadataInit?.headers).toMatchObject({ 'X-Goog-Drive-Resource-Keys': 'image-123/image-key' })
+    const [thumbnailUrl, thumbnailInit] = fetcher.mock.calls[1]!
+    expect(thumbnailUrl).toBe('https://lh3.googleusercontent.com/drive-thumb')
+    expect(thumbnailInit?.headers).not.toHaveProperty('x-goog-api-key')
+  })
+
+  it('uses a fresh cached thumbnail link without a Drive metadata request', async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => new Response(new Uint8Array([1]), {
+      headers: { 'content-type': 'image/jpeg' },
+    }))
+    const adapter = new GoogleDriveAdapter('api-key', fetcher as typeof fetch)
+    const result = await adapter.readThumbnail('image-123', undefined, 'https://lh3.googleusercontent.com/cached')
+    expect(result.refreshed).toBe(false)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes a cached thumbnail after an upstream failure', async () => {
+    const fetcher = vi.fn(async (url: string, _init?: RequestInit) => url.includes('cached')
+      ? new Response('expired', { status: 403 })
+      : url.includes('www.googleapis.com')
+        ? new Response(JSON.stringify({ thumbnailLink: 'https://lh3.googleusercontent.com/new' }), {
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response(new Uint8Array([1]), { headers: { 'content-type': 'image/jpeg' } }))
+    const adapter = new GoogleDriveAdapter('api-key', fetcher as typeof fetch)
+    const result = await adapter.readThumbnail('image-123', undefined, 'https://lh3.googleusercontent.com/cached')
+    expect(result.refreshed).toBe(true)
+    expect(result.thumbnailLink).toBe('https://lh3.googleusercontent.com/new')
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
+  it('rejects a missing or untrusted thumbnail link without downloading the original', async () => {
+    for (const thumbnailLink of [undefined, 'https://attacker.example/secret']) {
+      const fetcher = vi.fn(async () => new Response(JSON.stringify({ thumbnailLink }), {
+        headers: { 'content-type': 'application/json' },
+      }))
+      const adapter = new GoogleDriveAdapter('api-key', fetcher)
+      await expect(adapter.readThumbnail('image-123')).rejects.toMatchObject({ status: 502 })
+      expect(fetcher).toHaveBeenCalledTimes(1)
+    }
   })
 
   it('preserves the Google error reason for quota handling without returning the body', async () => {

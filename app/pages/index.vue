@@ -25,7 +25,8 @@ useSeoMeta({
           <h1 class="max-w-3xl text-5xl font-semibold leading-[1.08] tracking-[-.045em] sm:text-6xl lg:text-[5.1rem]">Từ bộ ảnh đầu tiên đến lời <em class="font-serif font-normal text-[#6d8559]">“ưng rồi”.</em></h1>
           <p class="mt-7 max-w-xl text-lg leading-8 text-[#67675f]">Một nơi để khách chọn ảnh, ghi chú mong muốn chỉnh sửa và duyệt thành phẩm. Studio theo dõi từng bước, tìm đúng file và bàn giao gọn gàng.</p>
           <div class="mt-9 flex flex-wrap gap-3">
-            <NuxtLink to="/studio" class="rounded-full bg-[#344732] px-6 py-3.5 font-semibold text-white shadow-lg shadow-[#344732]/15 transition hover:bg-[#263825]">Mở studio <span aria-hidden="true">↗</span></NuxtLink>
+            <NuxtLink to="/create" class="rounded-full bg-[#344732] px-6 py-3.5 font-semibold text-white shadow-lg shadow-[#344732]/15 transition hover:bg-[#263825]">Tạo album nhanh <span aria-hidden="true">↗</span></NuxtLink>
+            <NuxtLink to="/studio" class="rounded-full border border-[#cfd5c9] bg-white px-6 py-3.5 font-semibold transition hover:border-[#6d8559]">Mở studio</NuxtLink>
             <NuxtLink to="/tools/file-filter" class="rounded-full border border-[#cfd5c9] bg-white px-6 py-3.5 font-semibold transition hover:border-[#6d8559]">Dùng công cụ lọc file</NuxtLink>
           </div>
           <div class="mt-12 grid max-w-lg grid-cols-3 gap-6 border-t border-[#dedfd6] pt-6 text-sm">

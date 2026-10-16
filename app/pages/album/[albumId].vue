@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { driveFocusSrc, driveFocusSrcset, driveGridSrc, driveGridSrcset, FOCUS_SIZES, focusWidthCap, GRID_SIZES, LIST_SIZES, retryDelayMs, withRetryParam } from '~/lib/drive-image'
 
-type Photo = { id: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number }
+type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number }
 type Overview = { id: string; title: string; status: string; expiresAt: string; participant: { id: string; displayName: string } | null; settings: { limitKind: string; limitMin: number | null; limitMax: number | null; collaborationMode: string; shortlistRounds: number } }
 type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
 const route = useRoute()
@@ -26,6 +27,11 @@ const error = ref('')
 const status = ref('')
 const review = ref<{ roundNumber: number; driveUrl: string | null; deliveryUrl: string | null; status: string } | null>(null)
 const revisionText = ref('')
+const thumbnailState = ref<Record<string, 'retry' | 'proxy' | 'original' | 'failed'>>({})
+const focusImageFailed = ref(false)
+const focusStage = ref<'drive' | 'retry' | 'original'>('drive')
+const focusLoaded = ref(false)
+const focusWidthLimit = ref(2560)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let noteReadRequest = 0
 
@@ -127,6 +133,10 @@ async function toggle(photo: Photo) {
 
 async function openPhoto(photo: Photo) {
   const request = ++noteReadRequest
+  focusImageFailed.value = false
+  focusStage.value = 'drive'
+  focusLoaded.value = false
+  focusWidthLimit.value = focusWidthCap()
   focusPhoto.value = photo
   noteText.value = ''
   noteVersion.value = 0
@@ -169,6 +179,57 @@ async function saveNote() {
 function setView(value: 'grid' | 'list') {
   view.value = value
   localStorage.setItem('zeno-gallery-view', value)
+}
+
+function thumbnailSrc(photo: Photo) {
+  const state = thumbnailState.value[photo.id]
+  if (!state) return driveGridSrc(photo.sourceFileId, photo.width, photo.height)
+  if (state === 'retry') return withRetryParam(driveGridSrc(photo.sourceFileId, photo.width, photo.height))
+  return state === 'proxy' ? `${root}/photos/${photo.id}/image?variant=thumbnail` : `${root}/photos/${photo.id}/image`
+}
+
+function thumbnailSrcset(photo: Photo) {
+  return thumbnailState.value[photo.id] ? undefined : driveGridSrcset(photo.sourceFileId, photo.width, photo.height)
+}
+
+function thumbnailSizes(photo: Photo) {
+  if (thumbnailState.value[photo.id]) return undefined
+  return view.value === 'grid' ? GRID_SIZES : LIST_SIZES
+}
+
+// Direct Drive CDN, one delayed retry, then the authenticated proxy thumbnail, then the original.
+function handleThumbnailError(photoId: string) {
+  const state = thumbnailState.value[photoId]
+  if (!state) {
+    setTimeout(() => { if (!thumbnailState.value[photoId]) thumbnailState.value[photoId] = 'retry' }, retryDelayMs())
+    return
+  }
+  if (state === 'retry') thumbnailState.value[photoId] = 'proxy'
+  else thumbnailState.value[photoId] = state === 'proxy' ? 'original' : 'failed'
+}
+
+function focusSrc(photo: Photo) {
+  if (focusStage.value === 'original') return `${root}/photos/${photo.id}/image`
+  const src = driveFocusSrc(photo.sourceFileId, focusWidthLimit.value)
+  return focusStage.value === 'retry' ? withRetryParam(src) : src
+}
+
+function focusSrcset(photo: Photo) {
+  return focusStage.value === 'drive' ? driveFocusSrcset(photo.sourceFileId, focusWidthLimit.value) : undefined
+}
+
+function showOriginal() {
+  focusLoaded.value = false
+  focusStage.value = 'original'
+}
+
+function handleFocusImageError() {
+  focusLoaded.value = false
+  if (focusStage.value === 'drive') {
+    const photoId = focusPhoto.value?.id
+    setTimeout(() => { if (focusPhoto.value?.id === photoId && focusStage.value === 'drive') focusStage.value = 'retry' }, retryDelayMs())
+  } else if (focusStage.value === 'retry') focusStage.value = 'original'
+  else focusImageFailed.value = true
 }
 
 onMounted(() => { void enter() })
@@ -221,7 +282,8 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
           <div v-else :class="view === 'grid' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5' : 'space-y-3'">
             <article v-for="photo in visiblePhotos" :key="photo.id" class="overflow-hidden rounded-2xl border border-[#e2e5dc] bg-white">
               <button type="button" class="block w-full" :aria-label="`Mở ảnh ${photo.filename}`" @click="openPhoto(photo)">
-                <img :src="`${root}/photos/${photo.id}/image`" :alt="photo.filename" loading="lazy" :class="view === 'grid' ? 'aspect-[.8] w-full object-cover' : 'h-32 w-full object-contain'">
+                <span v-if="thumbnailState[photo.id] === 'failed'" role="status" class="flex h-32 items-center justify-center bg-[#e9ede7] p-3 text-center text-sm text-[#687264]">Không tải được ảnh</span>
+                <img v-else :src="thumbnailSrc(photo)" :srcset="thumbnailSrcset(photo)" :sizes="thumbnailSizes(photo)" :alt="photo.filename" loading="lazy" decoding="async" referrerpolicy="no-referrer" :class="view === 'grid' ? 'aspect-[.8] w-full object-cover' : 'h-32 w-full object-contain'" @error="handleThumbnailError(photo.id)">
               </button>
               <div class="flex items-center justify-between gap-2 p-3">
                 <span class="truncate text-xs" :title="photo.filename">{{ photo.filename }}</span>
@@ -235,9 +297,16 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
     </main>
     <div v-if="focusPhoto" class="fixed inset-0 z-30 flex items-end justify-center bg-[#202920]/80 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" :aria-label="focusPhoto.filename">
       <div class="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-auto rounded-t-3xl bg-white sm:flex-row sm:rounded-3xl">
-        <div class="min-h-0 flex-1 bg-[#e9ede7]"><img :src="`${root}/photos/${focusPhoto.id}/image`" :alt="focusPhoto.filename" class="max-h-[60vh] w-full object-contain sm:max-h-[85vh]"></div>
+        <div class="relative flex min-h-[40vh] min-w-0 flex-1 items-center justify-center bg-[#e9ede7] sm:min-h-[60vh]">
+          <p v-if="focusImageFailed" role="alert" class="flex min-h-48 items-center justify-center p-6 text-center text-[#687264]">Không tải được ảnh gốc từ Google Drive.</p>
+          <template v-else>
+            <img v-if="!focusLoaded && !thumbnailState[focusPhoto.id]" :src="thumbnailSrc(focusPhoto)" :srcset="thumbnailSrcset(focusPhoto)" :sizes="thumbnailSizes(focusPhoto)" alt="" aria-hidden="true" referrerpolicy="no-referrer" class="absolute inset-0 size-full scale-105 object-contain blur-md">
+            <img :src="focusSrc(focusPhoto)" :srcset="focusSrcset(focusPhoto)" :sizes="focusStage === 'drive' ? FOCUS_SIZES : undefined" :alt="focusPhoto.filename" decoding="async" referrerpolicy="no-referrer" class="relative max-h-[60vh] w-full object-contain transition-opacity duration-200 sm:max-h-[85vh]" :class="focusLoaded ? 'opacity-100' : 'opacity-0'" @load="focusLoaded = true" @error="handleFocusImageError">
+          </template>
+        </div>
         <aside class="w-full p-5 sm:w-80">
           <div class="flex items-start justify-between gap-4"><h2 class="break-all font-semibold">{{ focusPhoto.filename }}</h2><button class="rounded-full border px-3 py-1" aria-label="Đóng ảnh" @click="closePhoto">✕</button></div>
+          <button v-if="focusStage !== 'original' && !focusImageFailed" type="button" class="mt-3 rounded-full border px-4 py-2 text-sm" @click="showOriginal">Xem ảnh gốc (nặng hơn)</button>
           <button v-if="overview?.status === 'PUBLISHED'" :disabled="busy" class="mt-5 rounded-full border px-4 py-2 text-sm font-semibold" @click="toggle(focusPhoto)">{{ selectedIds.includes(focusPhoto.id) ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
           <label v-if="overview?.status === 'PUBLISHED'" class="mt-7 block text-sm font-semibold">Ghi chú chỉnh sửa<textarea v-model="noteText" :disabled="noteLoading || noteLoadError || busy" maxlength="5000" rows="5" class="mt-2 w-full rounded-xl border border-[#cbd4c6] p-3 font-normal disabled:opacity-50" placeholder="Bạn muốn chỉnh gì ở ảnh này?"></textarea></label>
           <p v-if="noteLoading" class="mt-2 text-sm text-[#687264]" role="status">Đang tải ghi chú…</p>

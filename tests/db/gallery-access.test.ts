@@ -7,7 +7,7 @@ import { ensureStudio } from '../../server/studios/studio'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 
 const db = await PGlite.create()
-for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql']) {
+for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql']) {
   await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'))
 }
 await db.exec('SET ROLE app_runtime')

@@ -11,7 +11,13 @@ npm ci
 npm run dev
 ```
 
-Các trang hiện có: `/` (giới thiệu), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ). Công cụ lọc file dùng File System Access API; browser không hỗ trợ sẽ hiện hướng dẫn chuyển sang Chrome/Edge desktop.
+Các trang hiện có: `/` (giới thiệu), `/create` (tạo album nhanh không cần đăng nhập), `/guest/albums/:id` (quản trị album bằng link bí mật), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ). Công cụ lọc file dùng File System Access API; browser không hỗ trợ sẽ hiện hướng dẫn chuyển sang Chrome/Edge desktop.
+
+## Tạo và chia sẻ album
+
+**Studio:** đăng nhập → tạo album nháp từ folder Drive công khai → kiểm tra và xuất bản → lấy link khách → có thể cấp thêm link khách trong danh sách studio. Khách mở link, nhập tên rồi chọn ảnh và ghi chú mà không cần tài khoản. Studio quản lý chốt ảnh, xuất kết quả, hậu kỳ, duyệt và bàn giao ở trang album.
+
+**Tạo nhanh:** mở `/create`, nhập tên và folder Drive công khai, chọn hạn 15/30 ngày và giới hạn ảnh → hệ thống xuất bản ngay và trả hai link riêng: link khách và link quản trị bí mật. Link quản trị đổi token trong fragment lấy cookie HTTP only; người tạo có thể cấp lại link khách và quản lý vòng đời album. Hãy lưu link quản trị trước khi rời trang vì chưa có cách khôi phục khi mất. Tạo nhanh giới hạn 10 lần thử mỗi giờ theo IP. Người có tài khoản có thể nhận album vào studio mình sở hữu; link quản trị guest bị thu hồi, còn album, kết quả và link khách được giữ nguyên. Album hết hạn chỉ nhận vào studio trong 30 ngày giữ metadata và không tự xuất bản lại.
 
 Trong danh sách album tại `/studio`, album đã xuất bản có nút **Chia sẻ link khách hàng**. Nút cấp link khách mới và hiển thị ngay dưới album để mở hoặc sao chép. Link khách đã gửi trước đó vẫn hợp lệ cho đến khi album hết hạn hoặc token bị thu hồi.
 
@@ -34,9 +40,11 @@ Chủ studio hoặc quản lý có thể tạo lời mời theo email; link đư
 
 `GoogleDriveAdapter` dùng Google Drive API để liệt kê ảnh, phân trang và đọc nội dung ảnh. V1 chỉ nhận folder đặt quyền **“Bất kỳ ai có đường liên kết”**. Tạo **API key** trong Google Cloud project đã bật Google Drive API, giới hạn key cho Drive API và đặt ở `NUXT_GOOGLE_API_KEY`. OAuth Client ID dùng cho đăng nhập Google (`...apps.googleusercontent.com`) không phải API key. Giữ key ở server; không đưa vào repo hay browser.
 
+Gallery lấy thumbnail Drive qua endpoint ảnh có kiểm tra quyền của Zeno; Focus lấy ảnh gốc từ cùng endpoint. URL thumbnail ngắn hạn được làm mới ở server, response chỉ dùng cache riêng tư. Nếu thumbnail lỗi, lưới thử ảnh gốc và sau đó hiện trạng thái lỗi rõ ràng. Việc tối ưu tốc độ cần được đo lại với folder mẫu thật trước khi coi đạt nghiệm thu.
+
 Đặt `NUXT_DRIVE_SAMPLE_FOLDER_URL` tới folder công khai có ảnh (tối đa 3.000 ảnh), rồi chạy `npm run test:drive-live`. Lệnh kiểm đủ trang, ID trùng và tải mẫu ảnh đầu/giữa/cuối; nếu có ảnh mang resource key, lệnh tải thêm ảnh đó. Kết quả có `scaleVerified` (đã thử ít nhất 1.000 ảnh) và `resourceKeySampled`; hai mục chưa đạt được ghi rõ thay vì chặn folder nhỏ. Đầu ra không in API key, ID ảnh hay link folder.
 
-Folder mẫu hiện tại có 307 ảnh, một trang, không ảnh nào trả resource key. Ngày 2026-10-15, lệnh live, HTTP tạo album → xuất bản → xem ảnh khách trên local và Vercel Preview đều đạt với folder này. `NUXT_DRIVE_VERIFIED=true` đã bật cho local và Preview; Production tiếp tục khóa. Khi có folder 1.000–3.000 ảnh và ảnh có resource key, chạy lại kiểm chứng trước khi coi hai mục đó là đạt. HTTP smoke script `npm run test:drive-http` và `npm run test:drive-preview-http` cần `NUXT_DATABASE_TEST_URL`, `NUXT_DATABASE_TEST_DIRECT_URL`, `NUXT_DRIVE_SAMPLE_FOLDER_URL`; script Preview cần thêm `NUXT_DRIVE_PREVIEW_DEPLOYMENT`. Đặt `NUXT_DRIVE_EXPECTED_PHOTO_COUNT` khi kiểm folder khác; mặc định hiện là 307.
+Folder mẫu hiện tại trả 326 ảnh, một trang, không ảnh nào trả resource key. Ngày 2026-10-15, lệnh live đạt với 326 ảnh và 5 thumbnail mẫu tải được; HTTP tạo album → xuất bản → xem ảnh khách trên local và Vercel Preview đã đạt trước đó với 307 ảnh. `NUXT_DRIVE_VERIFIED=true` đã bật cho local và Preview; Production tiếp tục khóa. Khi có folder 1.000–3.000 ảnh và ảnh có resource key, chạy lại kiểm chứng trước khi coi hai mục đó là đạt. HTTP smoke script `npm run test:drive-http` và `npm run test:drive-preview-http` cần `NUXT_DATABASE_TEST_URL`, `NUXT_DATABASE_TEST_DIRECT_URL`, `NUXT_DRIVE_SAMPLE_FOLDER_URL`; script Preview cần thêm `NUXT_DRIVE_PREVIEW_DEPLOYMENT`. Đặt `NUXT_DRIVE_EXPECTED_PHOTO_COUNT` khi kiểm folder khác; mặc định hiện là 307.
 
 ## Kiểm tra
 

@@ -31,19 +31,22 @@ async function requireAlbumPermission(client: QueryClient, studioId: string, use
   if (!result.rows[0] || !canPerform(result.rows[0].role, action)) throw new StudioOperationError('Không có quyền thao tác album', 403)
 }
 
-function validateInput(input: CreateAlbumInput): void {
+export function validateAlbumInput(input: Pick<CreateAlbumInput, 'title' | 'expiresInDays' | 'limit' | 'collaborationMode' | 'shortlistRounds'>): void {
   if (!input.title.trim() || input.title.trim().length > 150) throw new StudioOperationError('Tên album phải dài 1–150 ký tự', 400)
   if (input.expiresInDays !== 15 && input.expiresInDays !== 30) throw new StudioOperationError('Hạn album phải là 15 hoặc 30 ngày', 400)
   if (input.shortlistRounds !== undefined && input.shortlistRounds !== 1 && input.shortlistRounds !== 2) throw new StudioOperationError('Số vòng shortlist không hợp lệ', 400)
   if (input.collaborationMode && !['shared', 'individual', 'voting'].includes(input.collaborationMode)) throw new StudioOperationError('Chế độ cộng tác không hợp lệ', 400)
   const limit = input.limit
+  if (!limit || !['unlimited', 'maximum', 'minimum', 'exact', 'range'].includes(limit.kind)) {
+    throw new StudioOperationError('Giới hạn chọn không hợp lệ', 400)
+  }
   if (limit.kind === 'unlimited') return
   if (limit.kind === 'range') {
     if (!Number.isInteger(limit.min) || !Number.isInteger(limit.max) || limit.min < 0 || limit.max < limit.min) throw new StudioOperationError('Giới hạn chọn không hợp lệ', 400)
   } else if (!Number.isInteger(limit.count) || limit.count < 0) throw new StudioOperationError('Giới hạn chọn không hợp lệ', 400)
 }
 
-async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnType<typeof parseGoogleDriveFolderLink>): Promise<SourcePhoto[]> {
+export async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnType<typeof parseGoogleDriveFolderLink>): Promise<SourcePhoto[]> {
   const photos: SourcePhoto[] = []
   const seenIds = new Set<string>()
   const seenPages = new Set<string>()
@@ -79,11 +82,12 @@ async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnType<type
     }
   } while (pageToken)
   if (!photos.length) throw new StudioOperationError('Thư mục Drive không có ảnh có thể sử dụng', 400)
-  return photos
+  // Plain code-point order, matching migration 018 (COLLATE "C"); Drive returns files in no stable order.
+  return photos.sort((a, b) => (a.filename < b.filename ? -1 : a.filename > b.filename ? 1 : 0))
 }
 
 export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapter, input: CreateAlbumInput): Promise<AlbumSummary> {
-  validateInput(input)
+  validateAlbumInput(input)
   let folder: ReturnType<typeof parseGoogleDriveFolderLink>
   try { folder = parseGoogleDriveFolderLink(input.folderUrl) }
   catch (error) {
@@ -94,41 +98,53 @@ export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapt
     client => requireAlbumPermission(client, input.studioId, input.userId, 'album.create'))
   const photos = await collectPhotos(source, folder)
   const id = randomUUID()
+  let expiresAt: Date
+  await withDatabaseContext(pool, { studioId: input.studioId, userId: input.userId, scope: 'member' }, async client => {
+    await requireAlbumPermission(client, input.studioId, input.userId, 'album.create')
+    expiresAt = await insertAlbumRecords(client, input.studioId, id, folder, photos, input, false)
+  })
+  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length }
+}
+
+export async function insertAlbumRecords(
+  client: QueryClient, studioId: string, albumId: string, folder: ReturnType<typeof parseGoogleDriveFolderLink>,
+  photos: SourcePhoto[], input: Pick<CreateAlbumInput, 'title' | 'expiresInDays' | 'limit' | 'collaborationMode' | 'shortlistRounds'>,
+  published: boolean,
+): Promise<Date> {
   const sourceId = randomUUID()
   const roundId = randomUUID()
   const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
   const limit = input.limit
   const minimum = limit.kind === 'range' ? limit.min : limit.kind === 'minimum' || limit.kind === 'exact' ? limit.count : null
   const maximum = limit.kind === 'range' ? limit.max : limit.kind === 'maximum' || limit.kind === 'exact' ? limit.count : null
-  await withDatabaseContext(pool, { studioId: input.studioId, userId: input.userId, scope: 'member' }, async client => {
-    await requireAlbumPermission(client, input.studioId, input.userId, 'album.create')
-    await client.query('INSERT INTO albums (id, studio_id, title, expires_at) VALUES ($1, $2, $3, $4)', [id, input.studioId, input.title.trim(), expiresAt])
+  await client.query('INSERT INTO albums (id, studio_id, title, status, expires_at, published_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [albumId, studioId, input.title.trim(), published ? 'PUBLISHED' : 'DRAFT', expiresAt, published ? new Date() : null])
+  await client.query(
+    'INSERT INTO album_settings (album_id, limit_kind, limit_min, limit_max, collaboration_mode, shortlist_rounds, duration_days) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [albumId, limit.kind, minimum, maximum, input.collaborationMode ?? 'shared', input.shortlistRounds ?? 1, input.expiresInDays],
+  )
+  await client.query('INSERT INTO photo_sources (id, album_id, kind, folder_id, resource_key, sync_status, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, now())',
+    [sourceId, albumId, 'google_drive', folder.folderId, folder.resourceKey ?? null, 'READY'])
+  for (let start = 0; start < photos.length; start += 250) {
+    const batch = photos.slice(start, start + 250)
+    const values: unknown[] = []
+    const placeholders = batch.map((photo, offset) => {
+      const base = offset * 12
+      values.push(randomUUID(), albumId, sourceId, photo.id, photo.filename, photo.mimeType,
+        photo.resourceKey ?? null, photo.width ?? null, photo.height ?? null, start + offset,
+        photo.thumbnailLink ?? null, photo.thumbnailLink ? new Date() : null)
+      return `(${Array.from({ length: 12 }, (_, column) => `$${base + column + 1}`).join(', ')})`
+    })
     await client.query(
-      'INSERT INTO album_settings (album_id, limit_kind, limit_min, limit_max, collaboration_mode, shortlist_rounds, duration_days) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [id, limit.kind, minimum, maximum, input.collaborationMode ?? 'shared', input.shortlistRounds ?? 1, input.expiresInDays],
+      `INSERT INTO photos (id, album_id, source_id, source_file_id, filename, mime_type, resource_key, width, height, sort_order, thumbnail_url, thumbnail_checked_at) VALUES ${placeholders.join(', ')}`,
+      values,
     )
-    await client.query('INSERT INTO photo_sources (id, album_id, kind, folder_id, resource_key, sync_status, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, now())',
-      [sourceId, id, 'google_drive', folder.folderId, folder.resourceKey ?? null, 'READY'])
-    for (let start = 0; start < photos.length; start += 250) {
-      const batch = photos.slice(start, start + 250)
-      const values: unknown[] = []
-      const placeholders = batch.map((photo, offset) => {
-        const base = offset * 10
-        values.push(randomUUID(), id, sourceId, photo.id, photo.filename, photo.mimeType,
-          photo.resourceKey ?? null, photo.width ?? null, photo.height ?? null, start + offset)
-        return `(${Array.from({ length: 10 }, (_, column) => `$${base + column + 1}`).join(', ')})`
-      })
-      await client.query(
-        `INSERT INTO photos (id, album_id, source_id, source_file_id, filename, mime_type, resource_key, width, height, sort_order) VALUES ${placeholders.join(', ')}`,
-        values,
-      )
-    }
-    await client.query('INSERT INTO selection_rounds (id, album_id, round_number) VALUES ($1, $2, 1)', [roundId, id])
-    if ((input.collaborationMode ?? 'shared') === 'shared') {
-      await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), id, roundId, 'shared'])
-    }
-  })
-  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt, photoCount: photos.length }
+  }
+  await client.query('INSERT INTO selection_rounds (id, album_id, round_number) VALUES ($1, $2, 1)', [roundId, albumId])
+  if ((input.collaborationMode ?? 'shared') === 'shared') {
+    await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
+  }
+  return expiresAt
 }
 
 export async function getStudioAlbums(pool: ConnectionPool, studioId: string, userId: string): Promise<AlbumSummary[]> {
