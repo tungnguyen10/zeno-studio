@@ -20,17 +20,17 @@ export interface GalleryPhoto {
 }
 
 export async function getAlbumOverview(pool: ConnectionPool, access: AlbumAccess): Promise<{
-  id: string; title: string; status: string; expiresAt: Date; joined: boolean; canJoin: boolean
+  id: string; title: string; status: string; currentCycle: number; expiresAt: Date; joined: boolean; canJoin: boolean
   settings: { limitKind: string; limitMin: number | null; limitMax: number | null }
 }> {
   return withDatabaseContext(pool, { albumId: access.albumId, scope: access.scope }, async client => {
-    const album = await client.query<{ id: string; title: string; status: string; expires_at: Date }>(
-      'SELECT id, title, status, expires_at FROM albums WHERE id = $1', [access.albumId])
+    const album = await client.query<{ id: string; title: string; status: string; current_cycle: number; expires_at: Date }>(
+      'SELECT id, title, status, current_cycle, expires_at FROM albums WHERE id = $1', [access.albumId])
     if (!album.rows[0]) throw new StudioOperationError('Album không còn truy cập được', 410)
     const settings = await client.query<{ limit_kind: string; limit_min: number | null; limit_max: number | null }>(
       'SELECT limit_kind, limit_min, limit_max FROM app_private.album_public_settings($1)', [access.albumId])
     return {
-      id: album.rows[0].id, title: album.rows[0].title, status: album.rows[0].status, expiresAt: album.rows[0].expires_at,
+      id: album.rows[0].id, title: album.rows[0].title, status: album.rows[0].status, currentCycle: album.rows[0].current_cycle, expiresAt: album.rows[0].expires_at,
       joined: access.participantId !== null,
       canJoin: access.scope === 'customer' && access.participantId === null,
       settings: { limitKind: settings.rows[0]!.limit_kind, limitMin: settings.rows[0]!.limit_min, limitMax: settings.rows[0]!.limit_max },

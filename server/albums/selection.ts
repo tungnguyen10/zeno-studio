@@ -198,10 +198,20 @@ export async function reopenManagedSelection(pool: ConnectionPool, manager: Albu
     const current = await client.query<{ status: string; current_cycle: number }>(
       'SELECT status, current_cycle FROM albums WHERE id = $1 FOR UPDATE', [albumId])
     if (current.rows[0]?.status !== 'FINALIZED') throw new StudioOperationError('Chỉ mở lại album đã chốt', 409)
+    const previous = await client.query<{ id: string }>(
+      'SELECT id FROM selection_versions WHERE album_id = $1 ORDER BY version_number DESC LIMIT 1', [albumId])
+    if (!previous.rows[0]) throw new StudioOperationError('Album chưa có bộ ảnh đã chốt', 409)
+    const listVersion = await client.query<{ version: number }>(
+      'SELECT coalesce(max(version), 0)::integer + 1 AS version FROM selection_lists WHERE album_id = $1 AND kind = $2', [albumId, 'shared'])
     const cycle = current.rows[0].current_cycle + 1
     const roundId = randomUUID()
+    const listId = randomUUID()
     await client.query('INSERT INTO selection_rounds (id, album_id, cycle, round_number) VALUES ($1, $2, $3, 1)', [roundId, albumId, cycle])
-    await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
+    await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind, version) VALUES ($1, $2, $3, $4, $5)',
+      [listId, albumId, roundId, 'shared', listVersion.rows[0]!.version])
+    await client.query(`INSERT INTO selections (album_id, list_id, photo_id)
+      SELECT $1, $2, photo_id FROM selection_version_items WHERE selection_version_id = $3`,
+      [albumId, listId, previous.rows[0].id])
     await client.query("UPDATE albums SET status = 'PUBLISHED', current_cycle = $1, updated_at = now() WHERE id = $2", [cycle, albumId])
     return { cycle }
   })

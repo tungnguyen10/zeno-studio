@@ -1,8 +1,8 @@
 # Tiến độ triển khai V1
 
-Cập nhật: 2026-10-15. `Dev Neon` nghĩa là đã chạy trên nhánh development `codex-v1-dev`; **chưa phải nghiệm thu production**.
+Cập nhật: 2026-10-17. `Dev Neon` nghĩa là đã chạy trên nhánh development `codex-v1-dev`; **chưa phải nghiệm thu production**.
 
-Kiểm tra mới nhất cho nhánh làm việc: `npm test` 79/79, `npm run typecheck` và `npm run build` đạt; toàn bộ Chromium desktop/mobile E2E đạt 28/28. Migration 016–017 đã áp lên nhánh Neon development sau khi xác minh connection string. Folder Drive mẫu hiện trả 326 ảnh; 5 thumbnail mẫu và ảnh gốc của album đang báo lỗi tải được. Chưa đo thời gian/dung lượng toàn trang gallery hoặc chạy HTTP smoke trên Neon test/Preview vì thiếu Neon test URL.
+Kiểm tra mới nhất cho nhánh làm việc: `npm test` 89/89, `npm run typecheck` và `npm run build` đạt; toàn bộ Chromium E2E đạt 42/42. Migration 016–017 đã áp lên nhánh Neon development sau khi xác minh connection string. Folder Drive mẫu hiện trả 326 ảnh; 5 thumbnail mẫu và ảnh gốc của album đang báo lỗi tải được. Chưa đo thời gian/dung lượng toàn trang gallery hoặc chạy HTTP smoke trên Neon test/Preview vì thiếu Neon test URL.
 
 | Task | Trạng thái | Đầu ra / phần chưa xong |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ Kiểm tra mới nhất cho nhánh làm việc: `npm test` 79/79, `npm run typec
 | T23–T30 | Một phần | Link khách tự vào album (không nhập tên; mọi thiết bị dùng chung một danh sách chọn), catalog phân trang, grid/list, chọn ảnh có giới hạn/version và polling 4 giây; thiếu password, masonry/justified, zoom/swipe, filter/sort phong phú và bulk. |
 | T31–T32 | Dev Neon | Ghi chú chung cho mỗi ảnh, lịch sử phiên bản, conflict; UI focus panel cơ bản. |
 | T33–T34 | Một phần | Danh sách chọn chung; studio chọn bộ cuối. Đã bỏ chế độ Individual/Voting và shortlist 2 vòng khỏi code (cột DB còn lại, chưa xóa). |
-| T35–T37 | Dev Neon | Studio xem danh sách/phiếu, chốt snapshot bất biến, mở cycle mới; test local và pooled Neon. |
+| T35–T37 | Dev Neon | Studio xem danh sách/phiếu, chốt snapshot bất biến; mở cycle mới kế thừa bộ chốt gần nhất và xem bộ cũ trong gallery studio. Test local và pooled Neon cho luồng gốc; thay đổi kế thừa đã kiểm local, chưa chạy lại pooled Neon. |
 | T38–T42 | Một phần | Results, filename TXT/CSV, notes TXT/CSV, local matching/copy/report đã nối UI; còn vài option xuất. |
 | T43–T47 | Một phần | Production state, review/revision rounds, link Drive ảnh chỉnh, khách duyệt và bàn giao theo snapshot có API/UI và test local + Neon; thiếu map ảnh chỉnh thủ công khi tên khác. |
 | T48–T49 | Chưa làm | Analytics events, daily aggregation và North Star. |

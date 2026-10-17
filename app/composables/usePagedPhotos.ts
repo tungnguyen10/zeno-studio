@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, triggerRef } from 'vue'
 
-export type PhotoFilter = 'all' | 'selected'
+export type PhotoFilter = 'all' | 'selected' | 'previous'
 export interface PhotoPageResponse<T> { items: T[]; nextCursor: string | null; total: number; selectedCount: number }
 export type PhotoPageFetcher<T> = (params: { cursor?: string; filter: PhotoFilter; limit: number }) => Promise<PhotoPageResponse<T>>
 

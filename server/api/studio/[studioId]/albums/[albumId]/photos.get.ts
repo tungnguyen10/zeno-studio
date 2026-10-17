@@ -10,5 +10,5 @@ export default defineEventHandler(async event => {
   const studioId = studioIdParam(event)
   const albumId = albumIdParam(event)
   setHeader(event, 'cache-control', 'no-store')
-  return studioApi(async () => listManagedAlbumPhotos(getAppPool(), { kind: 'member', studioId, userId: user.id }, albumId, readPhotoPageQuery(getQuery(event), 120)))
+  return studioApi(async () => listManagedAlbumPhotos(getAppPool(), { kind: 'member', studioId, userId: user.id }, albumId, readPhotoPageQuery(getQuery(event), 120, true)))
 })

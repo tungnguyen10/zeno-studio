@@ -96,7 +96,7 @@ Nền tảng giúp studio/photographer **tạo album từ Google Drive → gửi
 - Selection limit: Unlimited (default), Exact, Maximum, Minimum, Range.
 - Multi-select: desktop Shift/Cmd/Ctrl; mobile bật chế độ checkbox riêng; **bulk marked items** tách khỏi danh sách yêu thích chính thức.
 - Một vòng chọn; danh sách chọn chung cho cả link khách. Studio chốt bộ cuối, có thể chọn lại bộ ảnh khi chốt.
-- Có thể bỏ/chọn lại trước finalize; sau finalize muốn sửa phải **reopen → new snapshot**.
+- Có thể bỏ/chọn lại trước finalize; sau finalize muốn sửa phải **reopen → new snapshot**. Vòng mới kế thừa bộ ảnh studio đã chốt gần nhất để khách và studio tiếp tục thêm/bớt; snapshot cũ không đổi.
 
 ### Photo Notes (bắt buộc V1)
 - Mỗi ảnh có **♥ Chọn** và **💬 Ghi chú** ở Grid, List, Focus.

@@ -7,5 +7,5 @@ import { studioApi } from '../../../../utils/studio-api'
 export default defineEventHandler(async event => {
   guestNoStore(event)
   const manager = guestManager(event)
-  return studioApi(async () => listManagedAlbumPhotos(getAppPool(), manager, manager.albumId, readPhotoPageQuery(getQuery(event), 120)))
+  return studioApi(async () => listManagedAlbumPhotos(getAppPool(), manager, manager.albumId, readPhotoPageQuery(getQuery(event), 120, true)))
 })

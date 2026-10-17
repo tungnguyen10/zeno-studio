@@ -10,6 +10,7 @@ export interface StudioAlbumWorkspace {
   expiresAt: Date
   canFinalize: boolean
   hasResults: boolean
+  previousCount: number
   settings: { limitKind: string; limitMin: number | null; limitMax: number | null }
   photoCount: number
   selectedCount: number
@@ -28,9 +29,13 @@ export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: Al
     const album = result.rows[0]
     if (!album) throw new StudioOperationError('Album không tồn tại', 404)
     const counts = await queryPhotoPage(client, albumId, { limit: 1, filter: 'all' })
+    const previous = await client.query<{ count: number }>(
+      `SELECT (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id) AS count
+       FROM selection_versions v WHERE v.album_id = $1 ORDER BY v.version_number DESC LIMIT 1`, [albumId])
     return {
       id: album.id, title: album.title, status: album.status, expiresAt: album.expires_at,
       canFinalize: session.canFinalize, hasResults: album.has_results,
+      previousCount: previous.rows[0]?.count ?? 0,
       settings: { limitKind: album.limit_kind, limitMin: album.limit_min, limitMax: album.limit_max },
       photoCount: counts.total, selectedCount: counts.selectedCount,
     }
@@ -38,5 +43,5 @@ export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: Al
 }
 
 export async function listManagedAlbumPhotos(pool: ConnectionPool, manager: AlbumManager, albumId: string, options: PhotoPageOptions): Promise<PhotoPage> {
-  return withManagedAlbum(pool, manager, albumId, 'album.view', client => queryPhotoPage(client, albumId, options))
+  return withManagedAlbum(pool, manager, albumId, 'album.view', client => queryPhotoPage(client, albumId, { ...options, includePrevious: true }))
 }

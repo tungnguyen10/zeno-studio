@@ -20,6 +20,47 @@ for (const { name, viewport } of viewports) {
   test.describe(`studio album workspace on ${name}`, () => {
     test.use({ viewport })
 
+    test('shows the previous final set and lets the studio keep or replace it after reopening', async ({ page }) => {
+      let albumStatus = 'FINALIZED'
+      let finalizeBody: unknown
+      const prior = photos[0]!
+      const replacement = photos[1]!
+      await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }))
+      await page.route(`**/api/studio/${studioId}/albums/${albumId}`, route => route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify({
+          id: albumId, title: 'Mochi', status: albumStatus, expiresAt: '2030-01-01T00:00:00Z', canFinalize: true,
+          hasResults: true, previousCount: 1,
+          settings: { limitKind: 'maximum', limitMin: null, limitMax: 20 }, photoCount: photos.length, selectedCount: albumStatus === 'PUBLISHED' ? 1 : 4,
+        }),
+      }))
+      await page.route(`**/api/studio/${studioId}/albums/${albumId}/photos?*`, route => {
+        const filter = new URL(route.request().url()).searchParams.get('filter')
+        const all = photos.map(photo => ({ ...photo, selected: albumStatus === 'PUBLISHED' ? photo.id === prior.id : photo.selected, previouslyFinalized: photo.id === prior.id }))
+        const items = filter === 'previous' ? all.filter(photo => photo.previouslyFinalized) : filter === 'selected' ? all.filter(photo => photo.selected) : all
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items, nextCursor: null, total: photos.length, selectedCount: albumStatus === 'PUBLISHED' ? 1 : 4 }) })
+      })
+      await page.route(`**/api/studio/${studioId}/albums/${albumId}/reopen`, route => {
+        albumStatus = 'PUBLISHED'
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cycle: 2 }) })
+      })
+      await page.route(`**/api/studio/${studioId}/albums/${albumId}/finalize`, route => {
+        finalizeBody = route.request().postDataJSON()
+        albumStatus = 'FINALIZED'
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ versionNumber: 2, count: 1 }) })
+      })
+      await page.goto(`/studio/albums/${albumId}?studio=${studioId}`)
+      await page.getByRole('button', { name: 'Bộ chốt trước (1)' }).click()
+      await expect(page.getByRole('list', { name: 'Ảnh trong album' }).getByRole('listitem')).toHaveCount(1)
+      await expect(page.getByText('Đã chốt trước', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Mở vòng chọn mới' }).click()
+      await expect(page.getByRole('button', { name: 'Chốt 1 ảnh' })).toBeVisible()
+      await page.getByRole('button', { name: `Chốt ${prior.filename}` }).click()
+      await page.getByRole('button', { name: /Tất cả/ }).click()
+      await page.getByRole('button', { name: `Chốt ${replacement.filename}` }).click()
+      await page.getByRole('button', { name: 'Chốt 1 ảnh' }).click()
+      await expect.poll(() => finalizeBody).toEqual({ include: [replacement.id], exclude: [prior.id] })
+    })
+
     test('shows a skeleton, then the photo gallery with filters, layouts and finalize adjustments', async ({ page }) => {
       let release: () => void = () => {}
       const gate = new Promise<void>(resolve => { release = resolve })

@@ -9,7 +9,7 @@ import PhotoGallery from '~/components/album/PhotoGallery.vue'
 import PhotoTile from '~/components/album/PhotoTile.vue'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number; selected: boolean }
-type Overview = { id: string; title: string; status: string; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null } }
+type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null } }
 type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
 const route = useRoute()
 const albumId = String(route.params.albumId)
@@ -96,6 +96,22 @@ async function loadPhotos() {
   if (paged.error.value) error.value = paged.error.value
 }
 
+async function refreshAlbumState() {
+  if (!overview.value) return
+  const next = (await $fetch<{ album: Overview }>(`${root}/access`)).album
+  const changed = next.status !== overview.value.status || next.currentCycle !== overview.value.currentCycle
+  overview.value = next
+  if (changed) {
+    selectionLoaded.value = false
+    selectionVersion.value = 0
+    selectedIds.value = []
+    review.value = null
+    await loadSelection()
+    await loadPhotos()
+    if (next.status === 'FINALIZED' || next.status === 'DELIVERED') await loadReview()
+  } else await loadSelection()
+}
+
 async function enter() {
   loading.value = true
   error.value = ''
@@ -115,7 +131,7 @@ async function enter() {
     if (overview.value.status === 'FINALIZED' || overview.value.status === 'DELIVERED') await loadReview()
     if (import.meta.client) {
       pollTimer = setInterval(() => {
-        if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && !focusPhoto.value) void loadSelection().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
+        if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && !focusPhoto.value) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
       }, 4000)
     }
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Link album không hợp lệ hoặc đã hết hạn' }
