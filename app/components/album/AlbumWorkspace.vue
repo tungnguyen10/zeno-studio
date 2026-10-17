@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ALBUM_STATUS_LABELS, type AlbumStatus } from '~~/shared/domain/album-status'
 import { driveFitSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl } from '~/lib/drive-image'
 import type { GalleryLayout } from '~/lib/gallery-layout'
 import { usePagedPhotos, type PhotoFilter, type PhotoPageResponse } from '~/composables/usePagedPhotos'
@@ -10,7 +11,7 @@ import PhotoTile from './PhotoTile.vue'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; sortOrder: number; selected: boolean; previouslyFinalized: boolean }
 type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; previousCount: number; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; photoCount: number; selectedCount: number }
-const props = defineProps<{ apiRoot: string; backTo: string; resultsTo: string }>()
+const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; resultsTo: string }>(), { backLabel: 'Quay lại' })
 const workspace = ref<Workspace | null>(null)
 // Studio edits are stored as differences from the customer's list so huge albums never ship full id arrays.
 const included = ref(new Set<string>())
@@ -24,13 +25,9 @@ const layout = useGalleryLayout('zeno-studio-gallery-layout')
 const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`${props.apiRoot}/photos`, { query: { limit: params.limit, filter: params.filter, ...(params.cursor ? { cursor: params.cursor } : {}) } }))
 const filter = computed<PhotoFilter>({ get: () => paged.filter.value, set: value => { if (value !== paged.filter.value) void paged.reset(value) } })
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Bản nháp', PUBLISHED: 'Khách đang chọn', FINALIZED: 'Đã chốt', DELIVERED: 'Đã bàn giao', EXPIRED: 'Hết hạn',
-}
-
 const canChoose = computed(() => workspace.value?.status === 'PUBLISHED' && workspace.value.canFinalize)
 const chosenCount = computed(() => (workspace.value?.selectedCount ?? 0) - excluded.value.size + included.value.size)
-const statusLabel = computed(() => workspace.value ? STATUS_LABELS[workspace.value.status] ?? workspace.value.status : '')
+const statusLabel = computed(() => workspace.value ? ALBUM_STATUS_LABELS[workspace.value.status as AlbumStatus] ?? workspace.value.status : '')
 const limitLabel = computed(() => {
   const s = workspace.value?.settings
   if (!s || s.limitKind === 'unlimited') return 'Không giới hạn'
@@ -106,7 +103,7 @@ onMounted(() => { void load() })
   <div class="min-h-screen bg-[#f8f7f3] text-[#24231f]">
     <header class="sticky top-0 z-20 border-b border-[#e2e5dc] bg-[#f8f7f3]/95 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <NuxtLink :to="backTo" class="-ml-2 inline-flex min-h-11 items-center rounded-full px-3 font-semibold text-[#344732] hover:bg-[#eef2ea] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">← Quay lại</NuxtLink>
+        <NuxtLink :to="backTo" class="-ml-2 inline-flex min-h-11 items-center rounded-full px-3 font-semibold text-[#344732] hover:bg-[#eef2ea] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">← {{ backLabel }}</NuxtLink>
         <span v-if="workspace" class="min-w-0 truncate text-sm text-[#667461]">{{ workspace.title }}</span>
       </div>
     </header>
@@ -149,6 +146,7 @@ onMounted(() => { void load() })
             <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Giới hạn: {{ limitLabel }}</li>
             <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Hạn {{ new Date(workspace.expiresAt).toLocaleDateString('vi-VN') }}</li>
           </ul>
+          <AlbumProgress :status="workspace.status" />
         </section>
 
         <p v-if="error" role="alert" class="mt-5 rounded-xl border border-[#ead6d6] bg-white p-4 text-sm text-red-700">{{ error }}</p>
@@ -164,6 +162,7 @@ onMounted(() => { void load() })
             <GalleryLayoutSwitch v-model="layout" />
           </div>
           <div class="flex flex-wrap gap-2">
+            <slot name="actions" :workspace="workspace" :reload="load" />
             <NuxtLink v-if="workspace.hasResults" :to="resultsTo" class="inline-flex min-h-11 items-center rounded-full border border-[#cbd4c6] bg-white px-5 font-semibold text-[#344732] hover:bg-[#f1f5ed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">Xem kết quả đã chốt</NuxtLink>
             <button v-if="workspace.status === 'FINALIZED' && workspace.canFinalize" type="button" :disabled="busy" :aria-busy="busy" class="min-h-11 rounded-full bg-[#344732] px-5 font-semibold text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="reopen">{{ busy ? 'Đang mở…' : 'Mở vòng chọn mới' }}</button>
           </div>

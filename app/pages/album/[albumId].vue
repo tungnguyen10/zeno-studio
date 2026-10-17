@@ -112,16 +112,26 @@ async function refreshAlbumState() {
   } else await loadSelection()
 }
 
+async function loadOverview(token: string | null): Promise<Overview> {
+  try {
+    return (await $fetch<{ album: Overview }>(`${root}/access`)).album
+  } catch (cause) {
+    const code = (cause as { statusCode?: number } | null)?.statusCode
+    if (code !== 403) throw cause
+    if (!token) throw new Error('Link thiếu mã truy cập, hãy xin lại link đầy đủ từ người gửi hoặc studio')
+    // Redeem only when the cookie is missing/stale; redeeming on every load would mint a new participant token each time.
+    try { await $fetch(`${root}/access`, { method: 'POST', body: { token } }) }
+    catch { throw new Error('Link album không hợp lệ hoặc đã hết hạn') }
+    return (await $fetch<{ album: Overview }>(`${root}/access`)).album
+  }
+}
+
 async function enter() {
   loading.value = true
   error.value = ''
   try {
     const token = typeof route.query.token === 'string' ? route.query.token : null
-    if (token) {
-      await $fetch(`${root}/access`, { method: 'POST', body: { token } })
-      await navigateTo({ path: route.path }, { replace: true })
-    }
-    overview.value = (await $fetch<{ album: Overview }>(`${root}/access`)).album
+    overview.value = await loadOverview(token)
     if (overview.value.canJoin) {
       try { await joinAlbum() }
       catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể vào album' }

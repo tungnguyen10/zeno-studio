@@ -4,6 +4,8 @@ const studioId = '11111111-1111-4111-8111-111111111111'
 const publishedId = '22222222-2222-4222-8222-222222222222'
 const draftId = '33333333-3333-4333-8333-333333333333'
 const customerToken = 'a'.repeat(43)
+const expiresAt = '2099-01-01T00:00:00.000Z'
+const progress = { expiresAt, selectedCount: 0, selectionLimit: null, latestVersionNumber: null }
 
 test('studio album list can reveal a fresh customer share link on the published row', async ({ page }) => {
   let shareRequests = 0
@@ -16,8 +18,8 @@ test('studio album list can reveal a fresh customer share link on the published 
   }))
   await page.route(`**/api/studio/${studioId}/albums`, route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ albums: [
-      { id: publishedId, title: 'Album đã xuất bản', status: 'PUBLISHED', photoCount: 2 },
-      { id: draftId, title: 'Album nháp', status: 'DRAFT', photoCount: 2 },
+      { id: publishedId, title: 'Album đã xuất bản', status: 'PUBLISHED', photoCount: 2, ...progress },
+      { id: draftId, title: 'Album nháp', status: 'DRAFT', photoCount: 2, ...progress },
     ] }),
   }))
   await page.route(`**/api/studio/${studioId}/albums/${publishedId}/share`, route => {
@@ -27,11 +29,11 @@ test('studio album list can reveal a fresh customer share link on the published 
 
   await page.goto('/studio')
   const published = page.getByRole('article').filter({ hasText: 'Album đã xuất bản' })
-  await expect(published.getByRole('button', { name: 'Chia sẻ link khách hàng' })).toBeVisible()
+  await expect(published.getByRole('button', { name: 'Sao chép link khách' })).toBeVisible()
   const draft = page.getByRole('article').filter({ hasText: 'Album nháp' })
-  await expect(draft.getByRole('button', { name: 'Chia sẻ link khách hàng' })).toHaveCount(0)
-  await published.getByRole('button', { name: 'Chia sẻ link khách hàng' }).click()
+  await expect(draft.getByRole('button', { name: 'Sao chép link khách' })).toHaveCount(0)
+  await published.getByRole('button', { name: 'Sao chép link khách' }).click()
   await expect(published.getByRole('link', { name: /album\/.*token=/ })).toHaveAttribute('href', `http://127.0.0.1:43627/album/${publishedId}?token=${customerToken}`)
-  await expect(published.getByRole('button', { name: 'Sao chép link' })).toBeVisible()
+  await expect(published.getByRole('button', { name: 'Sao chép lại link' })).toBeVisible()
   expect(shareRequests).toBe(1)
 })

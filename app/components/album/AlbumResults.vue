@@ -2,9 +2,10 @@
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { ExportItem } from '~~/shared/domain/export'
+import { PRODUCTION_STATUS_LABELS, countRetouched } from '~~/shared/domain/album-status'
 
 type ResultPage = { versionNumber: number; total: number; items: ExportItem[]; nextCursor: string | null }
-const props = defineProps<{ apiRoot: string; backTo: string }>()
+const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string }>(), { backLabel: 'Quay lại' })
 const results = ref<{ versionNumber: number; total: number } | null>(null)
 const items = shallowRef<ExportItem[]>([])
 const nextCursor = ref<string | null>(null)
@@ -32,6 +33,7 @@ const virtualizer = useVirtualizer(computed(() => ({
   gap: 10,
 })))
 const virtualRows = computed(() => virtualizer.value.getVirtualItems())
+const retouched = computed(() => countRetouched(production.value?.items ?? []))
 
 async function loadPage() {
   if (loadingMore.value || (results.value && !nextCursor.value)) return
@@ -120,7 +122,7 @@ async function openFilter() {
 
 <template>
   <div class="min-h-screen bg-[#f8f7f3] text-[#24231f]">
-    <header class="border-b border-[#e2e5dc] bg-white px-5 py-5"><div class="mx-auto max-w-5xl"><NuxtLink :to="backTo" class="font-bold text-[#344732]">← Quay lại</NuxtLink></div></header>
+    <header class="border-b border-[#e2e5dc] bg-white px-5 py-5"><div class="mx-auto max-w-5xl"><NuxtLink :to="backTo" class="inline-flex min-h-11 items-center font-bold text-[#344732] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">← {{ backLabel }}</NuxtLink></div></header>
     <main class="mx-auto max-w-5xl px-5 py-12">
       <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Selection Results</p>
       <h1 class="mt-3 text-4xl font-semibold">Ảnh đã chốt</h1>
@@ -140,6 +142,12 @@ async function openFilter() {
       <p v-else-if="error" class="mt-8 rounded-xl bg-white p-5 text-red-700" role="alert">{{ error }}</p>
       <template v-else-if="results">
         <p class="mt-3 text-[#667461]">Phiên bản {{ results.versionNumber }} · {{ results.total }} ảnh</p>
+        <nav v-if="production" aria-label="Các phần của trang" class="mt-5 flex gap-2 overflow-x-auto text-sm font-semibold">
+          <a href="#selection" class="inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-white px-4 text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Ảnh đã chốt</a>
+          <a href="#production" class="inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-white px-4 text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Hậu kỳ và duyệt</a>
+          <a href="#delivery" class="inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-white px-4 text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Bàn giao</a>
+        </nav>
+        <section id="selection" class="scroll-mt-6">
         <div class="mt-7 flex flex-wrap gap-2 text-sm font-semibold">
           <button class="rounded-full bg-[#344732] px-5 py-3 text-white" @click="openFilter">Lọc file trên máy</button>
           <button class="rounded-full border px-5 py-3" @click="copyFilenames">Copy tên file</button>
@@ -172,25 +180,34 @@ async function openFilter() {
             </div>
           </div>
         </ClientOnly>
-        <section v-if="production" class="mt-12 border-t border-[#dfe4da] pt-8">
+        </section>
+        <section v-if="production" id="production" class="mt-12 scroll-mt-6 border-t border-[#dfe4da] pt-8">
           <h2 class="text-2xl font-semibold">Hậu kỳ và duyệt</h2>
+          <div v-if="production.items.length" class="mt-3">
+            <p class="text-sm text-muted"><strong class="text-ink">{{ retouched }}/{{ production.items.length }}</strong> ảnh đã chỉnh</p>
+            <progress class="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#e3e8de] accent-[#344732]" :value="retouched" :max="production.items.length" aria-label="Tiến độ chỉnh ảnh" />
+          </div>
           <div class="mt-5 max-h-[60vh] space-y-2 overflow-auto overscroll-contain">
             <div v-for="task in production.items" :key="task.id" class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 text-sm [contain-intrinsic-size:auto_56px] [content-visibility:auto]">
-              <span class="break-all font-medium">{{ task.filename }} · {{ task.status }}</span>
-              <button v-if="task.status === 'PENDING' || task.status === 'REVISION_REQUESTED'" class="font-semibold text-[#344732] underline" @click="moveTask(task.id, 'RETOUCHING')">Bắt đầu chỉnh</button>
-              <button v-else-if="task.status === 'RETOUCHING'" class="font-semibold text-[#344732] underline" @click="moveTask(task.id, 'WAITING_REVIEW')">Ảnh đã chỉnh</button>
+              <span class="min-w-0 break-all"><span class="font-medium">{{ task.filename }}</span> <span class="ml-1 rounded-full bg-tint px-2.5 py-0.5 text-xs font-semibold text-[#4f5d4b]">{{ PRODUCTION_STATUS_LABELS[task.status] ?? task.status }}</span></span>
+              <button v-if="task.status === 'PENDING' || task.status === 'REVISION_REQUESTED'" type="button" class="min-h-11 font-semibold text-[#344732] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="moveTask(task.id, 'RETOUCHING')">Bắt đầu chỉnh</button>
+              <button v-else-if="task.status === 'RETOUCHING'" type="button" class="min-h-11 font-semibold text-[#344732] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="moveTask(task.id, 'WAITING_REVIEW')">Ảnh đã chỉnh</button>
             </div>
           </div>
           <form class="mt-7 rounded-2xl bg-white p-5" @submit.prevent="sendReview">
             <h3 class="font-semibold">Gửi ảnh đã chỉnh để khách duyệt</h3>
-            <label class="mt-3 block text-sm">Link folder Google Drive<input v-model="editedDriveUrl" required type="url" class="mt-2 w-full rounded-xl border p-3" placeholder="https://drive.google.com/drive/folders/..."></label>
-            <button class="mt-3 rounded-full bg-[#344732] px-5 py-2.5 text-sm font-semibold text-white">Mở vòng duyệt</button>
+            <label class="mt-3 block text-sm">Link folder Google Drive<input v-model="editedDriveUrl" required type="url" class="mt-2 min-h-11 w-full rounded-xl border p-3" placeholder="https://drive.google.com/drive/folders/..."></label>
+            <button class="mt-3 min-h-11 rounded-full bg-[#344732] px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">Mở vòng duyệt</button>
           </form>
-          <form v-if="production.canDeliver" class="mt-4 rounded-2xl bg-white p-5" @submit.prevent="deliver">
+        </section>
+        <section v-if="production" id="delivery" class="mt-12 scroll-mt-6 border-t border-[#dfe4da] pt-8">
+          <h2 class="text-2xl font-semibold">Bàn giao</h2>
+          <form v-if="production.canDeliver" class="mt-5 rounded-2xl bg-white p-5" @submit.prevent="deliver">
             <h3 class="font-semibold">Bàn giao sau khi khách duyệt</h3>
-            <label class="mt-3 block text-sm">Link Drive thành phẩm<input v-model="deliveryDriveUrl" required type="url" class="mt-2 w-full rounded-xl border p-3" placeholder="https://drive.google.com/drive/folders/..."></label>
-            <button class="mt-3 rounded-full border border-[#344732] px-5 py-2.5 text-sm font-semibold text-[#344732]">Đánh dấu hoàn tất</button>
+            <label class="mt-3 block text-sm">Link Drive thành phẩm<input v-model="deliveryDriveUrl" required type="url" class="mt-2 min-h-11 w-full rounded-xl border p-3" placeholder="https://drive.google.com/drive/folders/..."></label>
+            <button class="mt-3 min-h-11 rounded-full border border-[#344732] px-5 text-sm font-semibold text-[#344732] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">Đánh dấu hoàn tất</button>
           </form>
+          <p v-else class="mt-3 text-sm text-muted">Mở sau khi khách duyệt tất cả ảnh đã chỉnh.</p>
         </section>
       </template>
     </main>

@@ -58,7 +58,7 @@ test('customer opens album, saves a selection and an independent note', async ({
 
   await page.goto(`/album/${albumId}?token=${'a'.repeat(43)}`)
   await expect(page.getByRole('heading', { name: 'Album mẫu' })).toBeVisible()
-  await expect(page).toHaveURL(`/album/${albumId}`)
+  await expect(page).toHaveURL(`/album/${albumId}?token=${'a'.repeat(43)}`)
   await expect.poll(() => driveSizes).toContain('w320')
   await page.getByRole('button', { name: 'Chọn Ảnh A.JPG' }).click()
   await expect(page.getByText('1 ảnh đã chọn')).toBeVisible()

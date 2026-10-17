@@ -13,6 +13,11 @@ export interface AlbumSummary {
   status: 'DRAFT' | 'PUBLISHED' | 'FINALIZED' | 'EXPIRED' | 'DELIVERED'
   expiresAt: Date
   photoCount: number
+  // Customer's shared list in the current cycle; 0 when the caller's role cannot read selections.
+  selectedCount: number
+  // Upper bound of the selection limit, or null when there is none.
+  selectionLimit: number | null
+  latestVersionNumber: number | null
 }
 
 export interface CreateAlbumInput {
@@ -99,7 +104,9 @@ export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapt
     await requireAlbumPermission(client, input.studioId, input.userId, 'album.create')
     expiresAt = await insertAlbumRecords(client, input.studioId, id, folder, photos, input, false)
   })
-  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length }
+  const limit = input.limit
+  const selectionLimit = limit.kind === 'range' ? limit.max : limit.kind === 'maximum' || limit.kind === 'exact' ? limit.count : null
+  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length, selectedCount: 0, selectionLimit, latestVersionNumber: null }
 }
 
 export async function insertAlbumRecords(
@@ -144,9 +151,21 @@ export async function insertAlbumRecords(
 export async function getStudioAlbums(pool: ConnectionPool, studioId: string, userId: string): Promise<AlbumSummary[]> {
   return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
     await requireAlbumPermission(client, studioId, userId, 'album.view')
-    const result = await client.query<{ id: string; title: string; status: AlbumSummary['status']; expires_at: Date; photo_count: number }>(
-      'SELECT a.id, a.title, a.status, a.expires_at, count(p.id)::integer AS photo_count FROM albums a LEFT JOIN photos p ON p.album_id = a.id WHERE a.studio_id = $1 GROUP BY a.id ORDER BY a.created_at DESC', [studioId])
-    return result.rows.map(row => ({ id: row.id, title: row.title, status: row.status, expiresAt: row.expires_at, photoCount: row.photo_count }))
+    const result = await client.query<{ id: string; title: string; status: AlbumSummary['status']; expires_at: Date; photo_count: number; selected_count: number; limit_max: number | null; latest_version: number | null }>(
+      `SELECT a.id, a.title, a.status, a.expires_at,
+         (SELECT count(*)::integer FROM photos p WHERE p.album_id = a.id) AS photo_count,
+         (SELECT count(*)::integer FROM selections s
+            JOIN selection_lists l ON l.id = s.list_id
+            JOIN selection_rounds r ON r.id = l.round_id
+          WHERE s.album_id = a.id AND l.kind = 'shared' AND r.round_number = 1 AND r.cycle = a.current_cycle) AS selected_count,
+         st.limit_max,
+         (SELECT max(v.version_number)::integer FROM selection_versions v WHERE v.album_id = a.id) AS latest_version
+       FROM albums a LEFT JOIN album_settings st ON st.album_id = a.id
+       WHERE a.studio_id = $1 ORDER BY a.created_at DESC`, [studioId])
+    return result.rows.map(row => ({
+      id: row.id, title: row.title, status: row.status, expiresAt: row.expires_at, photoCount: row.photo_count,
+      selectedCount: row.selected_count, selectionLimit: row.limit_max, latestVersionNumber: row.latest_version,
+    }))
   })
 }
 

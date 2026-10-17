@@ -8,6 +8,10 @@ export default defineNuxtConfig({
       functions: { runtime: 'nodejs24.x' },
     },
   },
+  routeRules: {
+    // Customer links carry a capability token in the query string.
+    '/album/**': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
+  },
   css: ['~/assets/css/main.css'],
   vite: { plugins: [tailwindcss()] },
   runtimeConfig: {

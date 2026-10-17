@@ -19,7 +19,7 @@ Các trang hiện có: `/` (giới thiệu), `/create` (tạo album nhanh không
 
 **Tạo nhanh:** mở `/create`, nhập tên và folder Drive công khai, chọn hạn 15/30 ngày và giới hạn ảnh → hệ thống xuất bản ngay và trả hai link riêng: link khách và link quản trị bí mật. Link quản trị đổi token trong fragment lấy cookie HTTP only; người tạo có thể cấp lại link khách và quản lý vòng đời album. Hãy lưu link quản trị trước khi rời trang vì chưa có cách khôi phục khi mất. Tạo nhanh giới hạn 10 lần thử mỗi giờ theo IP. Người có tài khoản có thể nhận album vào studio mình sở hữu; link quản trị guest bị thu hồi, còn album, kết quả và link khách được giữ nguyên. Album hết hạn chỉ nhận vào studio trong 30 ngày giữ metadata và không tự xuất bản lại.
 
-Trong danh sách album tại `/studio`, album đã xuất bản có nút **Chia sẻ link khách hàng**. Nút cấp link khách mới và hiển thị ngay dưới album để mở hoặc sao chép. Link khách đã gửi trước đó vẫn hợp lệ cho đến khi album hết hạn hoặc token bị thu hồi.
+Trong danh sách album tại `/studio`, album đã xuất bản có nút **Sao chép link khách**. Nút cấp link khách mới, tự sao chép vào clipboard và hiển thị gọn dưới album để mở hoặc sao chép lại. Link khách đã gửi trước đó vẫn hợp lệ cho đến khi album hết hạn hoặc token bị thu hồi.
 
 ## Neon
 
