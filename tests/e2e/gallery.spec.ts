@@ -70,7 +70,7 @@ test('customer opens album, saves a selection and an independent note', async ({
   releaseNoteRead()
   await expect(page.getByLabel('Ghi chú chỉnh sửa')).toBeEnabled()
   await page.getByLabel('Ghi chú chỉnh sửa').fill('Chỉnh sáng')
-  await page.getByRole('button', { name: 'Lưu ghi chú' }).click()
+  await expect(page.getByRole('button', { name: 'Lưu ghi chú' })).toHaveCount(0)
   await expect(page.getByRole('status').filter({ hasText: 'Đã lưu ghi chú' })).toBeVisible()
   expect(note).toBe('Chỉnh sáng')
 })
@@ -243,7 +243,7 @@ function navAlbumPhoto(index: number) {
   return { id: `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`, sourceFileId: `drive-nav-${index}`, filename: `Nav ${index}.JPG`, width: index % 2 ? 1500 : 800, height: 1000, status: 'READY', sortOrder: index, selected: false }
 }
 
-async function mockNavigationAlbum(page: import('@playwright/test').Page, savedNotes: string[]) {
+async function mockNavigationAlbum(page: import('@playwright/test').Page, savedNotes: string[], selectionPuts: number[] = []) {
   await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#ddd"/></svg>' }))
   await page.route(`**/api/album/${albumId}/**`, route => {
     const request = route.request()
@@ -261,6 +261,11 @@ async function mockNavigationAlbum(page: import('@playwright/test').Page, savedN
       return json({ items, nextCursor: second ? null : 'page-2', total: 3, selectedCount: 1 })
     }
     if (path.endsWith('/selection')) return json({ version: 1, selectedPhotoIds: [navAlbumPhoto(0).id] })
+    if (path.includes('/selection/')) {
+      const body = request.postDataJSON() as { selected: boolean; expectedVersion: number }
+      selectionPuts.push(body.expectedVersion)
+      return json({ status: 'saved', version: body.expectedVersion + 1, selected: body.selected, count: 1 })
+    }
     if (path.includes('/notes/') && request.method() === 'GET') return json({ body: '', version: 0 })
     if (path.includes('/notes/')) {
       const body = (request.postDataJSON() as { text: string }).text
@@ -291,6 +296,21 @@ test('steps through photos with buttons and keys, loading the next page and keep
   await expect(page.getByRole('dialog', { name: 'Nav 1.JPG' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('hearts respond instantly and saves are sent in order; double-click selects in the focus view', async ({ page }) => {
+  const selectionPuts: number[] = []
+  await mockNavigationAlbum(page, [], selectionPuts)
+  await page.goto(`/album/${albumId}`)
+  await expect(page.getByText('1 ảnh đã chọn')).toBeVisible()
+  await page.getByRole('button', { name: 'Chọn Nav 1.JPG' }).click()
+  await page.getByRole('button', { name: 'Bỏ chọn Nav 0.JPG' }).click()
+  await expect(page.getByRole('button', { name: 'Bỏ chọn Nav 1.JPG' })).toBeVisible()
+  await expect.poll(() => selectionPuts).toEqual([1, 2])
+  await page.getByRole('button', { name: 'Mở ảnh Nav 0.JPG' }).click()
+  await page.getByRole('dialog').getByRole('img', { name: 'Nav 0.JPG' }).dblclick()
+  await expect(page.getByRole('button', { name: '♥ Đã chọn' })).toBeVisible()
+  await expect.poll(() => selectionPuts).toEqual([1, 2, 3])
 })
 
 test.describe('focus view on mobile', () => {

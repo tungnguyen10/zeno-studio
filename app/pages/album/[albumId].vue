@@ -47,12 +47,21 @@ let stageObserver: ResizeObserver | undefined
 let returnFocus: HTMLElement | null = null
 let navigating = false
 let touchStart: { x: number; y: number } | null = null
+let lastTap = 0
+let lastTouchEnd = 0
+let noteSaveTimer: ReturnType<typeof setTimeout> | undefined
+let noteSaving: Promise<boolean> | null = null
+let statusTimer: ReturnType<typeof setTimeout> | undefined
+let selectionQueue: Promise<void> = Promise.resolve()
+const pendingSelections = ref(0)
+const heartPop = ref(false)
 const preloaded = new Set<string>()
 
 useSeoMeta({ title: () => overview.value ? `${overview.value.title} — Zeno Studio` : 'Album — Zeno Studio' })
 const visiblePhotos = computed(() => paged.items.value)
 const selectedSet = computed(() => new Set(selectedIds.value))
 const focusSelected = computed(() => !!focusPhoto.value && selectedSet.value.has(focusPhoto.value.id))
+const canSelect = computed(() => !!overview.value?.joined && overview.value.status === 'PUBLISHED')
 const focusIndex = computed(() => focusPhoto.value ? visiblePhotos.value.findIndex(photo => photo.id === focusPhoto.value!.id) : -1)
 const focusTotal = computed(() => Math.max(paged.total.value, visiblePhotos.value.length))
 const hasPrev = computed(() => focusIndex.value > 0)
@@ -64,6 +73,14 @@ const limitLabel = computed(() => {
   if (!s || s.limitKind === 'unlimited') return 'Không giới hạn'
   if (s.limitKind === 'range') return `${s.limitMin}–${s.limitMax} ảnh`
   return `${s.limitMax ?? s.limitMin} ảnh`
+})
+const limitHint = computed(() => {
+  const s = overview.value?.settings
+  if (!s || s.limitKind === 'unlimited') return ''
+  if (s.limitKind === 'range') return `Chọn từ ${s.limitMin}–${s.limitMax} ảnh`
+  if (s.limitKind === 'exact') return `Cần chọn đúng ${s.limitMax ?? s.limitMin} ảnh`
+  if (s.limitKind === 'minimum') return `Chọn ít nhất ${s.limitMin ?? s.limitMax} ảnh`
+  return `Chọn tối đa ${s.limitMax ?? s.limitMin} ảnh`
 })
 
 async function loadSelection() {
@@ -98,7 +115,7 @@ async function enter() {
     if (overview.value.status === 'FINALIZED' || overview.value.status === 'DELIVERED') await loadReview()
     if (import.meta.client) {
       pollTimer = setInterval(() => {
-        if (document.visibilityState === 'visible' && !busy.value && !focusPhoto.value) void loadSelection().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
+        if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && !focusPhoto.value) void loadSelection().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
       }, 4000)
     }
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Link album không hợp lệ hoặc đã hết hạn' }
@@ -138,23 +155,45 @@ async function retryJoin() {
   finally { busy.value = false }
 }
 
-async function toggle(photo: Photo) {
-  if (!overview.value?.joined || overview.value.status !== 'PUBLISHED' || busy.value) return
-  busy.value = true
-  status.value = 'Đang lưu lựa chọn…'
+function setSelected(photoId: string, selected: boolean) {
+  const has = selectedSet.value.has(photoId)
+  if (selected && !has) selectedIds.value = [...selectedIds.value, photoId]
+  else if (!selected && has) selectedIds.value = selectedIds.value.filter(id => id !== photoId)
+}
+
+// The heart flips instantly; saves run one at a time so each carries the version returned by the previous one.
+function toggle(photo: Photo) {
+  if (!canSelect.value) return
   const wanted = !selectedSet.value.has(photo.id)
+  setSelected(photo.id, wanted)
+  pendingSelections.value++
+  selectionQueue = selectionQueue.then(() => saveSelection(photo.id, wanted)).finally(() => { pendingSelections.value-- })
+}
+
+async function saveSelection(photoId: string, wanted: boolean) {
   try {
-    const result = await $fetch<SaveResult>(`${root}/selection/${photo.id}`, { method: 'PUT', body: { selected: wanted, expectedVersion: selectionVersion.value } })
+    const result = await $fetch<SaveResult>(`${root}/selection/${photoId}`, { method: 'PUT', body: { selected: wanted, expectedVersion: selectionVersion.value } })
     if (result.status === 'saved') {
-      selectedIds.value = wanted ? [...selectedIds.value, photo.id] : selectedIds.value.filter(id => id !== photo.id)
       selectionVersion.value = result.version
-      status.value = 'Đã lưu lựa chọn'
-    } else {
-      await loadSelection()
-      status.value = result.status === 'limit_reached' ? `Đã đạt giới hạn ${limitLabel.value}` : 'Lựa chọn đã thay đổi ở thiết bị khác. Đã đồng bộ lại.'
+      setSelected(photoId, wanted)
+      return
     }
+    status.value = result.status === 'limit_reached' ? `Đã đạt giới hạn ${limitLabel.value}` : 'Lựa chọn đã thay đổi ở thiết bị khác. Đã đồng bộ lại.'
   } catch (cause) { status.value = cause instanceof Error ? cause.message : 'Lưu thất bại. Vui lòng thử lại.' }
-  finally { busy.value = false }
+  selectionLoaded.value = false
+  try { await loadSelection() }
+  catch { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' }
+}
+
+function likeFocusPhoto() {
+  if (!focusPhoto.value || !canSelect.value) return
+  if (!focusSelected.value) toggle(focusPhoto.value)
+  heartPop.value = true
+  setTimeout(() => { heartPop.value = false }, 650)
+}
+
+function handleStageDoubleClick() {
+  if (Date.now() - lastTouchEnd > 600) likeFocusPhoto()
 }
 
 async function openPhoto(photo: Photo) {
@@ -216,21 +255,33 @@ async function step(delta: 1 | -1) {
 }
 
 async function saveNote(): Promise<boolean> {
-  if (!focusPhoto.value || !focusSelected.value || overview.value?.status !== 'PUBLISHED' || busy.value || noteLoading.value || noteLoadError.value) return false
-  busy.value = true
-  const photoId = focusPhoto.value.id
+  clearTimeout(noteSaveTimer)
+  if (noteSaving) await noteSaving
+  if (!noteDirty.value) return true
+  if (!focusPhoto.value || overview.value?.status !== 'PUBLISHED') return false
+  noteSaving = persistNote(focusPhoto.value.id, noteText.value)
+  try { return await noteSaving }
+  finally { noteSaving = null }
+}
+
+async function persistNote(photoId: string, text: string): Promise<boolean> {
+  status.value = 'Đang lưu ghi chú…'
   try {
-    const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string }>(`${root}/notes/${photoId}`, { method: 'PUT', body: { text: noteText.value, expectedVersion: noteVersion.value } })
+    const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string }>(`${root}/notes/${photoId}`, { method: 'PUT', body: { text, expectedVersion: noteVersion.value } })
     if (focusPhoto.value?.id !== photoId) return true
     noteVersion.value = note.version
-    noteText.value = note.body
     noteSavedText.value = note.body
-    status.value = note.status === 'saved' ? 'Đã lưu ghi chú' : 'Ghi chú đã đổi ở thiết bị khác. Đã tải bản mới.'
-    return note.status === 'saved'
+    if (note.status === 'conflict') {
+      noteText.value = note.body
+      status.value = 'Ghi chú đã đổi ở thiết bị khác. Đã tải bản mới.'
+      return false
+    }
+    status.value = 'Đã lưu ghi chú'
+    return true
   } catch (cause) {
     status.value = cause instanceof Error ? cause.message : 'Lưu ghi chú thất bại'
     return false
-  } finally { busy.value = false }
+  }
 }
 
 // Largest box with the photo's own ratio that fits the stage, so there are no letterbox bands.
@@ -276,7 +327,13 @@ function onStageTouchEnd(event: TouchEvent) {
   const dx = touch.clientX - touchStart.x
   const dy = touch.clientY - touchStart.y
   touchStart = null
-  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) void step(dx < 0 ? 1 : -1)
+  const now = Date.now()
+  lastTouchEnd = now
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { void step(dx < 0 ? 1 : -1); return }
+  const isTap = Math.abs(dx) < 10 && Math.abs(dy) < 10 && !(event.target instanceof Element && event.target.closest('button'))
+  if (!isTap) return
+  if (now - lastTap < 300) { lastTap = 0; likeFocusPhoto() }
+  else lastTap = now
 }
 
 function handleFocusKey(event: KeyboardEvent) {
@@ -297,6 +354,16 @@ watch(stageEl, element => {
 watch(() => !!focusPhoto.value, open => { if (import.meta.client) document.documentElement.style.overflow = open ? 'hidden' : '' })
 
 watch(focusIndex, index => { if (index >= 0 && index >= visiblePhotos.value.length - 3 && paged.hasMore.value && !paged.loading.value) void paged.loadMore() })
+
+watch(noteText, () => {
+  clearTimeout(noteSaveTimer)
+  if (noteDirty.value) noteSaveTimer = setTimeout(() => { void saveNote() }, 800)
+})
+
+watch(status, message => {
+  clearTimeout(statusTimer)
+  if (message) statusTimer = setTimeout(() => { if (status.value === message) status.value = '' }, 4000)
+})
 
 function thumbnailBase(photo: Photo, mode: GalleryLayout) {
   return mode === 'grid' ? driveGridSrc(photo.sourceFileId, photo.width, photo.height) : driveThumbnailUrl(photo.sourceFileId, 'w', 480)
@@ -350,6 +417,8 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
+  clearTimeout(noteSaveTimer)
+  clearTimeout(statusTimer)
   window.removeEventListener('keydown', handleFocusKey)
   stageObserver?.disconnect()
   document.documentElement.style.overflow = ''
@@ -365,23 +434,20 @@ onBeforeUnmount(() => {
     </header>
     <main class="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-8">
       <div v-if="loading" role="status" aria-busy="true" aria-label="Đang mở album">
-        <UiSkeleton class="h-3 w-20" />
-        <UiSkeleton class="mt-3 h-9 w-2/3 max-w-md sm:h-12" />
-        <UiSkeleton class="mt-4 h-4 w-56 max-w-full" />
-        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <UiSkeleton class="h-12 w-full rounded-full sm:w-64" />
-          <UiSkeleton class="h-11 w-72 max-w-full rounded-full" />
+        <UiSkeleton class="h-9 w-2/3 max-w-md sm:h-12" />
+        <UiSkeleton class="mt-3 h-4 w-48 max-w-full" />
+        <div class="mt-6 flex justify-end">
+          <UiSkeleton class="h-11 w-40 rounded-full" />
         </div>
-        <div class="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+        <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
           <UiPhotoSkeleton v-for="n in 10" :key="n" heart class="aspect-[.8]" />
         </div>
         <span class="sr-only">Đang mở album…</span>
       </div>
       <div v-else-if="error && !overview" role="alert" class="rounded-2xl bg-white p-6 text-red-700">{{ error }}</div>
       <template v-else-if="overview">
-        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Album ảnh</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">{{ overview.title }}</h1>
-        <p class="mt-3 text-sm text-[#687264]">{{ overview.status === 'PUBLISHED' ? `${selectedIds.length} ảnh đã chọn · ${limitLabel}` : overview.status === 'DELIVERED' ? 'Đã bàn giao' : 'Bộ ảnh đã chốt' }} · Hạn {{ new Date(overview.expiresAt).toLocaleDateString('vi-VN') }}</p>
+        <h1 class="text-3xl font-semibold tracking-tight sm:text-5xl">{{ overview.title }}</h1>
+        <p class="mt-2 text-sm text-[#687264]">{{ overview.status === 'PUBLISHED' ? (paged.total.value ? `${paged.total.value} ảnh · ` : '') : overview.status === 'DELIVERED' ? 'Đã bàn giao · ' : 'Bộ ảnh đã chốt · ' }}Hạn {{ new Date(overview.expiresAt).toLocaleDateString('vi-VN') }}</p>
         <section v-if="review" class="mt-7 max-w-2xl rounded-2xl border border-[#d6decf] bg-white p-5">
           <h2 class="text-xl font-semibold">Duyệt ảnh đã chỉnh · Vòng {{ review.roundNumber }}</h2>
           <p class="mt-2 text-sm text-[#687264]">Trạng thái: {{ review.status }}</p>
@@ -401,14 +467,10 @@ onBeforeUnmount(() => {
           <span class="sr-only">Đang vào album…</span>
         </div>
         <template v-else>
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="inline-flex w-full rounded-full border border-[#dfe4d8] bg-white p-1 sm:w-auto" role="group" aria-label="Lọc ảnh">
-              <button type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'all' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'all'" @click="filter = 'all'">Tất cả<span v-if="paged.total.value"> ({{ paged.total.value }})</span></button>
-              <button type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'selected' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'selected'" @click="filter = 'selected'">Đã chọn ({{ selectedIds.length }})</button>
-            </div>
+          <div class="mt-6 mb-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-[#4f5d4b]">{{ filter === 'selected' ? 'Ảnh đã chọn' : '' }}</p>
             <GalleryLayoutSwitch v-model="layout" />
           </div>
-          <p class="min-h-6 py-2 text-sm text-[#60735b]" role="status" aria-live="polite">{{ focusPhoto ? '' : status }}</p>
           <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
             <UiPhotoSkeleton v-for="n in 10" :key="n" heart class="aspect-[.8]" />
           </div>
@@ -439,7 +501,7 @@ onBeforeUnmount(() => {
                   @error="handleThumbnailError(photo.id)"
                 >
                   <template v-if="overview.status === 'PUBLISHED'" #action>
-                    <button type="button" :disabled="busy" class="grid size-10 shrink-0 place-items-center rounded-full border text-lg shadow-sm disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" :class="selectedSet.has(photo.id) ? 'border-[#b55364] bg-[#fff0f2] text-[#b55364]' : 'border-[#d8ddd3] bg-white/90 text-[#8a9386]'" :aria-label="`${selectedSet.has(photo.id) ? 'Bỏ chọn' : 'Chọn'} ${photo.filename}`" :aria-pressed="selectedSet.has(photo.id)" @click="toggle(photo)">♥</button>
+                    <button type="button" class="grid size-10 shrink-0 place-items-center rounded-full border text-lg shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" :class="selectedSet.has(photo.id) ? 'border-[#b55364] bg-[#fff0f2] text-[#b55364]' : 'border-[#d8ddd3] bg-white/90 text-[#8a9386]'" :aria-label="`${selectedSet.has(photo.id) ? 'Bỏ chọn' : 'Chọn'} ${photo.filename}`" :aria-pressed="selectedSet.has(photo.id)" @click="toggle(photo)">♥</button>
                   </template>
                 </PhotoTile>
               </template>
@@ -452,6 +514,16 @@ onBeforeUnmount(() => {
         </template>
       </template>
     </main>
+    <div v-if="!focusPhoto && overview && !overview.canJoin" class="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <p role="status" aria-live="polite" class="max-w-sm rounded-full bg-[#24231f]/90 px-4 py-2 text-center text-sm text-white shadow-lg transition-opacity" :class="status ? 'opacity-100' : 'opacity-0'">{{ status }}</p>
+      <div v-if="canSelect" class="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-full bg-[#344732] py-2 pl-5 pr-2 text-white shadow-lg">
+        <p class="min-w-0 flex-1 leading-tight">
+          <span class="block text-sm font-semibold">♥ {{ selectedIds.length }} ảnh đã chọn</span>
+          <span v-if="limitHint" class="block text-xs text-white/75">{{ limitHint }}</span>
+        </p>
+        <button type="button" class="min-h-10 shrink-0 rounded-full bg-white px-4 text-sm font-semibold text-[#344732] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" :aria-pressed="filter === 'selected'" @click="filter = filter === 'selected' ? 'all' : 'selected'">{{ filter === 'selected' ? 'Xem tất cả' : 'Xem ảnh đã chọn' }}</button>
+      </div>
+    </div>
     <div v-if="focusPhoto" class="fixed inset-0 z-30 flex flex-col bg-[#121612] text-white sm:flex-row" role="dialog" aria-modal="true" :aria-label="focusPhoto.filename">
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <div class="flex items-center gap-3 px-3 pt-[max(.5rem,env(safe-area-inset-top))] pb-2 sm:px-5 sm:py-3">
@@ -459,11 +531,12 @@ onBeforeUnmount(() => {
           <h2 class="min-w-0 flex-1 truncate text-sm text-white/70" :title="focusPhoto.filename">{{ focusPhoto.filename }}</h2>
           <button ref="focusCloseButton" type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Đóng ảnh" @click="closePhoto">✕</button>
         </div>
-        <div ref="stageEl" class="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-2 sm:px-20 sm:pb-6" @touchstart.passive="onStageTouchStart" @touchend.passive="onStageTouchEnd">
+        <div ref="stageEl" class="relative flex min-h-0 flex-1 touch-manipulation items-center justify-center px-2 pb-2 select-none sm:px-20 sm:pb-6" @touchstart.passive="onStageTouchStart" @touchend.passive="onStageTouchEnd">
           <p v-if="focusImageFailed" role="alert" class="p-6 text-center text-white/80">Không tải được ảnh gốc từ Google Drive.</p>
-          <div v-else class="photo-placeholder relative overflow-hidden rounded-md sm:rounded-lg" :class="focusBox ? '' : 'size-full'" :style="focusBox ? { width: `${focusBox.width}px`, height: `${focusBox.height}px` } : undefined" :data-loading="!focusLoaded ? '' : undefined">
+          <div v-else class="photo-placeholder relative overflow-hidden rounded-md sm:rounded-lg" :class="focusBox ? '' : 'size-full'" :style="focusBox ? { width: `${focusBox.width}px`, height: `${focusBox.height}px` } : undefined" :data-loading="!focusLoaded ? '' : undefined" @dblclick="handleStageDoubleClick">
             <img v-if="!focusLoaded && !thumbnailState[focusPhoto.id]" :src="thumbnailSrc(focusPhoto, 'justified')" alt="" aria-hidden="true" referrerpolicy="no-referrer" class="absolute inset-0 size-full object-cover blur-md">
             <img v-if="focusBox" :key="focusPhoto.id" :src="focusSrc(focusPhoto)" :srcset="focusSrcset(focusPhoto)" :sizes="focusStage === 'drive' ? focusSizes(focusPhoto) : undefined" :alt="focusPhoto.filename" decoding="async" referrerpolicy="no-referrer" class="absolute inset-0 size-full object-contain transition-opacity duration-200" :class="focusLoaded ? 'opacity-100' : 'opacity-0'" @load="handleFocusImageLoad" @error="handleFocusImageError">
+            <span aria-hidden="true" class="pointer-events-none absolute inset-0 grid place-items-center text-8xl text-white drop-shadow-lg transition duration-300 motion-reduce:transition-none" :class="heartPop ? 'scale-100 opacity-100' : 'scale-50 opacity-0'">♥</span>
           </div>
           <button v-if="hasPrev" type="button" class="absolute left-2 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/45 backdrop-blur hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-white sm:left-4 sm:size-12" aria-label="Ảnh trước" @click="step(-1)">
             <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
@@ -474,17 +547,16 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <aside v-if="overview?.status === 'PUBLISHED'" class="max-h-[45dvh] shrink-0 overflow-y-auto rounded-t-2xl bg-white px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-[#24231f] sm:max-h-none sm:w-80 sm:rounded-none sm:p-5">
-        <button type="button" :disabled="busy" class="min-h-12 w-full rounded-full border text-base font-semibold disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" :class="focusSelected ? 'border-[#b55364] bg-[#b55364] text-white' : 'border-[#cbd4c6] bg-white text-[#344732]'" :aria-pressed="focusSelected" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
+        <button type="button" class="min-h-12 w-full rounded-full border text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" :class="focusSelected ? 'border-[#b55364] bg-[#b55364] text-white' : 'border-[#cbd4c6] bg-white text-[#344732]'" :aria-pressed="focusSelected" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
         <div v-if="focusSelected && noteLoading" role="status" aria-busy="true" aria-label="Đang tải ghi chú" class="mt-4">
           <UiSkeleton class="h-4 w-32" />
           <UiSkeleton class="mt-2 h-20 w-full rounded-xl sm:h-32" />
           <span class="sr-only">Đang tải ghi chú…</span>
         </div>
-        <label v-else-if="focusSelected" class="mt-4 block text-sm font-semibold">Ghi chú chỉnh sửa<textarea v-model="noteText" :disabled="noteLoading || noteLoadError || busy" maxlength="5000" rows="3" class="mt-2 w-full rounded-xl border border-[#cbd4c6] p-3 text-base font-normal disabled:opacity-50 sm:min-h-36 sm:text-sm" placeholder="Bạn muốn chỉnh gì ở ảnh này?"></textarea></label>
+        <label v-else-if="focusSelected" class="mt-4 block text-sm font-semibold">Ghi chú chỉnh sửa<textarea v-model="noteText" :disabled="noteLoading || noteLoadError" maxlength="5000" rows="3" class="mt-2 w-full rounded-xl border border-[#cbd4c6] p-3 text-base font-normal disabled:opacity-50 sm:min-h-36 sm:text-sm" placeholder="Bạn muốn chỉnh gì ở ảnh này?"></textarea></label>
         <p v-else-if="overview.joined" class="mt-3 text-center text-sm text-[#687264] sm:text-left">Chọn ảnh này để ghi chú cần chỉnh sửa.</p>
         <button v-if="noteLoadError && focusSelected" type="button" class="mt-3 rounded-full border px-5 py-2.5 text-sm font-semibold" @click="openPhoto(focusPhoto)">Thử tải lại ghi chú</button>
-        <button v-if="focusSelected && !noteLoading" type="button" :disabled="busy || noteLoadError || !noteDirty" class="mt-2 min-h-11 w-full rounded-full bg-[#344732] px-5 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto" @click="saveNote">Lưu ghi chú</button>
-        <p role="status" aria-live="polite" class="mt-2 min-h-5 text-sm text-[#60735b]">{{ status }}</p>
+        <p role="status" aria-live="polite" class="mt-1 min-h-5 text-xs text-[#60735b]">{{ status || (focusSelected && !noteLoading ? 'Ghi chú tự lưu khi bạn gõ.' : '') }}</p>
       </aside>
     </div>
   </div>

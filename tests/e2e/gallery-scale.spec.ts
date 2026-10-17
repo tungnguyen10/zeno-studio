@@ -56,7 +56,7 @@ test('keeps a 10,000-photo album responsive: few DOM tiles, paged loading, layou
   }
 
   await page.evaluate(() => window.scrollTo(0, 0))
-  await page.getByRole('button', { name: 'Đã chọn (200)' }).click()
+  await page.getByRole('button', { name: 'Xem ảnh đã chọn' }).click()
   await expect(page.getByRole('button', { name: 'Mở ảnh IMG_00050.jpg' })).toBeVisible()
   expect(requested).toContain('selected:0')
 })
