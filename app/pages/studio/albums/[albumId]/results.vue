@@ -6,5 +6,5 @@ useSeoMeta({ title: 'Kết quả chọn ảnh — Zeno Studio' })
 </script>
 
 <template>
-  <AlbumResults :api-root="`/api/studio/${studioId}/albums/${albumId}`" :back-to="`/studio/albums/${albumId}?studio=${studioId}`" back-label="Chi tiết album" />
+  <AlbumResults :api-root="`/api/studio/${studioId}/albums/${albumId}`" :back-to="`/studio/albums/${albumId}?studio=${studioId}`" :filter-base="`/studio/albums/${albumId}/filter?studio=${studioId}`" back-label="Chi tiết album" />
 </template>

@@ -66,7 +66,7 @@ test('exports guest results and sends review and delivery from the management pa
   let deliveryRequests = 0
   await page.route(`**/api/guest/albums/${albumId}/results?*`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ versionNumber: 1, total: 1, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] }),
+    body: JSON.stringify({ selectionVersionId: '33333333-3333-4333-8333-333333333333', finalizedAt: '2026-10-17T00:00:00Z', versionNumber: 1, total: 1, notesCount: 0, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] }),
   }))
   await page.route(url => url.pathname === `/api/guest/albums/${albumId}/results/export` && url.searchParams.get('format') === 'selection-csv', route => route.fulfill({
     status: 200, headers: { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="selection.csv"' }, body: 'photo_id,filename\r\nphoto-1,01.jpg\r\n',
@@ -86,6 +86,7 @@ test('exports guest results and sends review and delivery from the management pa
   await page.goto(`/guest/albums/${albumId}/results`)
   await expect(page.getByRole('heading', { name: '01.jpg' })).toBeVisible()
   const download = page.waitForEvent('download')
+  await page.getByText('Xuất danh sách / ghi chú').click()
   await page.getByRole('button', { name: 'Selection CSV' }).click()
   expect((await download).suggestedFilename()).toBe('selection.csv')
   await page.getByLabel('Link folder Google Drive').fill('https://drive.google.com/drive/folders/edited')

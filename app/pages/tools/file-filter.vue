@@ -1,18 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef } from 'vue'
-import { matchLocalFiles, type LocalFile, type MatchResult } from '~~/shared/domain/file-matching'
-import { copyMatchedFiles, type CopyDestination, type CopyResult } from '~~/shared/domain/file-copy'
+import { matchLocalFiles, type MatchResult } from '~~/shared/domain/file-matching'
+import type { CopyResult } from '~~/shared/domain/file-copy'
 import { exportFileFilterReport } from '~~/shared/domain/file-report'
+import { scanDirectory, type IndexedFile } from '~~/app/services/local-filter/directoryScanner'
+import { copyLocalFiles } from '~~/app/services/local-filter/copyEngine'
 
 useSeoMeta({ title: 'Lọc file trên máy — Zeno Studio' })
 
-type DirectoryWithEntries = FileSystemDirectoryHandle & {
-  entries(): AsyncIterableIterator<[string, FileSystemHandle]>
-}
 type BrowserWithDirectoryPicker = Window & {
   showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>
 }
-interface IndexedFile extends LocalFile { handle: FileSystemFileHandle }
 
 const supported = ref(false)
 const requestedText = ref('')
@@ -48,16 +46,6 @@ const selectedMatches = computed(() => {
   return [...preview.value.matched, ...manual]
 })
 
-async function walk(directory: FileSystemDirectoryHandle, prefix = ''): Promise<IndexedFile[]> {
-  const collected: IndexedFile[] = []
-  for await (const [name, handle] of (directory as DirectoryWithEntries).entries()) {
-    const path = prefix ? `${prefix}/${name}` : name
-    if (handle.kind === 'directory') collected.push(...await walk(handle as FileSystemDirectoryHandle, path))
-    else collected.push({ name, path, handle: handle as FileSystemFileHandle })
-  }
-  return collected
-}
-
 async function chooseSource() {
   const picker = (window as BrowserWithDirectoryPicker).showDirectoryPicker
   if (!picker) return
@@ -65,7 +53,7 @@ async function chooseSource() {
     source.value = await picker({ mode: 'read' })
     busy.value = true
     message.value = 'Đang đọc danh sách file…'
-    indexedFiles.value = await walk(source.value)
+    indexedFiles.value = (await scanDirectory(source.value)).files
     preview.value = null
     message.value = `Đã tìm thấy ${indexedFiles.value.length} file trong thư mục nguồn.`
   } catch (error) {
@@ -109,14 +97,20 @@ async function runCopy() {
   busy.value = true
   progress.value = { done: 0, total: selectedMatches.value.length }
   try {
-    const files = await Promise.all(selectedMatches.value.map(async item => {
+    const files = selectedMatches.value.map(item => {
       const indexed = indexedFiles.value.find(file => file.path === item.file.path)
       if (!indexed) throw new Error(`Không còn tìm thấy ${item.file.path}`)
-      return { requested: item.requested, sourcePath: indexed.path, file: await indexed.handle.getFile() }
-    }))
-    report.value = await copyMatchedFiles(files, destination.value as unknown as CopyDestination, (done, total) => {
-      progress.value = { done, total }
+      return { id: indexed.path, requested: item.requested, sourcePath: indexed.path, outputPath: indexed.name, handle: indexed.handle }
     })
+    const outcomes = await copyLocalFiles(files, destination.value, { onProgress: current => {
+      progress.value = { done: current.length, total: files.length }
+    } })
+    report.value = {
+      copied: outcomes.filter(item => item.status === 'copied').map(item => item.outputPath),
+      skipped: outcomes.filter(item => item.status === 'skipped').map(item => item.outputPath),
+      errors: outcomes.filter(item => item.status === 'failed' || item.status === 'partial').map(item => ({ filename: item.outputPath, message: item.reason })),
+      outcomes: outcomes.map(item => ({ requested: item.requested, filename: item.outputPath, sourcePath: item.sourcePath, status: item.status === 'copied' ? 'copied' : item.status === 'skipped' ? 'skipped' : 'error', detail: item.reason })),
+    }
     message.value = `Đã copy ${report.value.copied.length} file; bỏ qua ${report.value.skipped.length}; lỗi ${report.value.errors.length}.`
   } catch (error) {
     message.value = error instanceof Error ? error.message : 'Không thể copy file.'

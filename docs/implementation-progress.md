@@ -2,7 +2,7 @@
 
 Cập nhật: 2026-10-17. `Dev Neon` nghĩa là đã chạy trên nhánh development `codex-v1-dev`; **chưa phải nghiệm thu production**.
 
-Kiểm tra mới nhất cho nhánh làm việc: `npm test` 89/89, `npm run typecheck` và `npm run build` đạt; toàn bộ Chromium E2E đạt 42/42. Migration 016–017 đã áp lên nhánh Neon development sau khi xác minh connection string. Folder Drive mẫu hiện trả 326 ảnh; 5 thumbnail mẫu và ảnh gốc của album đang báo lỗi tải được. Chưa đo thời gian/dung lượng toàn trang gallery hoặc chạy HTTP smoke trên Neon test/Preview vì thiếu Neon test URL.
+Kiểm tra mới nhất cho nhánh làm việc: `npm test` 121/121, `npm run typecheck` và `npm run build` đạt; Chromium E2E đạt 60/60 và bài fallback WebKit đạt 1/1. Bộ lọc file được kiểm bằng filesystem giả lập; chưa chạy copy trên ổ thật của macOS/Windows. Migration 016–017 đã áp lên nhánh Neon development sau khi xác minh connection string. Folder Drive mẫu hiện trả 326 ảnh; 5 thumbnail mẫu và ảnh gốc của album đang báo lỗi tải được. Chưa đo thời gian/dung lượng toàn trang gallery hoặc chạy HTTP smoke trên Neon test/Preview vì thiếu Neon test URL.
 
 | Task | Trạng thái | Đầu ra / phần chưa xong |
 | --- | --- | --- |
@@ -21,13 +21,15 @@ Kiểm tra mới nhất cho nhánh làm việc: `npm test` 89/89, `npm run typec
 | T31–T32 | Dev Neon | Ghi chú chung cho mỗi ảnh, lịch sử phiên bản, conflict; UI focus panel cơ bản. |
 | T33–T34 | Một phần | Danh sách chọn chung; studio chọn bộ cuối. Đã bỏ chế độ Individual/Voting và shortlist 2 vòng khỏi code (cột DB còn lại, chưa xóa). |
 | T35–T37 | Dev Neon | Studio xem danh sách/phiếu, chốt snapshot bất biến; mở cycle mới kế thừa bộ chốt gần nhất và xem bộ cũ trong gallery studio. Test local và pooled Neon cho luồng gốc; thay đổi kế thừa đã kiểm local, chưa chạy lại pooled Neon. |
-| T38–T42 | Một phần | Results, filename TXT/CSV, notes TXT/CSV, local matching/copy/report đã nối UI; còn vài option xuất. |
+| T38–T42 | Local | Results khóa selection version khi tìm/lọc/xuất, có thumbnail và ghi chú; trang lọc riêng lấy manifest của snapshot đã chốt. Browser quét metadata RAW, mặc định tạo `SELECTED` lúc xác nhận, hỗ trợ path con hoặc folder picker, xử lý mơ hồ/trùng tên, copy tuần tự và CSV báo cáo. Đã kiểm bằng unit/PGlite/Chromium giả lập filesystem; chưa nghiệm thu trên ổ thật macOS/Windows/Safari. |
 | T43–T47 | Một phần | Production state, review/revision rounds, link Drive ảnh chỉnh, khách duyệt và bàn giao theo snapshot có API/UI và test local + Neon; thiếu map ảnh chỉnh thủ công khi tên khác. |
 | T48–T49 | Chưa làm | Analytics events, daily aggregation và North Star. |
 | T50 | Dev Neon | Neon Function + schedule trigger đã chạy thật trên dev, khóa album và xóa metadata sau 30 ngày. Không dùng Vercel Cron. |
 | T51–T57 | Một phần | Error states, RLS tests, Chromium E2E và Nitro Vercel preset build Node 24 đã kiểm tại máy. Preview `dpl_9cV4g4GzbKaLoxWmxofqBiKmfZPz` Ready; đăng nhập, tạo/publish album 307 ảnh, phân trang gallery và tải ảnh khách qua HTTP đều đạt. Chưa nối Git; SMTP, Safari/iOS/Android/Zalo WebView, gallery 1.000–3.000 ảnh, resource key, backup/rollback và production release còn thiếu. |
 
 ## Gate hiện tại
+
+Benchmark bộ lọc cục bộ trên dữ liệu giả lập trong Node 24 (không gồm I/O ổ đĩa): quét 1.000/3.000/10.000 entry lần lượt 12/35/119 ms, match 2/4/12 ms. Số đo này chỉ kiểm thuật toán và khả năng giữ UI phản hồi; throughput copy, exFAT, quyền ổ ngoài và ngắt thiết bị cần kiểm trực tiếp trên macOS/Windows 11 với Chrome/Edge trước khi gọi luồng file cục bộ là nghiệm thu đa nền tảng.
 
 1. **Drive:** `NUXT_GOOGLE_API_KEY` đã là API key hợp lệ; `test:drive-live` hiện đạt với folder 326 ảnh, thumbnail mẫu và ảnh gốc của album lỗi tải được. HTTP local/Preview với 307 ảnh là kết quả trước thay đổi thumbnail. `NUXT_DRIVE_VERIFIED=true` ở local/Preview; Production giữ `false`. Cần đo toàn trang gallery, thử folder 1.000–3.000 ảnh và ảnh có resource key trước production. Backend unit/database test dùng adapter giả.
 2. **Email:** cần SMTP thật để xác minh gửi/nhận email end to end.

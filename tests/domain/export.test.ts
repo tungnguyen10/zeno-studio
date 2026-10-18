@@ -15,4 +15,7 @@ describe('selection exports', () => {
     expect(exportFilenamesTxt(items)).toBe('Ảnh,"đẹp".jpg\n')
     expect(exportNotesTxt(items)).toBe('Ảnh,"đẹp".jpg\nSáng ảnh\nchỉnh da\n')
   })
+  it('neutralizes spreadsheet formulas in user notes', () => {
+    expect(exportNotesCsv([{ photoId: 'p', filename: 'A.JPG', notes: [{ text: '=HYPERLINK("https://example.com")' }] }])).toContain("'=HYPERLINK")
+  })
 })

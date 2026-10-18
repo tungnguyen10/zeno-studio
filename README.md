@@ -11,7 +11,9 @@ npm ci
 npm run dev
 ```
 
-Các trang hiện có: `/` (giới thiệu), `/create` (tạo album nhanh không cần đăng nhập), `/guest/albums/:id` (quản trị album bằng link bí mật), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ). Công cụ lọc file dùng File System Access API; browser không hỗ trợ sẽ hiện hướng dẫn chuyển sang Chrome/Edge desktop.
+Các trang hiện có: `/` (giới thiệu), `/create` (tạo album nhanh không cần đăng nhập), `/guest/albums/:id` (quản trị album bằng link bí mật), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/studio/albums/:id/filter` (lọc ảnh gốc từ snapshot đã chốt), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ độc lập). Công cụ lọc file dùng File System Access API; browser không hỗ trợ vẫn xem và xuất kết quả, đồng thời hiện hướng dẫn chuyển sang Chrome/Edge desktop.
+
+Từ Results của studio, **Lọc ảnh gốc** mở đúng phiên bản đã chốt. Chọn thư mục RAW, xem file khớp/thiếu/mơ hồ rồi xác nhận copy. Mặc định ứng dụng chỉ tạo `RAW/SELECTED` lúc xác nhận; có thể nhập path con trong RAW (dấu `/` hoặc `\`) hoặc chọn thư mục khác bằng picker. Ảnh gốc không bị sửa, file đích đã có được bỏ qua, báo cáo `RETOUCH_NOTES.csv` và `SELECTION_REPORT.csv` được ghi trong đích. Nguồn chỉ đọc cần một đích khác có quyền ghi. Dữ liệu RAW và quyền truy cập thư mục ở trong browser, không tải file RAW lên server.
 
 ## Tạo và chia sẻ album
 

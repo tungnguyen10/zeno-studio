@@ -4,11 +4,15 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { ExportItem } from '~~/shared/domain/export'
 import { PRODUCTION_STATUS_LABELS, countRetouched } from '~~/shared/domain/album-status'
 
-type ResultPage = { versionNumber: number; total: number; items: ExportItem[]; nextCursor: string | null }
-const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string }>(), { backLabel: 'Quay lại' })
-const results = ref<{ versionNumber: number; total: number } | null>(null)
+type ResultPage = { selectionVersionId: string; finalizedAt: string; versionNumber: number; total: number; notesCount: number; items: ExportItem[]; nextCursor: string | null }
+const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; filterBase?: string }>(), { backLabel: 'Quay lại' })
+const results = ref<Omit<ResultPage, 'items' | 'nextCursor'> | null>(null)
 const items = shallowRef<ExportItem[]>([])
 const nextCursor = ref<string | null>(null)
+const lockedVersionId = ref<string | null>(null)
+const search = ref('')
+const notesFilter = ref<'all' | 'with' | 'without'>('all')
+let loadGeneration = 0
 const loadingMore = ref(false)
 const production = ref<{ canDeliver: boolean; items: Array<{ id: string; filename: string; status: string }> } | null>(null)
 const editedDriveUrl = ref('')
@@ -36,15 +40,29 @@ const virtualRows = computed(() => virtualizer.value.getVirtualItems())
 const retouched = computed(() => countRetouched(production.value?.items ?? []))
 
 async function loadPage() {
-  if (loadingMore.value || (results.value && !nextCursor.value)) return
+  if (loadingMore.value || (results.value && !nextCursor.value && items.value.length > 0)) return
+  const generation = loadGeneration
   loadingMore.value = true
   try {
-    const page = await $fetch<ResultPage>(`${props.apiRoot}/results`, { query: { limit: 100, ...(nextCursor.value ? { cursor: nextCursor.value } : {}) } })
-    results.value = { versionNumber: page.versionNumber, total: page.total }
+    const page = await $fetch<ResultPage>(`${props.apiRoot}/results`, { query: { limit: 100, versionId: lockedVersionId.value ?? undefined, search: search.value, notesFilter: notesFilter.value, ...(nextCursor.value ? { cursor: nextCursor.value } : {}) } })
+    if (generation !== loadGeneration) return
+    lockedVersionId.value = page.selectionVersionId
+    results.value = { selectionVersionId: page.selectionVersionId, finalizedAt: page.finalizedAt, versionNumber: page.versionNumber, total: page.total, notesCount: page.notesCount }
     items.value = items.value.concat(page.items)
     nextCursor.value = page.nextCursor
-  } finally { loadingMore.value = false }
+  } finally { if (generation === loadGeneration) loadingMore.value = false }
 }
+
+watch([search, notesFilter], () => {
+  loadGeneration++
+  items.value = []
+  nextCursor.value = null
+  loadingMore.value = false
+  void loadPage().catch(cause => { message.value = cause instanceof Error ? cause.message : 'Không tải được kết quả' })
+})
+
+const filterLink = computed(() => props.filterBase && results.value
+  ? `${props.filterBase}&version=${encodeURIComponent(results.value.selectionVersionId)}` : '')
 
 watch(virtualRows, rows => {
   const last = rows.at(-1)
@@ -62,7 +80,7 @@ onMounted(async () => {
 })
 
 function exportUrl(format: typeof EXPORTS[number]['format']) {
-  return `${props.apiRoot}/results/export?format=${format}`
+  return `${props.apiRoot}/results/export?format=${format}&versionId=${lockedVersionId.value ?? ''}`
 }
 
 async function filenamesText() {
@@ -115,6 +133,7 @@ async function copyFilenames() {
 
 async function openFilter() {
   if (!results.value) return
+  if (filterLink.value) { await navigateTo(filterLink.value); return }
   sessionStorage.setItem('zeno-filter-filenames', await filenamesText())
   await navigateTo('/tools/file-filter?from=results')
 }
@@ -141,7 +160,7 @@ async function openFilter() {
       </div>
       <p v-else-if="error" class="mt-8 rounded-xl bg-white p-5 text-red-700" role="alert">{{ error }}</p>
       <template v-else-if="results">
-        <p class="mt-3 text-[#667461]">Phiên bản {{ results.versionNumber }} · {{ results.total }} ảnh</p>
+        <p class="mt-3 text-[#667461]">Phiên bản {{ results.versionNumber }} · {{ results.total }} ảnh · {{ results.notesCount }} ảnh có ghi chú · Chốt {{ new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(results.finalizedAt)) }}</p>
         <nav v-if="production" aria-label="Các phần của trang" class="mt-5 flex gap-2 overflow-x-auto text-sm font-semibold">
           <a href="#selection" class="inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-white px-4 text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Ảnh đã chốt</a>
           <a href="#production" class="inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-white px-4 text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Hậu kỳ và duyệt</a>
@@ -149,9 +168,15 @@ async function openFilter() {
         </nav>
         <section id="selection" class="scroll-mt-6">
         <div class="mt-7 flex flex-wrap gap-2 text-sm font-semibold">
-          <button class="rounded-full bg-[#344732] px-5 py-3 text-white" @click="openFilter">Lọc file trên máy</button>
-          <button class="rounded-full border px-5 py-3" @click="copyFilenames">Copy tên file</button>
-          <button v-for="item in EXPORTS" :key="item.format" type="button" class="rounded-full border px-5 py-3" @click="downloadExport(item)">{{ item.label }}</button>
+          <NuxtLink v-if="filterLink" :to="filterLink" class="inline-flex min-h-11 items-center rounded-full bg-[#344732] px-5 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">Lọc ảnh gốc</NuxtLink>
+          <button v-else type="button" class="min-h-11 rounded-full bg-[#344732] px-5 text-white" @click="openFilter">Lọc file trên máy</button>
+          <button type="button" class="min-h-11 rounded-full border px-5" @click="copyFilenames">Copy tên file</button>
+          <details class="relative rounded-full border bg-white px-5 py-3"><summary class="cursor-pointer">Xuất danh sách / ghi chú</summary><div class="absolute right-0 z-10 mt-3 min-w-44 rounded-xl border bg-white p-2 shadow-lg"><button v-for="item in EXPORTS" :key="item.format" type="button" class="block min-h-11 w-full rounded-lg px-3 text-left hover:bg-[#eaf1e5] focus-visible:outline-2 focus-visible:outline-[#344732]" @click="downloadExport(item)">{{ item.label }}</button></div></details>
+        </div>
+        <p class="mt-2 text-sm text-muted">Copy và xuất áp dụng cho toàn bộ ảnh của phiên bản này.</p>
+        <div class="mt-5 flex flex-wrap gap-3">
+          <label class="text-sm font-medium">Tìm tên file<input v-model="search" type="search" name="result-search" class="mt-1 block min-h-11 rounded-xl border bg-white px-3" placeholder="Ví dụ DSC_0123…"></label>
+          <label class="text-sm font-medium">Ghi chú<select v-model="notesFilter" class="mt-1 block min-h-11 rounded-xl border bg-white px-3"><option value="all">Tất cả</option><option value="with">Có ghi chú</option><option value="without">Chưa có ghi chú</option></select></label>
         </div>
         <p role="status" class="mt-3 text-sm text-[#526b4e]">{{ message }}</p>
         <ClientOnly>
@@ -167,9 +192,13 @@ async function openFilter() {
                 class="absolute inset-x-0 rounded-xl border border-[#e0e4d9] bg-white p-4"
                 :style="{ transform: `translateY(${row.start}px)` }"
               >
-                <h2 class="break-all font-semibold">{{ items[row.index]!.filename }}</h2>
-                <p v-if="!items[row.index]!.notes.length" class="mt-1 text-sm text-[#81877e]">Không có ghi chú</p>
-                <p v-for="(note, index) in items[row.index]!.notes" :key="index" class="mt-1 whitespace-pre-line text-sm">{{ note.text }}</p>
+                <div class="flex min-w-0 gap-4">
+                  <div v-if="filterBase" class="grid size-16 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#eaf1e5] text-xs text-muted"><img :src="`${apiRoot}/photos/${items[row.index]!.photoId}/image`" alt="" loading="lazy" width="64" height="64" class="size-full object-cover" @error="($event.target as HTMLImageElement).hidden = true"></div>
+                  <div class="min-w-0"><h2 class="break-all font-semibold">{{ items[row.index]!.filename }}</h2>
+                    <p v-if="!items[row.index]!.notes.length" class="mt-1 text-sm text-[#81877e]">Không có ghi chú</p>
+                    <p v-for="(note, index) in items[row.index]!.notes" :key="index" class="mt-1 whitespace-pre-line text-sm">{{ note.text }}</p>
+                  </div>
+                </div>
               </li>
             </ul>
             <div v-if="loadingMore" role="status" aria-label="Đang tải thêm" class="mt-2.5 space-y-2.5">
@@ -179,6 +208,7 @@ async function openFilter() {
               </div>
             </div>
           </div>
+          <p v-if="!loadingMore && items.length === 0" class="mt-3 text-sm text-muted">Không có ảnh phù hợp.</p>
         </ClientOnly>
         </section>
         <section v-if="production" id="production" class="mt-12 scroll-mt-6 border-t border-[#dfe4da] pt-8">

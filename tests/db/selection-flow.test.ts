@@ -49,6 +49,11 @@ describe('selection workflow', () => {
     await savePhotoNote(pool, access, photos[0]!.id, 'Chỉnh màu', 1)
     expect((await finalizeStudioSelection(pool, studio.id, 'selection-owner', album.id)).versionNumber).toBe(2)
     expect((await getSelectionResults(pool, studio.id, 'selection-owner', album.id)).items[0]?.notes).toEqual([{ text: 'Chỉnh màu' }])
+    const current = await getSelectionResults(pool, studio.id, 'selection-owner', album.id)
+    expect(current.notesCount).toBe(1)
+    expect(current.selectionVersionId).toMatch(/^[0-9a-f-]{36}$/i)
+    const frozen = await getSelectionResults(pool, studio.id, 'selection-owner', album.id, { limit: 100, versionId: (await withDatabaseContext(pool, { studioId: studio.id, userId: 'selection-owner', scope: 'member' }, client => client.query<{ id: string }>('SELECT id FROM selection_versions WHERE album_id = $1 AND version_number = 1', [album.id]))).rows[0]!.id })
+    expect(frozen).toMatchObject({ versionNumber: 1, notesCount: 1, items: [{ filename: 'A.JPG', notes: [{ text: 'Chỉnh sáng' }] }] })
     const original = await withDatabaseContext(pool, { studioId: studio.id, userId: 'selection-owner', scope: 'member' }, client =>
       client.query<{ notes: { text: string }[] }>(`SELECT i.notes FROM selection_version_items i JOIN selection_versions v ON v.id = i.selection_version_id
         WHERE v.album_id = $1 AND v.version_number = 1`, [album.id]))

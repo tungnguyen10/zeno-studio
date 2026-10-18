@@ -24,7 +24,7 @@ test('previews matches and copies only resolved files', async ({ page }) => {
         yield ['set-2', folder('set-2', ['B.CR3'])]
       },
     }
-    const stored = new Set<string>()
+    const stored = new Map<string, Uint8Array[]>()
     const destination = {
       kind: 'directory', name: 'Output',
       async isSameEntry() { return false },
@@ -33,8 +33,8 @@ test('previews matches and copies only resolved files', async ({ page }) => {
           if (stored.has(name)) return {}
           throw new DOMException('not found', 'NotFoundError')
         }
-        stored.add(name)
-        return { createWritable: async () => new WritableStream() }
+        stored.set(name, [])
+        return { createWritable: async () => new WritableStream<Uint8Array>({ write(chunk) { stored.get(name)!.push(chunk) } }), getFile: async () => new File(stored.get(name)!, name) }
       },
     }
     Object.defineProperty(window, 'showDirectoryPicker', {

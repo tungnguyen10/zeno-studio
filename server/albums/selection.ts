@@ -218,13 +218,14 @@ export async function reopenManagedSelection(pool: ConnectionPool, manager: Albu
 }
 
 export interface SelectionResultItem { photoId: string; filename: string; notes: { text: string }[] }
-export interface SelectionResults { versionNumber: number; total: number; items: SelectionResultItem[]; nextCursor: string | null }
-export interface ResultPageOptions { limit: number; cursor?: string }
+export interface SelectionResults { selectionVersionId: string; finalizedAt: string; versionNumber: number; total: number; notesCount: number; items: SelectionResultItem[]; nextCursor: string | null }
+export interface ResultPageOptions { limit?: number; cursor?: string; versionId?: string; search?: string; notesFilter?: 'all' | 'with' | 'without' }
 
-function parseResultCursor(value: string): { filename: string; id: string } {
+function parseResultCursor(value: string): { filename: string; id: string; versionId: string; search: string; notesFilter: string } {
   try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { filename: string; id: string }
-    if (typeof parsed.filename === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.id)) return parsed
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { filename: string; id: string; versionId: string; search: string; notesFilter: string }
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (typeof parsed.filename === 'string' && uuid.test(parsed.id) && uuid.test(parsed.versionId) && typeof parsed.search === 'string' && typeof parsed.notesFilter === 'string') return parsed
   } catch { /* Invalid cursor is reported below. */ }
   throw new StudioOperationError('Cursor kết quả không hợp lệ', 400)
 }
@@ -235,25 +236,35 @@ export async function getSelectionResults(pool: ConnectionPool, studioId: string
 
 // Without `page` every item is returned; exports rely on that.
 export async function getManagedSelectionResults(pool: ConnectionPool, manager: AlbumManager, albumId: string, page?: ResultPageOptions): Promise<SelectionResults> {
-  if (page && (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 200)) throw new StudioOperationError('Kích thước trang không hợp lệ', 400)
+  if (page?.limit !== undefined && (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 200)) throw new StudioOperationError('Kích thước trang không hợp lệ', 400)
   const after = page?.cursor ? parseResultCursor(page.cursor) : null
+  const search = page?.search ?? ''
+  const notesFilter = page?.notesFilter ?? 'all'
   return withManagedAlbum(pool, manager, albumId, 'album.view', async client => {
-    const version = await client.query<{ id: string; version_number: number; total: number }>(
-      `SELECT v.id, v.version_number, (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id) AS total
-       FROM selection_versions v WHERE v.album_id = $1 ORDER BY v.version_number DESC LIMIT 1`, [albumId])
+    const version = await client.query<{ id: string; version_number: number; finalized_at: Date; total: number; notes_count: number }>(
+      `SELECT v.id, v.version_number, v.finalized_at,
+        (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id) AS total,
+        (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id AND jsonb_array_length(i.notes) > 0) AS notes_count
+       FROM selection_versions v WHERE v.album_id = $1 AND ($2::uuid IS NULL OR v.id = $2::uuid)
+       ORDER BY v.version_number DESC LIMIT 1`, [albumId, page?.versionId ?? null])
     if (!version.rows[0]) throw new StudioOperationError('Album chưa được chốt', 404)
+    const versionId = version.rows[0].id
+    if (after && (after.versionId !== versionId || after.search !== search || after.notesFilter !== notesFilter)) throw new StudioOperationError('Cursor kết quả không hợp lệ', 400)
     const items = await client.query<{ photo_id: string; filename: string; notes: { text: string }[] }>(
       `SELECT photo_id, filename, notes FROM selection_version_items
        WHERE selection_version_id = $1 AND ($2::text IS NULL OR (filename, photo_id) > ($2::text, $3::uuid))
+       AND ($5 = '' OR position(lower($5) in lower(filename)) > 0)
+       AND ($6 = 'all' OR ($6 = 'with' AND jsonb_array_length(notes) > 0) OR ($6 = 'without' AND jsonb_array_length(notes) = 0))
        ORDER BY filename, photo_id LIMIT $4`,
-      [version.rows[0].id, after?.filename ?? null, after?.id ?? null, page ? page.limit + 1 : null])
-    const hasMore = page ? items.rows.length > page.limit : false
-    const rows = page ? items.rows.slice(0, page.limit) : items.rows
+      [versionId, after?.filename ?? null, after?.id ?? null, page?.limit ? page.limit + 1 : null, search, notesFilter])
+    const hasMore = page?.limit ? items.rows.length > page.limit : false
+    const rows = page?.limit ? items.rows.slice(0, page.limit) : items.rows
     const mapped = rows.map(row => ({ photoId: row.photo_id, filename: row.filename, notes: row.notes.map(note => ({ text: note.text })) }))
     const last = mapped.at(-1)
     return {
-      versionNumber: version.rows[0].version_number, total: version.rows[0].total, items: mapped,
-      nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ filename: last.filename, id: last.photoId })).toString('base64url') : null,
+      selectionVersionId: versionId, finalizedAt: version.rows[0].finalized_at.toISOString(),
+      versionNumber: version.rows[0].version_number, total: version.rows[0].total, notesCount: version.rows[0].notes_count, items: mapped,
+      nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ filename: last.filename, id: last.photoId, versionId, search, notesFilter })).toString('base64url') : null,
     }
   })
 }

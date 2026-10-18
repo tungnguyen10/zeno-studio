@@ -63,7 +63,7 @@ for (const { name, viewport } of viewports) {
       await expect(page.getByRole('status', { name: 'Đang tải không gian studio' })).toBeVisible()
       await capture(page, `${name}-studio-workspace`)
       studio.release()
-      await expect(page.getByText('Studio Mẫu')).toBeVisible()
+      await expect(page.getByText('Studio Mẫu', { exact: true })).toBeVisible()
     })
 
     test('members page shows a skeleton until members load', async ({ page }) => {
@@ -99,7 +99,7 @@ for (const { name, viewport } of viewports) {
       const wait = gate()
       await page.route(`**/api/guest/albums/${albumId}/results?*`, async route => {
         await wait.opened
-        return json(route, { versionNumber: 1, total: 1, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] })
+        return json(route, { selectionVersionId: '11111111-1111-4111-8111-111111111111', finalizedAt: '2026-10-17T00:00:00.000Z', versionNumber: 1, total: 1, notesCount: 0, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] })
       })
       await page.route(`**/api/guest/albums/${albumId}/production`, route => json(route, { canDeliver: false, items: [] }))
       await page.goto(`/guest/albums/${albumId}/results`)

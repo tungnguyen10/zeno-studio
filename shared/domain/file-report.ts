@@ -1,9 +1,6 @@
 import type { CopyResult } from './file-copy'
 import type { MatchResult } from './file-matching'
-
-function cell(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
-}
+import { csv } from './csv'
 
 export function exportFileFilterReport(preview: MatchResult, resolvedPaths: Record<string, string>, copy: CopyResult | null): string {
   const rows: string[][] = [['phase', 'status', 'requested', 'local_path', 'detail']]
@@ -18,5 +15,5 @@ export function exportFileFilterReport(preview: MatchResult, resolvedPaths: Reco
       rows.push(['copy', outcome.status, outcome.requested, outcome.sourcePath, outcome.detail])
     }
   }
-  return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n'
+  return '\uFEFF' + csv(rows)
 }
