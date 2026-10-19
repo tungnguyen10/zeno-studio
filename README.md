@@ -1,6 +1,6 @@
 # Zeno Studio — Photo Workflow Platform V1
 
-Ứng dụng Nuxt 4 cho luồng chọn ảnh, ghi chú và bàn giao của studio. [Đặc tả V1](docs/photo-workflow-platform-v1-spec.md) là nguồn yêu cầu sản phẩm; [tiến độ](docs/implementation-progress.md) ghi rõ phần đã kiểm thử và các gate còn mở.
+Ứng dụng Nuxt 4 cho luồng chọn ảnh, ghi chú và bàn giao của studio. [Hướng dẫn sử dụng cho studio](docs/studio-user-guide.md) mô tả các luồng hiện có; [đặc tả V1](docs/photo-workflow-platform-v1-spec.md) là nguồn yêu cầu sản phẩm; [tiến độ](docs/implementation-progress.md) ghi rõ phần đã kiểm thử và các gate còn mở.
 
 ## Chạy cục bộ
 
