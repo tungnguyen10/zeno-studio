@@ -1,7 +1,26 @@
 <script setup lang="ts">
+import { onMounted, ref, useTemplateRef } from 'vue'
+
 useSeoMeta({
   title: 'Zeno Studio — Photo Workflow',
   description: 'Từ lựa chọn ảnh đến bàn giao, một luồng làm việc rõ ràng cho studio và khách hàng.',
+})
+
+const HERO_PHOTOS = [
+  { src: '/images/hero/bride.jpg', width: 480, height: 720, aspect: 'aspect-[.88]', position: 'object-[50%_20%]', heart: true },
+  { src: '/images/hero/bouquet.jpg', width: 480, height: 720, aspect: 'aspect-[.88]', position: 'object-[50%_60%]', heart: true },
+  { src: '/images/hero/couple.jpg', width: 720, height: 478, aspect: 'aspect-[1.35]', position: 'object-left', heart: false },
+  { src: '/images/hero/hands.jpg', width: 720, height: 480, aspect: 'aspect-[1.35]', position: 'object-center', heart: false },
+]
+const heroLoaded = ref(HERO_PHOTOS.map(() => false))
+const heroImages = useTemplateRef<HTMLImageElement[]>('heroImages')
+
+// SSR images can finish loading before hydration attaches @load.
+onMounted(() => {
+  heroImages.value?.forEach(img => {
+    const index = HERO_PHOTOS.findIndex(photo => img.src.endsWith(photo.src))
+    if (index >= 0 && img.complete && img.naturalWidth) heroLoaded.value[index] = true
+  })
 })
 </script>
 
@@ -41,10 +60,10 @@ useSeoMeta({
           <div class="relative rounded-3xl border border-line bg-white p-3 shadow-[0_35px_90px_-35px_rgba(39,55,35,.34)] sm:rounded-[2rem] sm:p-5">
             <div class="flex items-center justify-between gap-2 px-2 pb-3 text-xs text-muted sm:pb-4"><span class="truncate font-semibold text-brand">Album · Mai & Quang</span><span class="shrink-0">124 ảnh · Đang chọn</span></div>
             <div class="grid grid-cols-2 gap-2 sm:gap-3">
-              <div class="aspect-[.88] rounded-2xl bg-[linear-gradient(150deg,#d8d0bc,#eee9de_47%,#9aab92)] p-3"><span class="grid size-8 place-items-center rounded-full bg-white/90 text-heart">♥</span></div>
-              <div class="aspect-[.88] rounded-2xl bg-[linear-gradient(145deg,#bfc9b2,#f4e6d5_54%,#d9baa0)] p-3"><span class="grid size-8 place-items-center rounded-full bg-white/90 text-heart">♥</span></div>
-              <div class="aspect-[1.35] rounded-2xl bg-[linear-gradient(135deg,#cec4b0,#e4d9c3_52%,#9aa68f)]" />
-              <div class="aspect-[1.35] rounded-2xl bg-[linear-gradient(130deg,#abc0aa,#e7e7d7_50%,#bca991)]" />
+              <div v-for="(photo, index) in HERO_PHOTOS" :key="photo.src" class="photo-placeholder rounded-2xl" :class="photo.aspect" :data-loading="heroLoaded[index] ? undefined : ''">
+                <img ref="heroImages" :src="photo.src" alt="" :width="photo.width" :height="photo.height" :fetchpriority="index === 0 ? 'high' : undefined" decoding="async" class="size-full object-cover transition-opacity duration-500" :class="[photo.position, heroLoaded[index] ? 'opacity-100' : 'opacity-0']" @load="heroLoaded[index] = true">
+                <span v-if="photo.heart" class="absolute left-3 top-3 grid size-8 place-items-center rounded-full bg-white/90 text-heart shadow-sm">♥</span>
+              </div>
             </div>
             <div class="mt-3 flex items-center justify-between rounded-2xl bg-tint px-4 py-3 text-sm sm:mt-4"><span><strong class="text-brand">18 ảnh</strong> đã chọn</span><span class="font-semibold text-brand">Xem lựa chọn →</span></div>
           </div>
