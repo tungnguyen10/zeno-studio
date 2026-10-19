@@ -21,6 +21,7 @@ Thiết lập ở Vercel **Preview**, dùng Neon branch riêng đã migrate và 
 | `NUXT_DRIVE_VERIFIED` | `true` ở Preview sau live test và HTTP smoke với folder 307 ảnh; Production tiếp tục `false`. |
 | `NUXT_GOOGLE_API_KEY` | API key Google Cloud cho Drive API, lưu Sensitive ở Preview; không dùng OAuth Client ID. |
 | `NUXT_SMTP_URL`, `NUXT_MAIL_FROM` | Chỉ khi có SMTP thật để kiểm email xác minh/reset. |
+| `NUXT_PUBLIC_SITE_URL` | Origin HTTPS chính thức (không có `/` cuối) cho canonical, `og:*`, `sitemap.xml`, `robots.txt`, `llms.txt` và JSON-LD. Bắt buộc ở Production; nếu bỏ trống sẽ dùng origin của request. |
 
 Preview hiện có `NUXT_DATABASE_URL` từ nhánh Neon dev, `NUXT_BETTER_AUTH_SECRET` riêng, `NUXT_GOOGLE_API_KEY` và `NUXT_DRIVE_VERIFIED=true`; các biến chỉ ở scope Preview và lưu dạng Sensitive/Encrypted. Không đặt `NUXT_DATABASE_DIRECT_URL` trên Vercel: migration chạy riêng từ máy/CI với owner direct URL. `.vercelignore` loại `.env` cùng các artifact local khỏi nguồn upload. Không đưa URL hoặc secret vào Git, docs hoặc chat.
 

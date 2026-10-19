@@ -5,8 +5,10 @@ import type { CopyResult } from '~~/shared/domain/file-copy'
 import { exportFileFilterReport } from '~~/shared/domain/file-report'
 import { scanDirectory, type IndexedFile } from '~~/app/services/local-filter/directoryScanner'
 import { copyLocalFiles } from '~~/app/services/local-filter/copyEngine'
+import { publicPage } from '~~/shared/site'
 
-useSeoMeta({ title: 'Lọc file trên máy — Zeno Studio' })
+const filterPage = publicPage('/tools/file-filter')
+useSeoMeta({ title: filterPage.title, description: filterPage.description, ogTitle: filterPage.title, ogDescription: filterPage.description })
 
 type BrowserWithDirectoryPicker = Window & {
   showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>

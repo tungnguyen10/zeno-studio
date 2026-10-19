@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
+import { publicPage } from '~~/shared/site'
 
-useSeoMeta({ title: 'Tạo album nhanh — Zeno Studio' })
+const createPage = publicPage('/create')
+useSeoMeta({ title: createPage.title, description: createPage.description, ogTitle: createPage.title, ogDescription: createPage.description })
 const title = ref('')
 const folderUrl = ref('')
 const expiresInDays = ref<15 | 30>(15)

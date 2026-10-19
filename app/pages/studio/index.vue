@@ -3,8 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ALBUM_FILTERS, countByFilter, filterAlbums, type AlbumFilter } from '~~/shared/domain/album-status'
 import type { StudioAlbum } from '~/lib/studio-album'
 import { useStudioStore } from '~/stores/studio'
+import { publicPage } from '~~/shared/site'
 
-useSeoMeta({ title: 'Studio — Zeno Studio' })
+const studioPage = publicPage('/studio')
+useSeoMeta({ title: studioPage.title, description: studioPage.description, ogTitle: studioPage.title, ogDescription: studioPage.description })
 
 const store = useStudioStore()
 const route = useRoute()

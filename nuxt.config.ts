@@ -11,11 +11,22 @@ export default defineNuxtConfig({
   routeRules: {
     // Customer links carry a capability token in the query string.
     '/album/**': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
+    '/guest/**': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
+    '/studio/invite': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
+    '/studio/reset-password': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
+    '/studio/albums/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/studio/members': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/api/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
   },
   app: {
     head: {
       htmlAttrs: { lang: 'vi' },
       meta: [{ name: 'theme-color', content: '#f8f7f3' }],
+      link: [
+        { rel: 'icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/icons/favicon-32x32.png' },
+        { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' },
+      ],
     },
   },
   css: ['~/assets/css/main.css'],
@@ -29,5 +40,9 @@ export default defineNuxtConfig({
     driveVerified: '',
     googleClientId: '',
     googleClientSecret: '',
+    public: {
+      // Absolute origin for canonical, sitemap and structured data; falls back to the request origin.
+      siteUrl: '',
+    },
   },
 })

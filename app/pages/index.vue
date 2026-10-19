@@ -1,9 +1,65 @@
 <script setup lang="ts">
 import { onMounted, ref, useTemplateRef } from 'vue'
+import { FAQS, ORGANIZATION, SITE_DESCRIPTION, SITE_NAME, WORKFLOW_STEPS as STEPS, publicPage } from '~~/shared/site'
 
+const page = publicPage('/')
 useSeoMeta({
-  title: 'Zeno Studio — Photo Workflow',
-  description: 'Từ lựa chọn ảnh đến bàn giao, một luồng làm việc rõ ràng cho studio và khách hàng.',
+  title: page.title,
+  description: page.description,
+  ogTitle: page.title,
+  ogDescription: page.description,
+})
+
+const siteUrl = useSiteUrl()
+const organizationId = `${siteUrl}/#organization`
+useHead({
+  script: [{
+    type: 'application/ld+json',
+    innerHTML: JSON.stringify({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'Organization',
+          '@id': organizationId,
+          name: ORGANIZATION.name,
+          legalName: ORGANIZATION.legalName,
+          url: ORGANIZATION.url,
+          logo: `${siteUrl}/icons/icon-512.png`,
+          email: ORGANIZATION.email,
+          telephone: ORGANIZATION.telephone,
+          taxID: ORGANIZATION.taxId,
+          address: { '@type': 'PostalAddress', ...ORGANIZATION.address },
+        },
+        {
+          '@type': 'WebSite',
+          '@id': `${siteUrl}/#website`,
+          name: SITE_NAME,
+          url: `${siteUrl}/`,
+          inLanguage: 'vi-VN',
+          publisher: { '@id': organizationId },
+        },
+        {
+          '@type': 'WebApplication',
+          name: SITE_NAME,
+          url: `${siteUrl}/`,
+          description: SITE_DESCRIPTION,
+          applicationCategory: 'BusinessApplication',
+          operatingSystem: 'Web',
+          inLanguage: 'vi-VN',
+          featureList: STEPS.map(step => `${step.title}: ${step.body}`),
+          publisher: { '@id': organizationId },
+        },
+        {
+          '@type': 'FAQPage',
+          mainEntity: FAQS.map(item => ({
+            '@type': 'Question',
+            name: item.q,
+            acceptedAnswer: { '@type': 'Answer', text: item.a },
+          })),
+        },
+      ],
+    }),
+  }],
 })
 
 const HERO_PHOTOS = [
@@ -14,12 +70,6 @@ const HERO_PHOTOS = [
 ]
 const heroLoaded = ref(HERO_PHOTOS.map(() => false))
 const heroImages = useTemplateRef<HTMLImageElement[]>('heroImages')
-
-const STEPS = [
-  { title: 'Chọn ảnh dễ hơn', body: 'Khách chọn và ghi chú trên từng ảnh ngay từ điện thoại, không cần tạo tài khoản.' },
-  { title: 'Hậu kỳ chính xác', body: 'Studio nhận tên file và yêu cầu chỉnh sửa, sau đó lọc RAW/JPEG ngay trên máy.' },
-  { title: 'Duyệt rõ ràng', body: 'Mỗi vòng review được lưu lại để cả hai bên biết ảnh nào cần sửa và khi nào hoàn tất.' },
-]
 
 const AUDIENCES = [
   {
@@ -38,13 +88,6 @@ const AUDIENCES = [
       'Xem lại thành phẩm và phản hồi trước khi nhận bàn giao.',
     ],
   },
-]
-
-const FAQS = [
-  { q: 'Khách có cần tạo tài khoản không?', a: 'Không. Khách chỉ cần mở link album studio gửi để xem, chọn và ghi chú ảnh.' },
-  { q: 'Ảnh được lưu ở đâu?', a: 'Ảnh gốc vẫn nằm trong folder Google Drive của bạn. Zeno Studio chỉ đọc ảnh từ folder đã chia sẻ bằng đường liên kết.' },
-  { q: 'Tạo album nhanh khác gì không gian studio?', a: 'Tạo album nhanh không cần đăng nhập và album có hạn 15 hoặc 30 ngày. Không gian studio dành cho đội ngũ cần quản lý nhiều album, thành viên và các vòng duyệt.' },
-  { q: 'Công cụ lọc file có tải ảnh lên máy chủ không?', a: 'Không. Công cụ chạy ngay trong trình duyệt, chỉ copy file sang thư mục đích và không xóa file nguồn.' },
 ]
 
 // SSR images can finish loading before hydration attaches @load.
