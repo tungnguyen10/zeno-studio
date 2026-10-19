@@ -57,6 +57,7 @@ test('creates SELECTED only after confirmation and writes copy plus reports', as
 
 test('normalizes a relative folder and keeps preview read only', async ({ page }) => {
   await page.goto(`/studio/albums/${albumId}/filter?studio=${studioId}&version=${versionId}`)
+  await page.getByRole('button', { name: 'Đổi thư mục đích' }).click()
   await page.getByLabel('Path con trong RAW').check()
   await page.getByLabel('Path tương đối').fill('KhachA\\DaLoc')
   await page.getByRole('button', { name: 'Chọn RAW', exact: true }).click()
@@ -71,6 +72,7 @@ test('invalidates preview when the destination changes, then copies into a picke
   await page.goto(`/studio/albums/${albumId}/filter?studio=${studioId}&version=${versionId}`)
   await page.getByRole('button', { name: 'Chọn RAW', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Xác nhận copy 1 file' })).toBeVisible()
+  await page.getByRole('button', { name: 'Đổi thư mục đích' }).click()
   await page.getByLabel('Path con trong RAW').check()
   await expect(page.getByRole('button', { name: 'Xác nhận copy 1 file' })).toHaveCount(0)
   await page.getByLabel('Thư mục khác').check()
@@ -85,6 +87,7 @@ test('requires another destination when RAW is read only', async ({ page }) => {
   await page.goto(`/studio/albums/${albumId}/filter?studio=${studioId}&version=${versionId}`)
   await page.getByRole('button', { name: 'Nguồn chỉ đọc' }).click()
   await expect(page.getByRole('button', { name: 'Xác nhận copy 1 file' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Đổi thư mục đích' }).click()
   await page.getByLabel('Thư mục khác').check()
   await page.getByRole('button', { name: 'Chọn thư mục đích khác' }).click()
   await expect(page.getByRole('button', { name: 'Xác nhận copy 1 file' })).toBeEnabled()

@@ -12,13 +12,13 @@ const ICONS: Record<GalleryLayout, string> = {
 </script>
 
 <template>
-  <div class="inline-flex rounded-full border border-[#dfe4d8] bg-white p-1" role="group" aria-label="Kiểu hiển thị">
+  <div class="inline-flex rounded-full border border-line bg-white p-0.5" role="group" aria-label="Kiểu hiển thị">
     <button
       v-for="option in GALLERY_LAYOUTS"
       :key="option.value"
       type="button"
-      class="grid size-9 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]"
-      :class="layout === option.value ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'"
+      class="focus-ring grid size-11 place-items-center rounded-full transition-colors"
+      :class="layout === option.value ? 'bg-brand text-white' : 'text-muted hover:bg-tint'"
       :aria-label="option.label"
       :title="option.label"
       :aria-pressed="layout === option.value"

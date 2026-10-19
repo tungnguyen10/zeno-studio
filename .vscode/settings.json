@@ -1,3 +1,11 @@
 {
-    "dotenv.enableAutocloaking": false
+    "dotenv.enableAutocloaking": false,
+    "chat.tools.terminal.autoApprove": {
+        "npx playwright": true,
+        "npx vitest": true,
+        "git stash": true,
+        "git worktree": true,
+        "ln": true,
+        "cp": true
+    }
 }

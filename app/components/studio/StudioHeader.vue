@@ -57,9 +57,9 @@ async function signOut() {
   }
 }
 
-const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand'
-const tabClass = `inline-flex min-h-10 items-center justify-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors sm:px-4 ${focusRing}`
-const tabIdle = 'text-[#4f5d4b] hover:bg-white/70 hover:text-ink'
+const focusRing = 'focus-ring'
+const tabClass = 'focus-ring inline-flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors sm:px-4'
+const tabIdle = 'text-muted hover:bg-white/70 hover:text-ink'
 const tabActive = 'bg-brand text-white shadow-sm'
 </script>
 
@@ -116,7 +116,7 @@ const tabActive = 'bg-brand text-white shadow-sm'
           <span aria-hidden="true" class="grid size-9 place-items-center rounded-full bg-brand-soft text-white">{{ initial }}</span>
           <span v-if="store.user" class="hidden max-w-44 truncate font-medium text-muted md:inline">{{ store.user.email }}</span>
           <span class="sr-only">Tài khoản</span>
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" :class="['size-4 text-muted transition-transform', menuOpen && 'rotate-180']">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" :class="['size-4 text-muted transition-transform motion-reduce:transition-none', menuOpen && 'rotate-180']">
             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
           </svg>
         </button>
@@ -124,7 +124,7 @@ const tabActive = 'bg-brand text-white shadow-sm'
         <div
           v-show="menuOpen"
           id="studio-account-menu"
-          class="absolute right-0 top-full mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-line bg-white p-2 shadow-lg"
+          class="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-line bg-white p-2 shadow-lg"
         >
           <div class="border-b border-line px-3 pb-3 pt-2">
             <p class="text-xs text-muted">Đăng nhập với</p>
@@ -135,7 +135,7 @@ const tabActive = 'bg-brand text-white shadow-sm'
             type="button"
             :disabled="signingOut"
             :aria-busy="signingOut"
-            :class="['mt-1 flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm font-semibold text-[#9a3b2e] hover:bg-[#fbeeea] disabled:opacity-60', focusRing]"
+            :class="['mt-1 flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm font-semibold text-danger hover:bg-danger-soft disabled:opacity-60', focusRing]"
             @click="signOut"
           >
             {{ signingOut ? 'Đang đăng xuất…' : 'Đăng xuất' }}

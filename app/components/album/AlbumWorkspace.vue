@@ -26,6 +26,17 @@ const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`
 const filter = computed<PhotoFilter>({ get: () => paged.filter.value, set: value => { if (value !== paged.filter.value) void paged.reset(value) } })
 
 const canChoose = computed(() => workspace.value?.status === 'PUBLISHED' && workspace.value.canFinalize)
+const filterTabs = computed(() => {
+  const w = workspace.value
+  if (!w) return []
+  const tabs: Array<{ id: PhotoFilter; label: string; count: number }> = [
+    { id: 'all', label: 'Tất cả', count: w.photoCount },
+    { id: 'selected', label: w.hasResults && w.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách đã chọn', count: w.selectedCount },
+  ]
+  if (w.hasResults) tabs.push({ id: 'previous', label: 'Bộ chốt trước', count: w.previousCount })
+  return tabs
+})
+const expiresLabel = computed(() => workspace.value ? new Intl.DateTimeFormat('vi-VN').format(new Date(workspace.value.expiresAt)) : '')
 const chosenCount = computed(() => (workspace.value?.selectedCount ?? 0) - excluded.value.size + included.value.size)
 const statusLabel = computed(() => workspace.value ? ALBUM_STATUS_LABELS[workspace.value.status as AlbumStatus] ?? workspace.value.status : '')
 const limitLabel = computed(() => {
@@ -100,81 +111,77 @@ onMounted(() => { void load() })
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#f8f7f3] text-[#24231f]">
-    <header class="sticky top-0 z-20 border-b border-[#e2e5dc] bg-[#f8f7f3]/95 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <NuxtLink :to="backTo" class="-ml-2 inline-flex min-h-11 items-center rounded-full px-3 font-semibold text-[#344732] hover:bg-[#eef2ea] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">← {{ backLabel }}</NuxtLink>
-        <span v-if="workspace" class="min-w-0 truncate text-sm text-[#667461]">{{ workspace.title }}</span>
+  <div class="min-h-dvh bg-canvas text-ink">
+    <header class="sticky top-0 z-20 border-b border-line bg-canvas/95 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-1.5 sm:px-6 lg:px-8">
+        <NuxtLink :to="backTo" class="focus-ring -ml-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2 font-semibold text-brand hover:bg-tint">← {{ backLabel }}</NuxtLink>
+        <span v-if="workspace" class="min-w-0 truncate text-sm text-muted">{{ workspace.title }}</span>
       </div>
     </header>
 
-    <main class="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-10 lg:px-8">
+    <main class="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6 sm:pt-10 lg:px-8">
       <div v-if="loading" role="status" aria-label="Đang tải album" aria-busy="true">
-        <div class="space-y-3 motion-safe:animate-pulse">
-          <div class="h-3 w-24 rounded-full bg-[#e3e8de]" />
-          <div class="h-9 w-2/3 max-w-sm rounded-xl bg-[#e3e8de]" />
+        <div class="space-y-3">
+          <UiSkeleton class="h-3 w-24 rounded-full" />
+          <UiSkeleton class="h-9 w-2/3 max-w-sm rounded-xl" />
           <div class="flex flex-wrap gap-2 pt-1">
-            <div v-for="n in 3" :key="n" class="h-7 w-28 rounded-full bg-[#e3e8de]" />
+            <UiSkeleton v-for="n in 3" :key="n" class="h-7 w-28 rounded-full" />
           </div>
         </div>
-        <div class="mt-8 h-11 w-60 rounded-full bg-[#e3e8de] motion-safe:animate-pulse" />
-        <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
-          <div v-for="n in 10" :key="n" class="overflow-hidden rounded-2xl border border-[#e2e5dc] bg-white motion-safe:animate-pulse">
+        <UiSkeleton class="mt-8 h-11 w-60 rounded-full" />
+        <div class="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          <div v-for="n in 10" :key="n" class="overflow-hidden rounded-2xl border border-line bg-white">
             <UiPhotoSkeleton class="aspect-[.8] rounded-none" />
             <div class="space-y-2 p-3">
-              <div class="h-3 w-4/5 rounded-full bg-[#e3e8de]" />
-              <div class="h-3 w-1/2 rounded-full bg-[#eef1ea]" />
+              <UiSkeleton class="h-3 w-4/5 rounded-full" />
+              <UiSkeleton class="h-3 w-1/2 rounded-full" />
             </div>
           </div>
         </div>
         <span class="sr-only">Đang tải album…</span>
       </div>
 
-      <div v-else-if="!workspace" role="alert" class="mx-auto max-w-md rounded-2xl border border-[#ead6d6] bg-white p-6 text-center">
-        <p class="font-semibold text-red-700">{{ error || 'Không tải được album' }}</p>
-        <button type="button" class="mt-4 min-h-11 rounded-full border border-[#cbd4c6] px-5 font-semibold hover:bg-[#f1f5ed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="retry">Thử lại</button>
+      <div v-else-if="!workspace" role="alert" class="mx-auto max-w-md rounded-2xl border border-danger/20 bg-white p-6 text-center">
+        <p class="font-semibold text-danger">{{ error || 'Không tải được album' }}</p>
+        <UiButton variant="secondary" class="mt-4" @click="retry">Thử lại</UiButton>
       </div>
 
       <template v-else>
         <section aria-labelledby="album-title">
-          <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Chi tiết album</p>
-          <h1 id="album-title" class="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{{ workspace.title }}</h1>
-          <ul class="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Thông tin album">
-            <li class="rounded-full bg-[#344732] px-3 py-1 font-semibold text-white">{{ statusLabel }}</li>
-            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">{{ workspace.photoCount }} ảnh</li>
-            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Đang chọn {{ workspace.selectedCount }}</li>
-            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Giới hạn: {{ limitLabel }}</li>
-            <li class="rounded-full border border-[#dfe4d8] bg-white px-3 py-1 text-[#4f5d4b]">Hạn {{ new Date(workspace.expiresAt).toLocaleDateString('vi-VN') }}</li>
+          <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Chi tiết album</p>
+          <h1 id="album-title" class="mt-2 break-words text-2xl font-semibold tracking-tight text-balance sm:text-4xl">{{ workspace.title }}</h1>
+          <ul class="mt-3 flex flex-wrap gap-1.5 text-xs sm:mt-4 sm:gap-2 sm:text-sm" aria-label="Thông tin album">
+            <li class="rounded-full bg-brand px-3 py-1 font-semibold text-white">{{ statusLabel }}</li>
+            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted tabular-nums">{{ workspace.photoCount }} ảnh</li>
+            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted tabular-nums">Đang chọn {{ workspace.selectedCount }}</li>
+            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted">Giới hạn: {{ limitLabel }}</li>
+            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted">Hạn <time :datetime="workspace.expiresAt">{{ expiresLabel }}</time></li>
           </ul>
           <AlbumProgress :status="workspace.status" />
         </section>
 
-        <p v-if="error" role="alert" class="mt-5 rounded-xl border border-[#ead6d6] bg-white p-4 text-sm text-red-700">{{ error }}</p>
-        <p v-if="message" role="status" class="mt-5 rounded-xl bg-[#eef4e8] p-4 text-sm font-medium text-[#344732]">{{ message }}</p>
+        <UiNotice v-if="error" tone="error" class="mt-5">{{ error }}</UiNotice>
+        <UiNotice v-if="message" tone="success" class="mt-5 font-medium">{{ message }}</UiNotice>
 
-        <div class="mt-7 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div class="inline-flex w-full rounded-full border border-[#dfe4d8] bg-white p-1 sm:w-auto" role="group" aria-label="Lọc ảnh">
-              <button type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'all' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'all'" @click="filter = 'all'">Tất cả ({{ workspace.photoCount }})</button>
-              <button type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'selected' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'selected'" @click="filter = 'selected'">{{ workspace.hasResults && workspace.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách đã chọn' }} ({{ workspace.selectedCount }})</button>
-              <button v-if="workspace.hasResults" type="button" class="min-h-10 flex-1 rounded-full px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732] sm:flex-none" :class="filter === 'previous' ? 'bg-[#344732] text-white' : 'text-[#4f5d4b] hover:bg-[#f1f5ed]'" :aria-pressed="filter === 'previous'" @click="filter = 'previous'">Bộ chốt trước ({{ workspace.previousCount }})</button>
-            </div>
-            <GalleryLayoutSwitch v-model="layout" />
+        <div class="mt-6 flex flex-col gap-3 sm:mt-7 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+            <UiTabs label="Lọc ảnh" :items="filterTabs" :current="filter" class="min-w-0" @select="filter = $event" />
+            <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" />
           </div>
-          <div class="flex flex-wrap gap-2">
+          <div class="grid gap-2 sm:flex sm:flex-wrap">
             <slot name="actions" :workspace="workspace" :reload="load" />
-            <NuxtLink v-if="workspace.hasResults" :to="resultsTo" class="inline-flex min-h-11 items-center rounded-full border border-[#cbd4c6] bg-white px-5 font-semibold text-[#344732] hover:bg-[#f1f5ed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]">Xem kết quả đã chốt</NuxtLink>
-            <button v-if="workspace.status === 'FINALIZED' && workspace.canFinalize" type="button" :disabled="busy" :aria-busy="busy" class="min-h-11 rounded-full bg-[#344732] px-5 font-semibold text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="reopen">{{ busy ? 'Đang mở…' : 'Mở vòng chọn mới' }}</button>
+            <UiButton v-if="workspace.hasResults" :to="resultsTo" variant="secondary">Xem kết quả đã chốt</UiButton>
+            <UiButton v-if="workspace.status === 'FINALIZED' && workspace.canFinalize" :loading="busy" @click="reopen">{{ busy ? 'Đang mở…' : 'Mở vòng chọn mới' }}</UiButton>
           </div>
         </div>
 
-        <p v-if="canChoose" class="mt-4 text-sm text-[#687264]">Bấm vào ảnh để thêm hoặc bỏ khỏi bộ chốt. Ảnh khách đã chọn được đánh dấu sẵn; ghi chú được đóng băng trong phiên bản kết quả.</p>
+        <p v-if="canChoose" class="mt-4 text-sm text-pretty text-muted">Bấm vào ảnh để thêm hoặc bỏ khỏi bộ chốt. Ảnh khách đã chọn được đánh dấu sẵn; ghi chú được đóng băng trong phiên bản kết quả.</p>
 
         <div class="mt-5">
-          <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
             <UiPhotoSkeleton v-for="n in 10" :key="n" class="aspect-[.8]" />
           </div>
-          <div v-else-if="!paged.items.value.length && !paged.loading.value" class="rounded-2xl border border-dashed border-[#d6ddd0] bg-white p-10 text-center text-[#687264]">
+          <div v-else-if="!paged.items.value.length && !paged.loading.value" class="rounded-2xl border border-dashed border-line-strong bg-white p-8 text-center text-muted sm:p-10">
             {{ paged.error.value || (filter === 'previous' ? 'Bộ chốt trước không có ảnh.' : filter === 'selected' ? 'Chưa có ảnh được chọn.' : 'Album chưa có ảnh.') }}
           </div>
           <ClientOnly v-else>
@@ -205,26 +212,26 @@ onMounted(() => { void load() })
                   @error="failedThumbnails[photo.id] = true"
                 >
                   <template v-if="photo.selected || photo.previouslyFinalized" #badge>
-                    <span v-if="photo.previouslyFinalized" class="inline-flex min-h-7 items-center rounded-full bg-[#eaf1e5]/95 px-2 text-xs font-semibold text-[#344732] shadow-sm">Đã chốt trước</span>
-                    <span v-else class="grid size-7 place-items-center rounded-full bg-[#fff0f2]/95 text-sm text-[#b55364] shadow-sm" :title="workspace.hasResults && workspace.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách chọn'"><span aria-hidden="true">♥</span><span class="sr-only">{{ workspace.hasResults && workspace.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách chọn' }}</span></span>
+                    <span v-if="photo.previouslyFinalized" class="inline-flex min-h-7 items-center rounded-full bg-tint/95 px-2 text-xs font-semibold text-brand shadow-sm">Đã chốt trước</span>
+                    <span v-else class="grid size-7 place-items-center rounded-full bg-heart-soft/95 text-sm text-heart shadow-sm" :title="workspace.hasResults && workspace.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách chọn'"><span aria-hidden="true">♥</span><span class="sr-only">{{ workspace.hasResults && workspace.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách chọn' }}</span></span>
                   </template>
                   <template v-if="canChoose" #action>
-                    <span aria-hidden="true" class="grid size-7 shrink-0 place-items-center rounded-full border-2 text-sm font-bold shadow-sm" :class="isChosen(photo) ? 'border-[#344732] bg-[#344732] text-white' : 'border-[#cbd4c6] bg-white/80 text-transparent'">✓</span>
+                    <span aria-hidden="true" class="grid size-7 shrink-0 place-items-center rounded-full border-2 text-sm font-bold shadow-sm" :class="isChosen(photo) ? 'border-brand bg-brand text-white' : 'border-line-strong bg-white/80 text-transparent'">✓</span>
                   </template>
                 </PhotoTile>
               </template>
             </PhotoGallery>
           </ClientOnly>
-          <div v-if="paged.error.value && paged.items.value.length" role="alert" class="mt-6 text-center text-sm text-red-700">
+          <div v-if="paged.error.value && paged.items.value.length" role="alert" class="mt-6 flex flex-wrap items-center justify-center gap-2 text-center text-sm text-danger">
             {{ paged.error.value }}
-            <button type="button" class="ml-2 rounded-full border px-4 py-2 font-semibold" @click="paged.loadMore">Thử lại</button>
+            <UiButton variant="secondary" size="sm" @click="paged.loadMore">Thử lại</UiButton>
           </div>
         </div>
 
-        <div v-if="canChoose" class="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-[#e2e5dc] bg-[#f8f7f3]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div v-if="canChoose" class="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-line bg-canvas/95 px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div class="flex items-center justify-between gap-3">
-            <p class="min-w-0 text-sm text-[#4f5d4b]"><strong class="text-[#24231f]">{{ chosenCount }}</strong> ảnh sẽ chốt · {{ limitLabel }}</p>
-            <button type="button" :disabled="busy" :aria-busy="busy" class="min-h-11 shrink-0 rounded-full bg-[#344732] px-6 font-semibold text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#344732]" @click="finalize">{{ busy ? 'Đang chốt…' : `Chốt ${chosenCount} ảnh` }}</button>
+            <p class="min-w-0 text-sm text-muted"><strong class="text-ink tabular-nums">{{ chosenCount }}</strong> ảnh sẽ chốt<span class="hidden min-[400px]:inline"> · {{ limitLabel }}</span></p>
+            <UiButton class="shrink-0" :loading="busy" @click="finalize">{{ busy ? 'Đang chốt…' : `Chốt ${chosenCount} ảnh` }}</UiButton>
           </div>
         </div>
       </template>

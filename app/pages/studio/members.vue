@@ -114,19 +114,19 @@ onMounted(() => {
   void load()
 })
 
-const field = 'mt-2 min-h-11 w-full rounded-xl border border-[#d9ddd2] px-4 py-2.5 font-normal focus-visible:border-brand-soft focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-soft'
-const dangerButton = 'min-h-11 rounded-full px-4 text-sm font-semibold text-red-700 hover:bg-[#fbeceb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50'
+const field = 'control mt-2'
+const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm font-semibold text-danger hover:bg-danger-soft disabled:opacity-50'
 </script>
 
 <template>
-  <div class="min-h-screen bg-canvas text-ink">
+  <div class="min-h-dvh bg-canvas text-ink">
     <StudioHeader v-if="store.studiosLoaded" />
-    <main class="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6 lg:px-8">
-      <h1 class="text-3xl font-semibold tracking-tight">Thành viên studio</h1>
-      <p v-if="store.studio && store.canManage" class="mt-1 text-sm text-muted">Mời người mới và quản lý vai trò truy cập studio.</p>
+    <main class="mx-auto max-w-6xl px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-8 lg:px-8">
+      <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Thành viên studio</h1>
+      <p v-if="store.studio && store.canManage" class="mt-1 text-sm text-pretty text-muted">Mời người mới và quản lý vai trò truy cập studio.</p>
 
-      <div v-if="!loaded" role="status" aria-busy="true" aria-label="Đang tải thành viên" class="mt-8 grid gap-6 lg:grid-cols-[22rem_1fr]">
-        <section class="rounded-2xl border border-line bg-white p-6">
+      <div v-if="!loaded" role="status" aria-busy="true" aria-label="Đang tải thành viên" class="mt-6 grid gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-[22rem_1fr]">
+        <section class="rounded-2xl border border-line bg-white p-4 sm:p-6">
           <UiSkeleton class="h-6 w-40" />
           <UiSkeleton class="mt-3 h-4 w-full" />
           <UiSkeleton class="mt-6 h-[4.5rem] w-full rounded-xl" />
@@ -147,46 +147,46 @@ const dangerButton = 'min-h-11 rounded-full px-4 text-sm font-semibold text-red-
         <span class="sr-only">Đang tải thành viên…</span>
       </div>
 
-      <div v-if="feedback" role="status" class="mt-6 rounded-xl bg-tint p-4 text-sm">
+      <div v-if="feedback" role="status" class="mt-5 rounded-xl bg-tint p-4 text-sm sm:mt-6">
         <p>{{ feedback }}</p>
-        <NuxtLink v-if="loaded && !store.canManage" to="/studio" class="mt-2 inline-flex min-h-11 items-center font-semibold text-brand underline underline-offset-4">Về trang studio</NuxtLink>
+        <NuxtLink v-if="loaded && !store.canManage" to="/studio" class="focus-ring mt-2 inline-flex min-h-11 items-center rounded font-semibold text-brand underline underline-offset-4">Về trang studio</NuxtLink>
       </div>
 
-      <div v-if="store.canManage && loaded" class="mt-8 grid items-start gap-6 lg:grid-cols-[22rem_1fr]">
-        <section class="rounded-2xl border border-line bg-white p-6 lg:sticky lg:top-28">
-          <h2 class="text-xl font-semibold">Mời người mới</h2>
-          <p class="mt-2 text-sm text-muted">Liên kết chỉ dùng cho email được mời và hết hạn sau 7 ngày.</p>
+      <div v-if="store.canManage && loaded" class="mt-6 grid items-start gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-[22rem_1fr]">
+        <section class="rounded-2xl border border-line bg-white p-4 sm:p-6 lg:sticky lg:top-28">
+          <h2 class="text-lg font-semibold sm:text-xl">Mời người mới</h2>
+          <p class="mt-2 text-sm text-pretty text-muted">Liên kết chỉ dùng cho email được mời và hết hạn sau 7 ngày.</p>
           <form class="mt-5 space-y-4" @submit.prevent="createInvitation">
             <label class="block text-sm font-semibold">Email người nhận
-              <input v-model="inviteEmail" type="email" required :class="field" placeholder="artist@studio.vn">
+              <input v-model="inviteEmail" type="email" required name="invite-email" autocomplete="off" spellcheck="false" autocapitalize="off" :class="field" placeholder="artist@studio.vn">
             </label>
             <label class="block text-sm font-semibold">Vai trò
-              <select v-model="inviteRole" :class="field">
+              <select v-model="inviteRole" name="invite-role" :class="field">
                 <option v-if="store.studio?.role === 'owner'" value="manager">Quản lý</option>
                 <option value="member">Thành viên</option>
                 <option value="retoucher">Retoucher</option>
               </select>
             </label>
-            <button :disabled="busy" class="min-h-11 rounded-full bg-brand px-6 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-60">Tạo lời mời</button>
+            <UiButton type="submit" class="w-full sm:w-auto" :loading="busy">Tạo lời mời</UiButton>
           </form>
           <div v-if="inviteLink" class="mt-5 rounded-xl bg-tint p-4">
             <label class="block text-sm font-semibold">Liên kết mời — chỉ hiện lần này
-              <input :value="inviteLink" readonly class="mt-2 w-full rounded-lg border border-[#cbd4c6] bg-white p-2 text-xs" @focus="($event.target as HTMLInputElement).select()">
+              <input :value="inviteLink" readonly translate="no" class="control mt-2 text-xs" @focus="($event.target as HTMLInputElement).select()">
             </label>
-            <button type="button" class="mt-2 min-h-11 text-sm font-semibold text-brand underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" @click="copyInvitation">Sao chép liên kết</button>
+            <UiButton variant="secondary" size="sm" class="mt-3" @click="copyInvitation">Sao chép liên kết</UiButton>
           </div>
         </section>
 
-        <div class="space-y-6">
-          <section class="rounded-2xl border border-line bg-white p-6">
-            <h2 class="text-xl font-semibold">Thành viên <span class="text-base font-normal text-muted">({{ members.length }})</span></h2>
+        <div class="space-y-4 sm:space-y-6">
+          <section class="rounded-2xl border border-line bg-white p-4 sm:p-6">
+            <h2 class="text-lg font-semibold sm:text-xl">Thành viên <span class="text-base font-normal text-muted tabular-nums">({{ members.length }})</span></h2>
             <p v-if="!members.length" class="mt-5 text-sm text-muted">Chưa có thành viên.</p>
-            <ul v-else class="mt-3 divide-y divide-[#e8ebe3]">
-              <li v-for="member in members" :key="member.userId" class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+            <ul v-else class="mt-3 divide-y divide-line">
+              <li v-for="member in members" :key="member.userId" class="flex flex-col gap-2 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <span class="min-w-0 break-all font-medium">{{ member.email || member.userId }}</span>
-                <span v-if="member.role === 'owner' || store.studio?.role !== 'owner'" class="rounded-full bg-tint px-3 py-1 text-xs font-semibold text-[#4f5d4b]">{{ STUDIO_ROLE_LABELS[member.role] }}</span>
-                <span v-else class="flex flex-wrap items-center gap-2">
-                  <select :value="member.role" :disabled="busy" :aria-label="`Vai trò của ${member.email || member.userId}`" class="min-h-11 rounded-lg border border-[#d9ddd2] bg-white px-2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand" @change="changeRole(member, ($event.target as HTMLSelectElement).value as InviteRole)">
+                <span v-if="member.role === 'owner' || store.studio?.role !== 'owner'" class="self-start rounded-full bg-tint px-3 py-1 text-xs font-semibold text-muted sm:self-auto">{{ STUDIO_ROLE_LABELS[member.role] }}</span>
+                <span v-else class="flex items-center gap-2">
+                  <select :value="member.role" :disabled="busy" :aria-label="`Vai trò của ${member.email || member.userId}`" class="control flex-1 sm:w-40 sm:flex-none" @change="changeRole(member, ($event.target as HTMLSelectElement).value as InviteRole)">
                     <option value="manager">Quản lý</option><option value="member">Thành viên</option><option value="retoucher">Retoucher</option>
                   </select>
                   <button type="button" :disabled="busy" :class="dangerButton" @click="askRemoveMember(member)">Thu hồi</button>
@@ -195,13 +195,13 @@ const dangerButton = 'min-h-11 rounded-full px-4 text-sm font-semibold text-red-
             </ul>
           </section>
 
-          <section class="rounded-2xl border border-line bg-white p-6">
-            <h2 class="text-xl font-semibold">Lời mời</h2>
+          <section class="rounded-2xl border border-line bg-white p-4 sm:p-6">
+            <h2 class="text-lg font-semibold sm:text-xl">Lời mời</h2>
             <p v-if="!invitations.length" class="mt-5 text-sm text-muted">Chưa có lời mời.</p>
-            <ul v-else class="mt-3 divide-y divide-[#e8ebe3]">
-              <li v-for="invitation in invitations" :key="invitation.id" class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+            <ul v-else class="mt-3 divide-y divide-line">
+              <li v-for="invitation in invitations" :key="invitation.id" class="flex flex-col gap-2 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <span class="min-w-0"><span class="break-all font-medium">{{ invitation.email }}</span><span class="block text-xs text-muted">{{ STUDIO_ROLE_LABELS[invitation.role] }} · {{ invitationState(invitation) }}</span></span>
-                <button v-if="isPending(invitation)" type="button" :disabled="busy" :class="dangerButton" @click="askRevokeInvitation(invitation)">Thu hồi lời mời</button>
+                <button v-if="isPending(invitation)" type="button" :disabled="busy" :class="[dangerButton, 'self-start sm:self-auto']" @click="askRevokeInvitation(invitation)">Thu hồi lời mời</button>
               </li>
             </ul>
           </section>
@@ -210,9 +210,9 @@ const dangerButton = 'min-h-11 rounded-full px-4 text-sm font-semibold text-red-
     </main>
 
     <UiModal v-model:open="confirmOpen" :title="confirmCopy.title" :description="confirmCopy.text">
-      <div class="flex flex-wrap justify-end gap-2">
-        <button type="button" class="min-h-11 rounded-full px-5 text-sm font-semibold text-muted hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" @click="confirmOpen = false">Hủy</button>
-        <button type="button" class="min-h-11 rounded-full bg-red-700 px-6 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700" @click="confirmPending">{{ confirmCopy.action }}</button>
+      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <UiButton variant="ghost" @click="confirmOpen = false">Hủy</UiButton>
+        <button type="button" class="focus-ring min-h-11 rounded-full bg-danger px-6 text-sm font-semibold text-white hover:bg-danger/90" @click="confirmPending">{{ confirmCopy.action }}</button>
       </div>
     </UiModal>
   </div>

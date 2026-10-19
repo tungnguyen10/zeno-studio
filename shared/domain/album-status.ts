@@ -29,6 +29,12 @@ export const PRODUCTION_STATUS_LABELS: Record<string, string> = {
   DELIVERED: 'Đã bàn giao',
 }
 
+export const REVIEW_STATUS_LABELS: Record<string, string> = {
+  WAITING_REVIEW: 'Đang chờ bạn duyệt',
+  APPROVED: 'Đã duyệt',
+  REVISION_REQUESTED: 'Đã yêu cầu sửa',
+}
+
 // Tasks past retouching: waiting for review, approved or delivered.
 const RETOUCHED_STATUSES = new Set(['WAITING_REVIEW', 'APPROVED', 'DELIVERED'])
 

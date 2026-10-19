@@ -36,7 +36,7 @@ async function submit() {
   finally { busy.value = false }
 }
 
-const field = 'mt-1 min-h-11 w-full rounded-xl border border-[#d9ddd2] px-3 py-2 font-normal focus-visible:border-brand-soft focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-soft'
+const field = 'control mt-1.5'
 </script>
 
 <template>
@@ -44,26 +44,27 @@ const field = 'mt-1 min-h-11 w-full rounded-xl border border-[#d9ddd2] px-3 py-2
     <div v-if="created" class="space-y-5">
       <div class="rounded-xl bg-tint p-4 text-sm">
         <p class="break-words font-semibold">{{ created.title }}</p>
-        <p class="mt-1 text-muted">{{ created.photoCount }} ảnh · Bản nháp</p>
+        <p class="mt-1 text-muted tabular-nums">{{ created.photoCount }} ảnh · Bản nháp</p>
       </div>
       <StudioAlbumShareActions :studio-id="studioId" :album-id="created.id" status="DRAFT" can-publish :can-share="false" primary @published="emit('changed')" />
       <div class="flex flex-wrap gap-2">
-        <NuxtLink :to="`/studio/albums/${created.id}?studio=${studioId}`" class="inline-flex min-h-11 items-center rounded-full border border-[#b8c8b3] px-5 text-sm font-semibold text-brand hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Mở album</NuxtLink>
-        <button type="button" class="min-h-11 rounded-full px-5 text-sm font-semibold text-muted hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" @click="open = false">Xong</button>
+        <UiButton :to="`/studio/albums/${created.id}?studio=${studioId}`" variant="secondary" size="sm">Mở album</UiButton>
+        <UiButton variant="ghost" size="sm" @click="open = false">Xong</UiButton>
       </div>
     </div>
 
     <form v-else class="space-y-4" @submit.prevent="submit">
-      <label class="block text-sm font-semibold">Tên album<input v-model="title" required maxlength="150" autofocus :class="field" placeholder="Mai & Quang"></label>
-      <label class="block text-sm font-semibold">Link folder Drive<input v-model="folderUrl" required type="url" inputmode="url" :class="field" placeholder="https://drive.google.com/drive/folders/..."></label>
-      <div class="grid grid-cols-2 gap-3">
-        <label class="block text-sm font-semibold">Tối đa ảnh chọn<input v-model.number="limit" required type="number" min="0" inputmode="numeric" :class="field"></label>
-        <label class="block text-sm font-semibold">Hạn album<select v-model.number="days" :class="field"><option :value="15">15 ngày</option><option :value="30">30 ngày</option></select></label>
+      <AlbumDriveShareGuide after-create="Album được tạo ở dạng nháp; xuất bản để lấy link gửi khách." />
+      <label class="block text-sm font-semibold">Tên album<input v-model="title" required maxlength="150" autofocus name="album-title" autocomplete="off" :class="field" placeholder="Mai & Quang…"></label>
+      <label class="block text-sm font-semibold">Link folder Drive<input v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" :class="field" placeholder="https://drive.google.com/drive/folders/…"></label>
+      <div class="grid gap-3 min-[380px]:grid-cols-2">
+        <label class="block text-sm font-semibold">Tối đa ảnh chọn<input v-model.number="limit" required type="number" min="0" inputmode="numeric" name="selection-limit" :class="field"></label>
+        <label class="block text-sm font-semibold">Hạn album<select v-model.number="days" name="expires-in" :class="field"><option :value="15">15 ngày</option><option :value="30">30 ngày</option></select></label>
       </div>
-      <p v-if="error" role="alert" class="rounded-xl bg-[#fbeceb] p-3 text-sm text-red-700">{{ error }}</p>
-      <div class="flex flex-wrap justify-end gap-2 pt-1">
-        <button type="button" class="min-h-11 rounded-full px-5 text-sm font-semibold text-muted hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" @click="open = false">Hủy</button>
-        <button type="submit" :disabled="busy" :aria-busy="busy" class="min-h-11 rounded-full bg-brand px-6 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50">{{ busy ? 'Đang tạo…' : 'Tạo album nháp' }}</button>
+      <UiNotice v-if="error" tone="error">{{ error }}</UiNotice>
+      <div class="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+        <UiButton variant="ghost" @click="open = false">Hủy</UiButton>
+        <UiButton type="submit" :loading="busy">{{ busy ? 'Đang tạo…' : 'Tạo album nháp' }}</UiButton>
       </div>
     </form>
   </UiModal>

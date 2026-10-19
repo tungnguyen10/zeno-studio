@@ -12,6 +12,12 @@ export default defineNuxtConfig({
     // Customer links carry a capability token in the query string.
     '/album/**': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
   },
+  app: {
+    head: {
+      htmlAttrs: { lang: 'vi' },
+      meta: [{ name: 'theme-color', content: '#f8f7f3' }],
+    },
+  },
   css: ['~/assets/css/main.css'],
   vite: { plugins: [tailwindcss()] },
   runtimeConfig: {

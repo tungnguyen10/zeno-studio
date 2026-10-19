@@ -67,11 +67,11 @@ async function claim() {
 </script>
 
 <template>
-  <div class="bg-[#f8f7f3] text-[#24231f]">
-    <section class="mx-auto max-w-5xl px-5 pt-10">
-      <p class="text-xs font-bold uppercase tracking-[.18em] text-[#718a66]">Quản trị bằng link bí mật</p>
-      <h1 class="mt-2 text-3xl font-semibold">Album của bạn</h1>
-      <div v-if="!ready && !error" role="status" aria-busy="true" aria-label="Đang kiểm tra link quản trị" class="mt-6 rounded-2xl border border-[#d8e0d2] bg-white p-5">
+  <div class="bg-canvas text-ink">
+    <section class="mx-auto max-w-5xl px-4 pt-6 sm:px-5 sm:pt-10">
+      <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Quản trị bằng link bí mật</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Album của bạn</h1>
+      <div v-if="!ready && !error" role="status" aria-busy="true" aria-label="Đang kiểm tra link quản trị" class="surface mt-5 p-4 sm:mt-6 sm:p-5">
         <UiSkeleton class="h-4 w-full max-w-lg" />
         <UiSkeleton class="mt-2 h-4 w-2/3" />
         <div class="mt-4 flex flex-wrap gap-3">
@@ -80,22 +80,22 @@ async function claim() {
         </div>
         <span class="sr-only">Đang kiểm tra link quản trị…</span>
       </div>
-      <p v-if="error" role="alert" class="mt-5 rounded-xl bg-white p-4 text-red-700">{{ error }}</p>
-      <div v-if="ready" class="mt-6 rounded-2xl border border-[#d8e0d2] bg-white p-5">
-        <p class="text-sm text-[#687264]">Link quản trị cho phép xem kết quả và quản lý album. Hãy giữ link này riêng tư.</p>
-        <div class="mt-4 flex flex-wrap gap-3">
-          <button :disabled="busy" class="min-h-11 rounded-full bg-[#344732] px-5 font-semibold text-white disabled:opacity-50" @click="share">Cấp link khách mới</button>
-          <button :disabled="busy" class="min-h-11 rounded-full border px-5 font-semibold disabled:opacity-50" @click="claim">Nhận album vào tài khoản</button>
+      <UiNotice v-if="error" tone="error" class="mt-5">{{ error }}</UiNotice>
+      <div v-if="ready" class="surface mt-5 p-4 sm:mt-6 sm:p-5">
+        <p class="text-sm text-pretty text-muted">Link quản trị cho phép xem kết quả và quản lý album. Hãy giữ link này riêng tư.</p>
+        <div class="mt-4 grid gap-2 sm:flex sm:flex-wrap sm:gap-3">
+          <UiButton :disabled="busy" @click="share">Cấp link khách mới</UiButton>
+          <UiButton variant="secondary" :disabled="busy" @click="claim">Nhận album vào tài khoản</UiButton>
         </div>
-        <p v-if="message" role="status" class="mt-4 text-sm text-[#526b4e]">{{ message }}</p>
-        <div v-if="customerLink" class="mt-4 rounded-xl bg-[#f1f5ed] p-4">
-          <p class="font-semibold">Link khách</p><a :href="customerLink" target="_blank" rel="noopener noreferrer" class="mt-2 block break-all text-[#344732] underline">{{ customerLink }}</a>
-          <button class="mt-3 min-h-11 rounded-full border px-4 font-semibold" @click="copy(customerLink)">Sao chép link khách</button>
+        <p v-if="message" role="status" class="mt-4 text-sm text-brand">{{ message }}</p>
+        <div v-if="customerLink" class="mt-4 rounded-xl bg-tint p-4">
+          <p class="font-semibold">Link khách</p><a :href="customerLink" target="_blank" rel="noopener noreferrer" translate="no" class="focus-ring mt-2 block rounded break-all text-sm text-brand underline">{{ customerLink }}</a>
+          <UiButton variant="secondary" size="sm" class="mt-3" @click="copy(customerLink)">Sao chép link khách</UiButton>
         </div>
-        <div v-if="adminLink" class="mt-4 rounded-xl bg-[#f1f5ed] p-4">
+        <div v-if="adminLink" class="mt-4 rounded-xl bg-tint p-4">
           <p class="font-semibold">Lưu link quản trị</p><p class="mt-1 text-sm">Không thể khôi phục link này trước khi nhận album vào tài khoản.</p>
-          <a :href="adminLink" class="mt-2 block break-all text-[#344732] underline">{{ adminLink }}</a>
-          <button class="mt-3 min-h-11 rounded-full border px-4 font-semibold" @click="copy(adminLink)">Sao chép link quản trị</button>
+          <a :href="adminLink" translate="no" class="focus-ring mt-2 block rounded break-all text-sm text-brand underline">{{ adminLink }}</a>
+          <UiButton variant="secondary" size="sm" class="mt-3" @click="copy(adminLink)">Sao chép link quản trị</UiButton>
         </div>
       </div>
     </section>

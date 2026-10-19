@@ -30,13 +30,13 @@ function onBackdropClick(event: MouseEvent) {
     @close="open = false"
     @click="onBackdropClick"
   >
-    <div class="p-5 sm:p-7">
+    <div class="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
           <h2 :id="titleId" class="text-xl font-semibold tracking-tight">{{ title }}</h2>
           <p v-if="description" class="mt-1 text-sm leading-6 text-muted">{{ description }}</p>
         </div>
-        <button type="button" aria-label="Đóng" class="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-full text-xl text-muted hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" @click="open = false">
+        <button type="button" aria-label="Đóng" class="focus-ring -mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-full text-xl text-muted hover:bg-tint" @click="open = false">
           <span aria-hidden="true">×</span>
         </button>
       </div>

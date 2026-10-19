@@ -24,8 +24,8 @@ const status = computed(() => publishedNow.value ? 'PUBLISHED' : props.status)
 const showPublish = computed(() => status.value === 'DRAFT' && props.canPublish)
 const showShare = computed(() => ['PUBLISHED', 'FINALIZED', 'DELIVERED'].includes(status.value) && props.canShare)
 
-const base = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50'
-const buttonClass = computed(() => [base, props.primary ? 'bg-brand text-white hover:bg-brand/90' : 'border border-[#b8c8b3] bg-white text-brand hover:bg-tint'])
+const base = 'focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors disabled:opacity-50 sm:px-5'
+const buttonClass = computed(() => [base, props.primary ? 'bg-brand text-white hover:bg-brand-dark' : 'border border-line bg-white text-brand hover:bg-tint'])
 
 async function request(action: 'publish' | 'share') {
   busy.value = action
@@ -86,12 +86,12 @@ async function copy(source: string | Promise<string>) {
       {{ busy === 'share' ? 'Đang lấy link…' : copied ? 'Đã sao chép' : 'Sao chép link khách' }}
     </button>
     <div v-if="link" class="flex w-full min-w-0 items-center gap-1 rounded-xl border border-line bg-tint py-1 pl-3 pr-1 text-sm">
-      <a :href="link" target="_blank" rel="noopener noreferrer" :title="link" class="min-w-0 flex-1 truncate py-2 text-[#4f5d4b] underline-offset-4 hover:text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ link }}</a>
-      <button type="button" aria-label="Sao chép lại link" title="Sao chép lại link" class="grid size-10 shrink-0 place-items-center rounded-lg text-brand hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" @click="copy(link)">
+      <a :href="link" target="_blank" rel="noopener noreferrer" :title="link" translate="no" class="focus-ring min-w-0 flex-1 truncate rounded py-2 text-muted underline-offset-4 hover:text-brand hover:underline">{{ link }}</a>
+      <button type="button" aria-label="Sao chép lại link" title="Sao chép lại link" class="focus-ring grid size-11 shrink-0 place-items-center rounded-lg text-brand hover:bg-white" @click="copy(link)">
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" class="size-4"><rect x="7" y="7" width="9" height="9" rx="2" /><path d="M13 7V5.5A1.5 1.5 0 0 0 11.5 4h-6A1.5 1.5 0 0 0 4 5.5v6A1.5 1.5 0 0 0 5.5 13H7" /></svg>
       </button>
     </div>
-    <p v-if="message?.tone === 'error'" role="alert" class="w-full text-sm text-red-700">{{ message.text }}</p>
-    <p v-else role="status" :class="message?.tone === 'info' ? 'w-full text-sm text-[#526b4e]' : 'sr-only'">{{ message?.text }}</p>
+    <p v-if="message?.tone === 'error'" role="alert" class="w-full text-sm text-danger">{{ message.text }}</p>
+    <p v-else role="status" :class="message?.tone === 'info' ? 'w-full text-sm text-brand' : 'sr-only'">{{ message?.text }}</p>
   </div>
 </template>
