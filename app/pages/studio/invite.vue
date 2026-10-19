@@ -28,7 +28,7 @@ onMounted(async () => {
 <template>
   <main class="mx-auto flex min-h-dvh max-w-lg items-center px-4 py-8 text-ink sm:px-5 sm:py-10">
     <section class="surface w-full p-5 shadow-sm sm:p-8">
-      <NuxtLink to="/" class="focus-ring inline-flex min-h-11 items-center rounded text-sm font-semibold text-brand">Zeno Studio</NuxtLink>
+      <NuxtLink to="/" aria-label="Zeno Studio – Trang chủ" class="focus-ring -ml-1 inline-flex min-h-11 items-center rounded-lg px-1 text-ink"><BrandLogo /></NuxtLink>
       <h1 class="mt-4 text-2xl font-semibold tracking-tight text-balance sm:mt-6 sm:text-3xl">Lời mời vào studio</h1>
       <div v-if="state === 'loading'" role="status" aria-busy="true" aria-label="Đang kiểm tra lời mời" class="mt-4">
         <UiSkeleton class="h-4 w-full" />

@@ -210,14 +210,11 @@ function downloadReport() {
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
-    <header class="border-b border-line bg-white px-4 sm:px-5">
-      <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 py-1.5">
-        <NuxtLink to="/" class="focus-ring -ml-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-semibold text-brand hover:bg-tint">← Zeno Studio</NuxtLink>
-        <span class="text-sm text-muted">Công cụ studio</span>
-      </div>
-    </header>
+    <SiteHeader width="6xl">
+      <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand">Vào studio</NuxtLink>
+    </SiteHeader>
 
-    <main class="mx-auto max-w-6xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-10">
+    <main class="mx-auto max-w-6xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-10 lg:px-8">
       <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Local File Filter</p>
       <h1 class="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Lọc file theo danh sách ảnh</h1>
       <p class="mt-4 max-w-3xl text-pretty text-muted">Dán tên ảnh khách đã chọn, tìm RAW/JPEG trong thư mục trên máy và copy đúng file sang thư mục đích · <span class="font-medium text-brand">Chỉ copy, không xóa file nguồn</span></p>
@@ -341,5 +338,6 @@ function downloadReport() {
         </div>
       </UiStepCard>
     </main>
+    <SiteFooter />
   </div>
 </template>

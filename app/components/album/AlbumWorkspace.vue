@@ -113,7 +113,7 @@ onMounted(() => { void load() })
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
     <header class="sticky top-0 z-20 border-b border-line bg-canvas/95 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-1.5 sm:px-6 lg:px-8">
+      <div class="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 lg:px-8">
         <NuxtLink :to="backTo" class="focus-ring -ml-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2 font-semibold text-brand hover:bg-tint">← {{ backLabel }}</NuxtLink>
         <span v-if="workspace" class="min-w-0 truncate text-sm text-muted">{{ workspace.title }}</span>
       </div>

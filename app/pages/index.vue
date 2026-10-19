@@ -15,6 +15,38 @@ const HERO_PHOTOS = [
 const heroLoaded = ref(HERO_PHOTOS.map(() => false))
 const heroImages = useTemplateRef<HTMLImageElement[]>('heroImages')
 
+const STEPS = [
+  { title: 'Chọn ảnh dễ hơn', body: 'Khách chọn và ghi chú trên từng ảnh ngay từ điện thoại, không cần tạo tài khoản.' },
+  { title: 'Hậu kỳ chính xác', body: 'Studio nhận tên file và yêu cầu chỉnh sửa, sau đó lọc RAW/JPEG ngay trên máy.' },
+  { title: 'Duyệt rõ ràng', body: 'Mỗi vòng review được lưu lại để cả hai bên biết ảnh nào cần sửa và khi nào hoàn tất.' },
+]
+
+const AUDIENCES = [
+  {
+    title: 'Cho studio',
+    points: [
+      'Tạo album từ folder Google Drive, ảnh gốc vẫn nằm trong Drive của bạn.',
+      'Nhận danh sách tên file kèm ghi chú chỉnh sửa, không cần đối chiếu qua tin nhắn.',
+      'Lọc RAW/JPEG đã chọn ngay trên máy và theo dõi từng vòng duyệt.',
+    ],
+  },
+  {
+    title: 'Cho khách hàng',
+    points: [
+      'Mở link là xem được, không cần tạo tài khoản.',
+      'Chọn ảnh yêu thích và ghi chú mong muốn ngay trên điện thoại.',
+      'Xem lại thành phẩm và phản hồi trước khi nhận bàn giao.',
+    ],
+  },
+]
+
+const FAQS = [
+  { q: 'Khách có cần tạo tài khoản không?', a: 'Không. Khách chỉ cần mở link album studio gửi để xem, chọn và ghi chú ảnh.' },
+  { q: 'Ảnh được lưu ở đâu?', a: 'Ảnh gốc vẫn nằm trong folder Google Drive của bạn. Zeno Studio chỉ đọc ảnh từ folder đã chia sẻ bằng đường liên kết.' },
+  { q: 'Tạo album nhanh khác gì không gian studio?', a: 'Tạo album nhanh không cần đăng nhập và album có hạn 15 hoặc 30 ngày. Không gian studio dành cho đội ngũ cần quản lý nhiều album, thành viên và các vòng duyệt.' },
+  { q: 'Công cụ lọc file có tải ảnh lên máy chủ không?', a: 'Không. Công cụ chạy ngay trong trình duyệt, chỉ copy file sang thư mục đích và không xóa file nguồn.' },
+]
+
 // SSR images can finish loading before hydration attaches @load.
 onMounted(() => {
   heroImages.value?.forEach(img => {
@@ -26,19 +58,15 @@ onMounted(() => {
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
-    <header class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6">
-      <NuxtLink to="/" class="focus-ring flex min-h-11 items-center gap-3 rounded-lg text-lg font-bold tracking-tight">
-        <span aria-hidden="true" class="grid size-9 place-items-center rounded-xl bg-brand text-lg text-white">Z</span>
-        Zeno Studio
-      </NuxtLink>
-      <nav aria-label="Điều hướng chính" class="flex items-center gap-2 text-sm font-medium sm:gap-3">
+    <SiteHeader>
+      <nav aria-label="Điều hướng chính" class="flex items-center gap-2 sm:gap-3">
         <NuxtLink to="/tools/file-filter" class="focus-ring hidden min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand sm:inline-flex">Lọc file trên máy</NuxtLink>
         <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full bg-brand px-4 text-white transition-colors hover:bg-brand-dark">Vào studio</NuxtLink>
       </nav>
-    </header>
+    </SiteHeader>
 
     <main>
-      <section class="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-6 sm:px-8 sm:pt-14 lg:grid-cols-[1.1fr_.9fr] lg:pb-28 lg:pt-24">
+      <section class="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-8 sm:px-8 sm:pt-14 lg:grid-cols-[1.1fr_.9fr] lg:pb-28 lg:pt-20">
         <div>
           <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-line-strong bg-tint px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[.16em] text-brand sm:mb-5 sm:px-4 sm:py-2 sm:text-xs">Quy trình ảnh liền mạch</p>
           <h1 class="max-w-3xl text-[2.5rem] font-semibold leading-[1.08] tracking-[-.04em] text-balance sm:text-6xl lg:text-[5.1rem]">Từ bộ ảnh đầu tiên đến lời <em class="font-serif font-normal text-brand-soft">“ưng rồi”.</em></h1>
@@ -46,13 +74,8 @@ onMounted(() => {
           <div class="mt-7 grid gap-2.5 sm:mt-9 sm:flex sm:flex-wrap sm:gap-3">
             <NuxtLink to="/create" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full bg-brand px-6 font-semibold text-white shadow-lg shadow-brand/15 transition-colors hover:bg-brand-dark">Tạo album nhanh <span aria-hidden="true">&nbsp;↗</span></NuxtLink>
             <NuxtLink to="/studio" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-line-strong bg-white px-6 font-semibold transition-colors hover:border-brand-soft">Mở studio</NuxtLink>
-            <NuxtLink to="/tools/file-filter" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-line-strong bg-white px-6 font-semibold transition-colors hover:border-brand-soft">Dùng công cụ lọc file</NuxtLink>
           </div>
-          <ol class="mt-10 grid max-w-lg grid-cols-3 gap-4 border-t border-line pt-6 text-sm sm:mt-12 sm:gap-6">
-            <li><strong class="block text-2xl text-brand">01</strong><span class="text-muted">Gửi album</span></li>
-            <li><strong class="block text-2xl text-brand">02</strong><span class="text-muted">Khách chọn & ghi chú</span></li>
-            <li><strong class="block text-2xl text-brand">03</strong><span class="text-muted">Duyệt & bàn giao</span></li>
-          </ol>
+          <p class="mt-6 text-sm text-muted sm:mt-8">Khách không cần tạo tài khoản · Hoạt động tốt trên điện thoại</p>
         </div>
 
         <div aria-hidden="true" class="relative mx-auto w-full max-w-[520px]">
@@ -71,23 +94,64 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="bg-tint py-12 sm:py-16">
+      <section aria-labelledby="how-title" class="bg-tint py-14 sm:py-20">
         <div class="mx-auto max-w-7xl px-4 sm:px-8">
-          <p class="text-sm font-semibold uppercase tracking-[.2em] text-brand-soft">Một workflow, trọn hành trình</p>
-          <div class="mt-6 grid gap-3 sm:mt-7 sm:gap-4 md:grid-cols-3">
-            <article v-for="item in [
-              ['01', 'Chọn ảnh dễ hơn', 'Khách chọn và ghi chú trên từng ảnh ngay từ điện thoại, không cần tạo tài khoản.'],
-              ['02', 'Hậu kỳ chính xác', 'Studio nhận tên file và yêu cầu chỉnh sửa, sau đó lọc RAW/JPEG ngay trên máy.'],
-              ['03', 'Duyệt rõ ràng', 'Mỗi vòng review được lưu lại để cả hai bên biết ảnh nào cần sửa và khi nào hoàn tất.'],
-            ]" :key="item[0]" class="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
-              <span class="text-sm font-semibold text-brand-soft">{{ item[0] }}</span>
-              <h2 class="mt-4 text-xl font-semibold tracking-tight sm:mt-8 sm:text-2xl">{{ item[1] }}</h2>
-              <p class="mt-2 leading-7 text-pretty text-muted sm:mt-3">{{ item[2] }}</p>
-            </article>
+          <p class="text-xs font-semibold uppercase tracking-[.2em] text-brand-soft sm:text-sm">Cách hoạt động</p>
+          <h2 id="how-title" class="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-balance sm:text-4xl">Một workflow, trọn hành trình</h2>
+          <ol class="mt-8 grid gap-3 sm:gap-4 md:grid-cols-3">
+            <li v-for="(step, index) in STEPS" :key="step.title" class="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
+              <span class="text-sm font-semibold text-brand-soft tabular-nums">0{{ index + 1 }}</span>
+              <h3 class="mt-4 text-xl font-semibold tracking-tight sm:mt-8 sm:text-2xl">{{ step.title }}</h3>
+              <p class="mt-2 leading-7 text-pretty text-muted sm:mt-3">{{ step.body }}</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section aria-labelledby="audience-title" class="mx-auto max-w-7xl px-4 py-14 sm:px-8 sm:py-20">
+        <p class="text-xs font-semibold uppercase tracking-[.2em] text-brand-soft sm:text-sm">Dành cho ai</p>
+        <h2 id="audience-title" class="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-balance sm:text-4xl">Gọn cho studio, dễ cho khách</h2>
+        <div class="mt-8 grid gap-3 sm:gap-4 md:grid-cols-2">
+          <article v-for="group in AUDIENCES" :key="group.title" class="surface p-5 sm:p-8">
+            <h3 class="text-lg font-semibold sm:text-xl">{{ group.title }}</h3>
+            <ul class="mt-4 space-y-3">
+              <li v-for="point in group.points" :key="point" class="flex gap-3 leading-7 text-pretty text-muted">
+                <span aria-hidden="true" class="mt-1.5 grid size-5 shrink-0 place-items-center rounded-full bg-tint text-xs font-bold text-brand">✓</span>
+                <span>{{ point }}</span>
+              </li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="faq-title" class="border-t border-line">
+        <div class="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-8 sm:py-20 lg:grid-cols-[.8fr_1.2fr] lg:gap-16">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[.2em] text-brand-soft sm:text-sm">Hỏi nhanh</p>
+            <h2 id="faq-title" class="mt-2 text-2xl font-semibold tracking-tight text-balance sm:text-4xl">Câu hỏi thường gặp</h2>
+          </div>
+          <div class="divide-y divide-line border-y border-line">
+            <details v-for="item in FAQS" :key="item.q" class="group">
+              <summary class="focus-ring flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-lg py-3 font-semibold [&::-webkit-details-marker]:hidden">
+                {{ item.q }}
+                <span aria-hidden="true" class="grid size-8 shrink-0 place-items-center rounded-full bg-tint text-brand transition-transform group-open:rotate-45 motion-reduce:transition-none">+</span>
+              </summary>
+              <p class="pb-5 pr-12 leading-7 text-pretty text-muted">{{ item.a }}</p>
+            </details>
           </div>
         </div>
       </section>
+
+      <section aria-labelledby="cta-title" class="px-4 pb-14 sm:px-8 sm:pb-20">
+        <div class="mx-auto flex max-w-7xl flex-col items-start gap-6 rounded-3xl bg-brand px-6 py-10 text-white sm:rounded-4xl sm:px-12 sm:py-14 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 id="cta-title" class="text-2xl font-semibold tracking-tight text-balance sm:text-4xl">Gửi album đầu tiên trong vài phút</h2>
+            <p class="mt-3 max-w-xl leading-7 text-pretty text-white/75">Dán link Google Drive, nhận link cho khách chọn ảnh. Không cần đăng nhập.</p>
+          </div>
+          <NuxtLink to="/create" class="inline-flex min-h-12 shrink-0 items-center justify-center rounded-full bg-white px-6 font-semibold text-brand transition-colors hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">Tạo album nhanh <span aria-hidden="true">&nbsp;↗</span></NuxtLink>
+        </div>
+      </section>
     </main>
-    <footer class="mx-auto flex max-w-7xl flex-wrap justify-between gap-3 px-4 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))] text-sm text-muted sm:px-8"><span>© Zeno Studio</span><span>Cho những bức ảnh đáng giữ lại.</span></footer>
+    <SiteFooter />
   </div>
 </template>

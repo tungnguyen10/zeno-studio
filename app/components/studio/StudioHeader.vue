@@ -65,15 +65,14 @@ const tabActive = 'bg-brand text-white shadow-sm'
 
 <template>
   <header class="sticky top-0 z-20 border-b border-line bg-canvas/95 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6 lg:flex-nowrap lg:gap-x-6 lg:px-8">
-      <div class="flex min-w-0 flex-1 items-center gap-3 lg:flex-none">
-        <NuxtLink to="/" aria-label="Zeno Studio – Trang chủ" :class="['flex min-h-11 shrink-0 items-center gap-2.5 rounded-lg font-bold', focusRing]">
-          <span aria-hidden="true" class="grid size-9 place-items-center rounded-xl bg-brand text-sm text-white">Z</span>
-          <span aria-hidden="true" class="hidden xl:inline">Zeno Studio</span>
+    <div class="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6 lg:flex-nowrap lg:gap-x-6 lg:px-8">
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <NuxtLink to="/" aria-label="Zeno Studio – Trang chủ" :class="['-ml-1 flex min-h-11 shrink-0 items-center rounded-lg px-1', focusRing]">
+          <BrandLogo compact />
         </NuxtLink>
 
         <template v-if="store.studio">
-          <span aria-hidden="true" class="hidden h-7 w-px shrink-0 bg-line xl:block" />
+          <span aria-hidden="true" class="hidden h-7 w-px shrink-0 bg-line sm:block" />
           <div class="min-w-0 text-sm">
             <select v-if="store.studios.length > 1" aria-label="Chọn studio" :value="store.studio.id" :class="['min-h-11 w-full max-w-56 truncate rounded-xl border border-line bg-white pl-3 pr-8 font-semibold', focusRing]" @change="switchStudio">
               <option v-for="item in store.studios" :key="item.id" :value="item.id">{{ item.name }}</option>

@@ -12,7 +12,7 @@ useSeoMeta({ title: 'Lọc ảnh gốc — Zeno Studio' })
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
-    <header class="border-b border-line bg-white px-4 sm:px-5"><div class="mx-auto max-w-6xl py-1.5"><NuxtLink :to="`/studio/albums/${albumId}/results?studio=${studioId}`" class="focus-ring -ml-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-semibold text-brand hover:bg-tint">← Ảnh đã chốt</NuxtLink></div></header>
+    <header class="sticky top-0 z-20 border-b border-line bg-canvas/95 px-4 backdrop-blur sm:px-5"><div class="mx-auto flex h-16 max-w-6xl items-center"><NuxtLink :to="`/studio/albums/${albumId}/results?studio=${studioId}`" class="focus-ring -ml-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-semibold text-brand hover:bg-tint">← Ảnh đã chốt</NuxtLink></div></header>
     <main class="mx-auto max-w-6xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-10">
       <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Local Photo Filter</p>
       <h1 class="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Lọc ảnh gốc</h1>

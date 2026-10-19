@@ -459,11 +459,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
-    <header class="sticky top-0 z-20 border-b border-line bg-canvas/95 px-4 backdrop-blur sm:px-8">
-      <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 py-1.5">
-        <NuxtLink to="/" class="focus-ring inline-flex min-h-11 items-center rounded-lg font-bold text-brand">Zeno Studio</NuxtLink>
-      </div>
-    </header>
+    <SiteHeader />
     <main class="mx-auto max-w-7xl px-4 pb-28 pt-5 sm:px-8 sm:pt-8">
       <div v-if="loading" role="status" aria-busy="true" aria-label="Đang mở album">
         <UiSkeleton class="h-9 w-2/3 max-w-md sm:h-12" />

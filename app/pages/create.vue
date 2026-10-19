@@ -43,7 +43,9 @@ async function copy(link: string, label: string) {
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
-    <header class="border-b border-line bg-white px-4 sm:px-5"><div class="mx-auto max-w-3xl py-1.5"><NuxtLink to="/" class="focus-ring -ml-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-bold text-brand hover:bg-tint">← Zeno Studio</NuxtLink></div></header>
+    <SiteHeader width="3xl">
+      <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand">Vào studio</NuxtLink>
+    </SiteHeader>
     <main class="mx-auto max-w-3xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-16">
       <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Không cần đăng nhập</p>
       <h1 class="mt-2 text-3xl font-semibold tracking-tight text-balance sm:mt-3 sm:text-4xl">Tạo album nhanh</h1>
@@ -75,5 +77,6 @@ async function copy(link: string, label: string) {
         <a :href="adminLink" class="focus-ring inline-flex min-h-11 items-center rounded font-semibold text-brand underline">Mở trang quản trị album <span aria-hidden="true">&nbsp;→</span></a>
       </section>
     </main>
+    <SiteFooter />
   </div>
 </template>

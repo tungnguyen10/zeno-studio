@@ -37,7 +37,7 @@ async function submit() {
 <template>
   <div class="grid min-h-dvh place-items-center bg-canvas px-4 py-8 text-ink sm:px-5 sm:py-12">
     <main class="w-full max-w-md rounded-3xl border border-line bg-white p-5 shadow-[0_30px_80px_-35px_rgba(39,55,35,.25)] sm:rounded-[2rem] sm:p-10">
-      <NuxtLink to="/" class="focus-ring mb-6 flex min-h-11 w-fit items-center gap-3 rounded-lg text-lg font-bold sm:mb-10"><span aria-hidden="true" class="grid size-9 place-items-center rounded-xl bg-brand text-white">Z</span>Zeno Studio</NuxtLink>
+      <NuxtLink to="/" aria-label="Zeno Studio – Trang chủ" class="focus-ring -ml-1 mb-6 flex min-h-11 w-fit items-center rounded-lg px-1 text-ink sm:mb-10"><BrandLogo /></NuxtLink>
       <template v-if="!token">
         <h1 class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">Liên kết không hợp lệ</h1>
         <p class="mt-4 leading-7 text-pretty text-muted">Liên kết đặt lại mật khẩu thiếu mã xác nhận. Hãy yêu cầu liên kết mới.</p>

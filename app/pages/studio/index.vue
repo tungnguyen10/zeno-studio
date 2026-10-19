@@ -145,10 +145,9 @@ function resetFilters() {
     </template>
 
     <template v-else>
-      <header class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6">
-        <NuxtLink to="/" class="focus-ring flex min-h-11 items-center gap-3 rounded-lg text-lg font-bold"><span aria-hidden="true" class="grid size-9 place-items-center rounded-xl bg-brand text-white">Z</span>Zeno Studio</NuxtLink>
-        <NuxtLink to="/tools/file-filter" class="focus-ring inline-flex min-h-11 items-center rounded-full px-2 text-sm font-semibold text-brand hover:bg-tint">Lọc file<span class="hidden sm:inline">&nbsp;trên máy</span>&nbsp;<span aria-hidden="true">↗</span></NuxtLink>
-      </header>
+      <SiteHeader>
+        <NuxtLink to="/tools/file-filter" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand">Lọc file<span class="hidden sm:inline">&nbsp;trên máy</span></NuxtLink>
+      </SiteHeader>
 
       <main class="mx-auto grid max-w-7xl items-start gap-8 px-4 pb-[max(3rem,env(safe-area-inset-bottom))] pt-4 sm:px-8 sm:pt-10 lg:grid-cols-2 lg:gap-12 lg:pt-24">
         <div class="max-w-xl">
@@ -172,6 +171,7 @@ function resetFilters() {
           <StudioAuthForm v-else :next="next" @signed-in="afterSignIn" />
         </section>
       </main>
+      <SiteFooter />
     </template>
   </div>
 </template>

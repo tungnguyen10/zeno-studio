@@ -6,6 +6,7 @@
         "git stash": true,
         "git worktree": true,
         "ln": true,
-        "cp": true
+        "cp": true,
+        "printf": true
     }
 }
