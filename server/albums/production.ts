@@ -23,7 +23,14 @@ export async function listManagedProductionTasks(pool: ConnectionPool, manager: 
       `SELECT t.id, i.photo_id, i.filename, t.status, t.assigned_user_id FROM production_tasks t
        JOIN selection_version_items i ON i.id = t.selection_version_item_id
        WHERE i.selection_version_id = $1 ORDER BY i.filename, i.photo_id`, [version.id])
-    return { versionNumber: version.version_number, canDeliver: session.canDeliver, items: tasks.rows.map(row => ({ id: row.id, photoId: row.photo_id, filename: row.filename, status: row.status, assignedUserId: row.assigned_user_id })) }
+    const review = await client.query<{ round_number: number; status: string }>(
+      'SELECT round_number, status FROM review_rounds WHERE selection_version_id = $1 ORDER BY round_number DESC LIMIT 1', [version.id])
+    return {
+      versionNumber: version.version_number,
+      canDeliver: session.canDeliver,
+      review: review.rows[0] ? { roundNumber: review.rows[0].round_number, status: review.rows[0].status } : null,
+      items: tasks.rows.map(row => ({ id: row.id, photoId: row.photo_id, filename: row.filename, status: row.status, assignedUserId: row.assigned_user_id })),
+    }
   })
 }
 

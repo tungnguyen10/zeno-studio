@@ -64,6 +64,7 @@ test('exchanges a guest admin link, shares a new customer link, and claims into 
 test('exports guest results and sends review and delivery from the management page', async ({ page }) => {
   let reviewRequests = 0
   let deliveryRequests = 0
+  let workflowStatus: 'ready' | 'approved' | 'delivered' = 'ready'
   await page.route(`**/api/guest/albums/${albumId}/results?*`, route => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ selectionVersionId: '33333333-3333-4333-8333-333333333333', finalizedAt: '2026-10-17T00:00:00Z', versionNumber: 1, total: 1, notesCount: 0, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] }),
@@ -73,14 +74,16 @@ test('exports guest results and sends review and delivery from the management pa
   }))
   await page.route(`**/api/guest/albums/${albumId}/production`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ canDeliver: true, items: [{ id: 'task-1', filename: '01.jpg', status: 'WAITING_REVIEW' }] }),
+    body: JSON.stringify({ canDeliver: true, review: workflowStatus === 'ready' ? null : { roundNumber: 1, status: 'APPROVED' }, items: [{ id: 'task-1', filename: '01.jpg', status: workflowStatus === 'ready' ? 'WAITING_REVIEW' : workflowStatus === 'approved' ? 'APPROVED' : 'DELIVERED' }] }),
   }))
   await page.route(`**/api/guest/albums/${albumId}/review`, route => {
     reviewRequests++
+    workflowStatus = 'approved'
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ roundNumber: 1 }) })
   })
   await page.route(`**/api/guest/albums/${albumId}/delivery`, route => {
     deliveryRequests++
+    workflowStatus = 'delivered'
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ versionNumber: 1 }) })
   })
   await page.goto(`/guest/albums/${albumId}/results`)
@@ -89,6 +92,8 @@ test('exports guest results and sends review and delivery from the management pa
   await page.getByText('Xuất danh sách / ghi chú').click()
   await page.getByRole('button', { name: 'Selection CSV' }).click()
   expect((await download).suggestedFilename()).toBe('selection.csv')
+  await page.getByRole('navigation', { name: 'Các bước xử lý' }).getByRole('link', { name: 'Duyệt & bàn giao' }).click()
+  await expect(page.getByRole('button', { name: 'Đánh dấu hoàn tất' })).toBeHidden()
   await page.getByLabel('Link folder Google Drive').fill('https://drive.google.com/drive/folders/edited')
   await page.getByRole('button', { name: 'Mở vòng duyệt' }).click()
   await expect(page.getByText('Đã mở vòng duyệt 1.')).toBeVisible()

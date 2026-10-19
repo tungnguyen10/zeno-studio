@@ -26,20 +26,24 @@ describe('production, review, and delivery', () => {
     const photo = (await listAlbumPhotos(pool, access)).items[0]!
     await setPhotoSelection(pool, access, photo.id, true, 0)
     await finalizeStudioSelection(pool, studio.id, 'production-owner', album.id)
+    expect((await listProductionTasks(pool, studio.id, 'production-owner', album.id)).review).toBeNull()
     let task = (await listProductionTasks(pool, studio.id, 'production-owner', album.id)).items[0]!
     expect(task.status).toBe('PENDING')
     await expect(startReviewRound(pool, studio.id, 'production-owner', album.id, 'https://drive.google.com/drive/folders/edited')).rejects.toThrow()
     await updateProductionTask(pool, studio.id, 'production-owner', album.id, task.id, 'RETOUCHING')
     await updateProductionTask(pool, studio.id, 'production-owner', album.id, task.id, 'WAITING_REVIEW')
     expect((await startReviewRound(pool, studio.id, 'production-owner', album.id, 'https://drive.google.com/drive/folders/edited')).roundNumber).toBe(1)
+    expect((await listProductionTasks(pool, studio.id, 'production-owner', album.id)).review).toEqual({ roundNumber: 1, status: 'WAITING_REVIEW' })
     expect((await getCustomerReview(pool, access))?.status).toBe('WAITING_REVIEW')
     expect((await submitCustomerReview(pool, access, 'request_revision', 'Chỉnh sáng')).status).toBe('REVISION_REQUESTED')
+    expect((await listProductionTasks(pool, studio.id, 'production-owner', album.id)).review).toEqual({ roundNumber: 1, status: 'REVISION_REQUESTED' })
     task = (await listProductionTasks(pool, studio.id, 'production-owner', album.id)).items[0]!
     expect(task.status).toBe('REVISION_REQUESTED')
     await updateProductionTask(pool, studio.id, 'production-owner', album.id, task.id, 'RETOUCHING')
     await updateProductionTask(pool, studio.id, 'production-owner', album.id, task.id, 'WAITING_REVIEW')
     expect((await startReviewRound(pool, studio.id, 'production-owner', album.id, 'https://drive.google.com/drive/folders/edited2')).roundNumber).toBe(2)
     expect((await submitCustomerReview(pool, access, 'approve', '')).status).toBe('APPROVED')
+    expect((await listProductionTasks(pool, studio.id, 'production-owner', album.id)).review).toEqual({ roundNumber: 2, status: 'APPROVED' })
     expect((await completeDelivery(pool, studio.id, 'production-owner', album.id, 'https://drive.google.com/drive/folders/final')).versionNumber).toBe(1)
     task = (await listProductionTasks(pool, studio.id, 'production-owner', album.id)).items[0]!
     expect(task.status).toBe('DELIVERED')
