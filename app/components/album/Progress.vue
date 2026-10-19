@@ -7,7 +7,7 @@ const current = computed(() => workflowStepIndex(props.status as AlbumStatus))
 </script>
 
 <template>
-  <ol v-if="current !== null" aria-label="Tiến trình album" class="mt-4 grid grid-cols-2 gap-1.5 text-xs sm:mt-5 sm:grid-cols-4 sm:gap-2 sm:text-sm">
+  <ol v-if="current !== null" aria-label="Tiến trình album" class="mt-4 grid grid-cols-2 gap-1.5 text-xs sm:mt-5 sm:grid-cols-3 sm:gap-2 sm:text-sm">
     <li
       v-for="(label, index) in WORKFLOW_STEPS"
       :key="label"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  countByFilter, countRetouched, daysLeft, effectiveStatus, filterAlbums, nextStep, workflowStepIndex,
+  countByFilter, daysLeft, effectiveStatus, filterAlbums, nextStep, workflowStepIndex,
   type AlbumStatus,
 } from '../../shared/domain/album-status'
 
@@ -24,7 +24,7 @@ describe('album status', () => {
   })
 
   it('places each status on the workflow', () => {
-    expect(['DRAFT', 'PUBLISHED', 'FINALIZED', 'DELIVERED', 'EXPIRED'].map(status => workflowStepIndex(status as AlbumStatus))).toEqual([0, 1, 2, 3, null])
+    expect(['DRAFT', 'PUBLISHED', 'FINALIZED', 'DELIVERED', 'EXPIRED'].map(status => workflowStepIndex(status as AlbumStatus))).toEqual([0, 1, 2, 2, null])
   })
 
   it('counts and filters albums by effective status and accent-insensitive title', () => {
@@ -35,9 +35,6 @@ describe('album status', () => {
     expect(filterAlbums(albums, 'EXPIRED', 'xyz', now)).toEqual([])
   })
 
-  it('counts retouched tasks as everything past retouching', () => {
-    expect(countRetouched([{ status: 'PENDING' }, { status: 'RETOUCHING' }, { status: 'WAITING_REVIEW' }, { status: 'APPROVED' }, { status: 'REVISION_REQUESTED' }])).toBe(2)
-  })
 })
 
 describe('next step', () => {

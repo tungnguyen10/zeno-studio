@@ -1,8 +1,8 @@
 # Hướng dẫn sử dụng Zeno Studio cho studio
 
-Tài liệu này hướng dẫn các luồng studio hiện có trong Zeno Studio: tạo album từ Google Drive, gửi khách chọn ảnh, chốt lựa chọn, lọc ảnh gốc trên máy, theo dõi hậu kỳ, mở vòng duyệt và bàn giao.
+Tài liệu này hướng dẫn luồng hiện có trong Zeno Studio: tạo album từ Google Drive, gửi khách chọn ảnh và ghi chú, chốt lựa chọn, xuất danh sách và lọc ảnh gốc trên máy. Xem [sơ đồ flow cốt lõi](./core-workflow.md).
 
-> **Lưu ý về trạng thái:** Hướng dẫn phản ánh code được rà soát ngày 19/10/2026. Tiến độ cập nhật ngày 17/10/2026 ghi Drive đã xác minh ở local/Preview nhưng cổng Drive trên Production vẫn khóa; các tính năng có thể chưa bật trên môi trường bạn đang dùng. Việc gửi email thật cũng chưa được nghiệm thu end-to-end. Đặc tả sản phẩm không đồng nghĩa tính năng đã được phát hành. Xem [tiến độ triển khai](./implementation-progress.md) trước khi đưa luồng vào vận hành thật.
+> **Lưu ý về trạng thái:** Hướng dẫn phản ánh code được rà soát ngày 20/10/2026. Drive đã xác minh ở local/Preview nhưng cổng Drive trên Production vẫn khóa; các tính năng có thể chưa bật trên môi trường bạn đang dùng. Việc gửi email thật cũng chưa được nghiệm thu end-to-end. Đặc tả sản phẩm không đồng nghĩa tính năng đã được phát hành. Xem [tiến độ triển khai](./implementation-progress.md) trước khi đưa luồng vào vận hành thật.
 
 ## 1. Chọn cách tạo album
 
@@ -59,7 +59,7 @@ Mọi người mở cùng link dùng **một danh sách chọn chung** và ghi c
 
 ## 6. Kiểm tra và chốt bộ ảnh
 
-1. Trong workspace, mở album đang ở trạng thái **Đang chọn**.
+1. Trong workspace hoặc trang quản trị album **Tạo nhanh**, mở album đang ở trạng thái **Đang chọn**.
 2. Dùng các bộ lọc **Tất cả**, **Đang chọn/Khách đã chọn** và kiểu hiển thị để rà ảnh.
 3. Bấm ảnh để thêm hoặc bỏ ảnh khỏi bộ chốt cuối; lựa chọn khách đã đánh dấu sẵn.
 4. Kiểm tra số ảnh sẽ chốt và giới hạn, rồi chọn **Chốt … ảnh**.
@@ -83,23 +83,15 @@ Trong **Kết quả chọn ảnh**, có thể tìm theo tên file, lọc ảnh c
 
 Đây là thao tác **copy**, không phải move; ảnh nguồn không bị sửa hoặc xóa. File đã có trong đích được bỏ qua; không ghi đè mặc định. Có thể xuất danh sách và ghi chú kể cả khi trình duyệt không hỗ trợ truy cập folder, nhưng cần Chrome/Edge desktop để quét và copy. Dữ liệu ảnh RAW và quyền truy cập folder ở trong trình duyệt, không tải RAW lên server.
 
-## 8. Theo dõi hậu kỳ, duyệt và bàn giao
+## 8. Kết quả trên máy
 
-Trong trang kết quả, mở lần lượt các mục **Ảnh đã chốt**, **Hậu kỳ**, **Duyệt & bàn giao**:
-
-1. Tại **Hậu kỳ**, cập nhật từng ảnh từ **Chưa chỉnh** sang **Đang chỉnh**, rồi **Ảnh đã chỉnh**.
-2. Khi tất cả ảnh đã sẵn sàng, nhập link folder Google Drive chứa ảnh đã chỉnh và chọn **Mở vòng duyệt**.
-3. Gửi link album khách cho khách xem kết quả. Khách có thể **Duyệt thành phẩm** hoặc nhập nội dung **Yêu cầu sửa**.
-4. Nếu khách yêu cầu sửa, cập nhật trạng thái các ảnh cần chỉnh, rồi mở vòng duyệt tiếp theo với link ảnh đã chỉnh.
-5. Sau khi khách duyệt và tất cả ảnh đã được duyệt, nhập link Drive thành phẩm và chọn **Đánh dấu hoàn tất**.
-
-Tên file ảnh đã chỉnh nên tương ứng với tên file đã chốt. Mapping thủ công cho ảnh đổi tên chưa được triển khai; nếu tên không khớp, hãy kiểm tra và thống nhất file trước khi gửi duyệt. Zeno tạo nội dung và link để studio tự gửi; không tự gửi tin nhắn Zalo.
+Sau khi copy, Filter Files tạo folder ảnh đã lọc và báo cáo trên máy người dùng. Zeno không ghi trạng thái “Đã lọc” lên album. Người giữ link quản trị của album **Tạo nhanh** cũng có thể mở trang kết quả và Filter Files cho đúng phiên bản đã chốt.
 
 ## 9. Thành viên studio
 
 Chủ studio và quản lý có thể mời thành viên tại **Thành viên studio**. Link mời gửi một lần, chỉ dùng được với email được mời đã xác minh và hết hạn sau 7 ngày. Link mời có thể được thu hồi. Không chia sẻ link mời ngoài người nhận.
 
-Quyền hiện có gồm chủ studio, quản lý, thành viên và retoucher; các thao tác tạo/quản lý album, chia sẻ, hậu kỳ và bàn giao phụ thuộc vai trò. Nếu một nút thao tác không xuất hiện, hãy nhờ chủ studio hoặc quản lý kiểm tra quyền thay vì dùng link quản trị guest.
+Quyền hiện có gồm chủ studio, quản lý và thành viên; tài khoản retoucher cũ chỉ còn quyền đọc cần thiết. Không thể mời mới vai trò retoucher. Nếu một nút thao tác không xuất hiện, hãy nhờ chủ studio hoặc quản lý kiểm tra quyền.
 
 ## 10. Hạn album và xử lý sự cố
 
@@ -113,4 +105,4 @@ Quyền hiện có gồm chủ studio, quản lý, thành viên và retoucher; c
 
 ## 11. Những điều chưa nên giả định
 
-Hướng dẫn này không cam kết các tính năng chưa được triển khai hoặc chưa qua gate phát hành. Tại lần cập nhật tiến độ gần nhất, các mục đáng chú ý còn thiếu/chưa nghiệm thu gồm: mật khẩu album, mapping thủ công khi ảnh chỉnh đổi tên, tự động gửi Zalo, hỗ trợ ổ đĩa thật trên mọi nền tảng/browser, xác minh SMTP thật và nghiệm thu đầy đủ Drive/Production. Kiểm tra [tiến độ triển khai](./implementation-progress.md) để biết trạng thái mới nhất trước khi dựa vào các luồng này trong quy trình sản xuất.
+Hướng dẫn này không cam kết các tính năng chưa được triển khai hoặc chưa qua gate phát hành. Tại lần cập nhật tiến độ gần nhất, các mục đáng chú ý còn thiếu/chưa nghiệm thu gồm: mật khẩu album, tự động gửi Zalo, hỗ trợ ổ đĩa thật trên mọi nền tảng/browser, xác minh SMTP thật và nghiệm thu đầy đủ Drive/Production. Kiểm tra [tiến độ triển khai](./implementation-progress.md) để biết trạng thái mới nhất trước khi dựa vào các luồng này trong quy trình sản xuất.

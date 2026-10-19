@@ -7,8 +7,8 @@ import { joinAlbum, resolveAlbumAccess } from '../../server/albums/access'
 import { ensureStudio, getStudiosForUser } from '../../server/studios/studio'
 import { getManagedAlbumWorkspace, listManagedAlbumPhotos } from '../../server/albums/workspace'
 import { finalizeManagedSelection, getManagedSelectionResults, getSelectionState, setPhotoSelection } from '../../server/albums/selection'
-import { completeManagedDelivery, getCustomerReview, listManagedProductionTasks, startManagedReviewRound, submitCustomerReview, updateManagedProductionTask } from '../../server/albums/production'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
+import { hashAccessToken } from '../../server/security/access-token'
 
 const db = await PGlite.create()
 const migrationDir = new URL('../../db/migrations/', import.meta.url)
@@ -69,9 +69,9 @@ describe('guest album ownership', () => {
     expect(await getStudiosForUser(pool, 'claim-owner')).toHaveLength(1)
   })
 
-  it('lets a guest manager finalize and manage production only for their album', async () => {
+  it('lets a guest manager finalize and read the immutable result without creating production tasks', async () => {
     const created = await createGuestAlbum(pool, source, {
-      title: 'Guest production', folderUrl: 'https://drive.google.com/drive/folders/folder123',
+      title: 'Guest selection', folderUrl: 'https://drive.google.com/drive/folders/folder123',
       expiresInDays: 15, limit: { kind: 'unlimited' },
     })
     const manager = { kind: 'guest' as const, albumId: created.id, token: created.adminToken }
@@ -83,21 +83,32 @@ describe('guest album ownership', () => {
     expect(result).toMatchObject({ versionNumber: 1, count: 1 })
     expect((await getManagedAlbumWorkspace(pool, manager, created.id)).hasResults).toBe(true)
     expect((await getManagedSelectionResults(pool, manager, created.id)).items[0]?.filename).toBe('01.jpg')
-    const tasks = await listManagedProductionTasks(pool, manager, created.id)
-    expect(tasks.canDeliver).toBe(true)
-    const updated = await updateManagedProductionTask(pool, manager, created.id, tasks.items[0]!.id, 'RETOUCHING')
-    expect(updated.status).toBe('RETOUCHING')
-    await updateManagedProductionTask(pool, manager, created.id, tasks.items[0]!.id, 'WAITING_REVIEW')
-    const review = await startManagedReviewRound(pool, manager, created.id, 'https://drive.google.com/drive/folders/edited')
-    expect(review.roundNumber).toBe(1)
-    const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, (await resolveAlbumAccess(pool, created.customerToken))!)).token))!
-    expect((await getCustomerReview(pool, access))?.status).toBe('WAITING_REVIEW')
-    expect((await submitCustomerReview(pool, access, 'approve', '')).status).toBe('APPROVED')
-    expect((await completeManagedDelivery(pool, manager, created.id, 'https://drive.google.com/drive/folders/final')).versionNumber).toBe(1)
+    const taskCount = await withDatabaseContext(pool, { albumId: created.id, scope: 'guest_admin' }, client =>
+      client.query<{ count: string }>('SELECT count(*)::text AS count FROM production_tasks WHERE album_id = $1', [created.id]))
+    expect(taskCount.rows[0]?.count).toBe('0')
+    const finalized = await getManagedSelectionResults(pool, manager, created.id)
+    expect((await getManagedSelectionResults(pool, manager, created.id, { versionId: finalized.selectionVersionId })).items[0]?.filename).toBe('01.jpg')
+    const other = await createGuestAlbum(pool, source, {
+      title: 'Other album', folderUrl: 'https://drive.google.com/drive/folders/folder123',
+      expiresInDays: 15, limit: { kind: 'unlimited' },
+    })
+    await expect(getManagedSelectionResults(pool, { kind: 'guest', albumId: other.id, token: other.adminToken }, other.id,
+      { versionId: finalized.selectionVersionId })).rejects.toMatchObject({ statusCode: 404 })
+    await expect(getManagedSelectionResults(pool, { kind: 'guest', albumId: created.id, token: created.customerToken }, created.id,
+      { versionId: finalized.selectionVersionId })).rejects.toMatchObject({ statusCode: 403 })
     await withDatabaseContext(pool, { albumId: created.id, scope: 'guest_admin' }, client =>
       client.query('UPDATE albums SET expires_at = now() - interval \'1 day\', status = \'EXPIRED\' WHERE id = $1', [created.id]))
     expect(await getManagedAlbumWorkspace(pool, manager, created.id)).toMatchObject({ canFinalize: false, hasResults: true })
     expect((await getManagedSelectionResults(pool, manager, created.id)).items).toHaveLength(1)
+    await withDatabaseContext(pool, { albumId: created.id, scope: 'guest_admin' }, client =>
+      client.query("UPDATE albums SET expires_at = now() + interval '1 day', status = 'DELIVERED' WHERE id = $1", [created.id]))
+    expect((await getManagedSelectionResults(pool, manager, created.id, { versionId: finalized.selectionVersionId })).items).toHaveLength(1)
+    await db.exec('RESET ROLE')
+    const revoked = await db.query('UPDATE album_tokens SET revoked_at = now() WHERE token_hash = $1', [hashAccessToken(created.adminToken)])
+    await db.exec('SET ROLE app_runtime')
+    expect(revoked.affectedRows).toBe(1)
+    await expect(getManagedSelectionResults(pool, manager, created.id, { versionId: finalized.selectionVersionId }))
+      .rejects.toMatchObject({ statusCode: 403 })
     await expect(getManagedAlbumWorkspace(pool, { kind: 'guest', albumId: created.id, token: created.customerToken }, created.id))
       .rejects.toMatchObject({ statusCode: 403 })
   })

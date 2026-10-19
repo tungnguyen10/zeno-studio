@@ -80,7 +80,7 @@ function resetFilters() {
           <div class="flex items-end justify-between gap-3">
             <div class="min-w-0">
               <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Album</h1>
-              <p class="mt-1 text-sm text-pretty text-muted">Theo dõi từng album từ lúc xuất bản đến khi bàn giao.</p>
+              <p class="mt-1 text-sm text-pretty text-muted">Theo dõi từng album từ lúc xuất bản đến khi chốt bộ ảnh.</p>
             </div>
             <UiButton v-if="store.canManage" class="shrink-0" @click="createOpen = true"><span aria-hidden="true">+</span> Tạo album</UiButton>
           </div>
@@ -155,8 +155,8 @@ function resetFilters() {
         <div class="max-w-xl">
           <p class="text-xs font-bold uppercase tracking-[.2em] text-brand-soft">Không gian làm việc cho studio</p>
           <h1 class="mt-3 text-[2rem] font-semibold leading-[1.1] tracking-[-.04em] text-balance sm:mt-4 sm:text-5xl">Mỗi bộ ảnh có một hành trình. <em class="font-serif font-normal text-brand-soft">Quản lý trọn vẹn.</em></h1>
-          <p class="mt-4 text-base leading-7 text-pretty text-muted sm:mt-6 sm:text-lg sm:leading-8">Theo dõi album, lựa chọn của khách, ghi chú hậu kỳ và các vòng duyệt ở cùng một nơi.</p>
-          <ul class="mt-6 hidden space-y-3 text-sm text-muted sm:mt-10 sm:block"><li>✓ Link khách và link quản trị tách biệt</li><li>✓ Tên file và yêu cầu chỉnh sửa luôn đi cùng ảnh</li><li>✓ Lịch sử chốt và duyệt được lưu rõ ràng</li></ul>
+          <p class="mt-4 text-base leading-7 text-pretty text-muted sm:mt-6 sm:text-lg sm:leading-8">Theo dõi album, lựa chọn chung và các phiên bản đã chốt ở cùng một nơi.</p>
+          <ul class="mt-6 hidden space-y-3 text-sm text-muted sm:mt-10 sm:block"><li>✓ Link khách và link quản trị tách biệt</li><li>✓ Tên file và ghi chú luôn đi cùng ảnh</li><li>✓ Lịch sử chốt được lưu rõ ràng</li></ul>
         </div>
 
         <section class="w-full max-w-lg rounded-3xl border border-line bg-white p-5 shadow-[0_30px_80px_-35px_rgba(39,55,35,.25)] sm:rounded-[2rem] sm:p-10">

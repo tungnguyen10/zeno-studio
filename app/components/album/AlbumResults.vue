@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import type { ExportItem } from '~~/shared/domain/export'
-import { countRetouched } from '~~/shared/domain/album-status'
-import { RESULT_EXPORTS, type ProductionPage, type ResultExportFormat, type ResultSummary, type ResultView } from '~/lib/album-results'
+import { RESULT_EXPORTS, type ResultExportFormat, type ResultSummary } from '~/lib/album-results'
 
 type ResultPage = ResultSummary & { items: ExportItem[]; nextCursor: string | null }
-const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; filterBase?: string }>(), { backLabel: 'Quay lại' })
-const route = useRoute()
+const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; filterBase: string; imageBase?: string }>(), { backLabel: 'Quay lại' })
 const results = ref<ResultSummary | null>(null)
 const items = shallowRef<ExportItem[]>([])
 const nextCursor = ref<string | null>(null)
@@ -15,51 +13,9 @@ const search = ref('')
 const notesFilter = ref<'all' | 'with' | 'without'>('all')
 let loadGeneration = 0
 const loadingMore = ref(false)
-const production = ref<ProductionPage | null>(null)
-const editedDriveUrl = ref('')
-const deliveryDriveUrl = ref('')
-const productionFilter = ref('all')
-const activeTaskId = ref<string | null>(null)
-const submittingReview = ref(false)
-const submittingDelivery = ref(false)
-const reviewError = ref('')
-const deliveryError = ref('')
 const error = ref('')
 const busy = ref(true)
 const message = ref('')
-
-const retouched = computed(() => countRetouched(production.value?.items ?? []))
-const allReady = computed(() => !!production.value?.items.length && production.value.items.every(item => item.status === 'WAITING_REVIEW'))
-const delivered = computed(() => !!production.value?.items.length && production.value.items.every(item => item.status === 'DELIVERED'))
-const canOpenReview = computed(() => allReady.value && (!production.value?.review || production.value.review.status === 'REVISION_REQUESTED'))
-const canSubmitDelivery = computed(() => !!production.value?.canDeliver && production.value.review?.status === 'APPROVED' && !!production.value.items.length && production.value.items.every(item => item.status === 'APPROVED') && !delivered.value)
-const remainingToRetouch = computed(() => (production.value?.items.length ?? 0) - retouched.value)
-const activeView = computed<ResultView>(() => {
-  const view = route.query.view
-  return view === 'production' || view === 'delivery' ? view : 'selection'
-})
-const steps = computed(() => ([
-  { id: 'selection', label: 'Ảnh đã chốt' },
-  { id: 'production', label: 'Hậu kỳ' },
-  { id: 'delivery', label: 'Duyệt & bàn giao' },
-] as const).map(step => ({ ...step, to: viewTo(step.id) })))
-const nextStep = computed(() => {
-  if (!production.value) return { view: 'selection' as ResultView, label: 'Xem ảnh đã chốt', hint: 'Danh sách và ghi chú của phiên bản đã chốt.' }
-  if (!production.value.items.length) return { view: 'selection' as ResultView, label: 'Xem ảnh đã chốt', hint: 'Chưa có công việc hậu kỳ cho phiên bản này.' }
-  if (delivered.value) return { view: 'delivery' as ResultView, label: 'Đã bàn giao', hint: 'Album đã hoàn tất.' }
-  if (canSubmitDelivery.value) return { view: 'delivery' as ResultView, label: 'Bàn giao album', hint: 'Khách đã duyệt ảnh thành phẩm.' }
-  if (production.value.review?.status === 'APPROVED') return { view: 'delivery' as ResultView, label: 'Chờ bàn giao', hint: 'Khách đã duyệt; người có quyền bàn giao sẽ hoàn tất.' }
-  if (production.value.review?.status === 'WAITING_REVIEW') return { view: 'delivery' as ResultView, label: 'Xem vòng duyệt', hint: 'Đang chờ khách duyệt ảnh.' }
-  if (canOpenReview.value) return { view: 'delivery' as ResultView, label: 'Mở vòng duyệt', hint: 'Ảnh đã sẵn sàng gửi khách.' }
-  return { view: 'production' as ResultView, label: 'Tiếp tục hậu kỳ', hint: `${remainingToRetouch.value} ảnh cần hoàn tất trước khi gửi duyệt.` }
-})
-const summaryNext = computed(() => production.value
-  ? { label: nextStep.value.label, hint: nextStep.value.hint, to: !delivered.value && activeView.value !== nextStep.value.view ? viewTo(nextStep.value.view) : undefined }
-  : undefined)
-
-function viewTo(view: ResultView) {
-  return { path: route.path, query: { ...route.query, view } }
-}
 
 function failureText(cause: unknown, fallback: string) {
   return cause instanceof Error ? cause.message : fallback
@@ -91,14 +47,12 @@ watch([search, notesFilter], () => {
   loadMore()
 })
 
-const filterLink = computed(() => props.filterBase && results.value
-  ? `${props.filterBase}&version=${encodeURIComponent(results.value.selectionVersionId)}` : '')
+const filterLink = computed(() => results.value
+  ? `${props.filterBase}${props.filterBase.includes('?') ? '&' : '?'}version=${encodeURIComponent(results.value.selectionVersionId)}` : '')
 
 onMounted(async () => {
   try {
     await loadPage()
-    try { await loadProduction() }
-    catch { message.value = 'Hậu kỳ hiện không khả dụng. Bạn vẫn có thể xuất kết quả đã chốt.' }
   }
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không tải được kết quả' }
   finally { busy.value = false }
@@ -125,45 +79,6 @@ async function downloadExport(format: ResultExportFormat) {
   } catch (cause) { message.value = cause instanceof Error ? cause.message : 'Không xuất được file' }
 }
 
-async function loadProduction() {
-  production.value = await $fetch<ProductionPage>(`${props.apiRoot}/production`)
-}
-
-async function moveTask(id: string, status: 'RETOUCHING' | 'WAITING_REVIEW') {
-  if (activeTaskId.value) return
-  activeTaskId.value = id
-  try {
-    await $fetch(`${props.apiRoot}/production/${id}`, { method: 'PATCH', body: { status } })
-    await loadProduction()
-    message.value = 'Đã cập nhật trạng thái ảnh.'
-  } catch (cause) { message.value = cause instanceof Error ? cause.message : 'Không cập nhật được hậu kỳ' }
-  finally { activeTaskId.value = null }
-}
-
-async function sendReview() {
-  if (!canOpenReview.value || submittingReview.value) return
-  submittingReview.value = true
-  reviewError.value = ''
-  try {
-    const review = await $fetch<{ roundNumber: number }>(`${props.apiRoot}/review`, { method: 'POST', body: { driveUrl: editedDriveUrl.value } })
-    message.value = `Đã mở vòng duyệt ${review.roundNumber}. Gửi link album khách để duyệt ảnh.`
-    await loadProduction()
-  } catch (cause) { reviewError.value = cause instanceof Error ? cause.message : 'Không gửi duyệt được' }
-  finally { submittingReview.value = false }
-}
-
-async function deliver() {
-  if (!canSubmitDelivery.value || submittingDelivery.value) return
-  submittingDelivery.value = true
-  deliveryError.value = ''
-  try {
-    await $fetch(`${props.apiRoot}/delivery`, { method: 'POST', body: { driveUrl: deliveryDriveUrl.value } })
-    message.value = 'Đã bàn giao album.'
-    await loadProduction()
-  } catch (cause) { deliveryError.value = cause instanceof Error ? cause.message : 'Không bàn giao được' }
-  finally { submittingDelivery.value = false }
-}
-
 async function copyFilenames() {
   if (!results.value) return
   try {
@@ -172,12 +87,6 @@ async function copyFilenames() {
   } catch { message.value = 'Không thể copy tự động. Hãy dùng mục Xuất danh sách / ghi chú.' }
 }
 
-async function openFilter() {
-  if (!results.value) return
-  if (filterLink.value) { await navigateTo(filterLink.value); return }
-  sessionStorage.setItem('zeno-filter-filenames', await filenamesText())
-  await navigateTo('/tools/file-filter?from=results')
-}
 </script>
 
 <template>
@@ -206,49 +115,20 @@ async function openFilter() {
       </div>
       <UiNotice v-else-if="error" tone="error" class="mt-6">{{ error }}</UiNotice>
       <template v-else-if="results">
-        <AlbumResultsSummary :summary="results" :next="summaryNext" />
-        <div v-if="production" class="sticky top-0 z-10 -mx-4 mt-4 border-b border-line bg-canvas/95 px-4 py-2 backdrop-blur sm:-mx-5 sm:mt-5 sm:px-5">
-          <UiTabs label="Các bước xử lý" :items="steps" :current="activeView" />
-        </div>
+        <AlbumResultsSummary :summary="results" />
         <UiNotice v-if="message" class="mt-4" aria-live="polite">{{ message }}</UiNotice>
         <AlbumResultsSelection
-          v-if="activeView === 'selection' || !production"
           v-model:search="search"
           v-model:notes-filter="notesFilter"
           :items="items"
           :total="results.total"
           :has-more="!!nextCursor"
           :loading-more="loadingMore"
-          :filter-link="filterLink || undefined"
-          :image-base="filterBase ? `${apiRoot}/photos` : undefined"
+          :filter-link="filterLink"
+          :image-base="imageBase"
           @load-more="loadMore"
           @copy="copyFilenames"
           @export="downloadExport"
-          @open-filter="openFilter"
-        />
-        <AlbumResultsProduction
-          v-if="production && activeView === 'production'"
-          v-model:filter="productionFilter"
-          :items="production.items"
-          :retouched="retouched"
-          :active-task-id="activeTaskId"
-          @move="moveTask"
-        />
-        <AlbumResultsDelivery
-          v-if="production && activeView === 'delivery'"
-          v-model:edited-url="editedDriveUrl"
-          v-model:delivery-url="deliveryDriveUrl"
-          :production="production"
-          :can-open-review="canOpenReview"
-          :can-submit-delivery="canSubmitDelivery"
-          :delivered="delivered"
-          :remaining="remainingToRetouch"
-          :submitting-review="submittingReview"
-          :submitting-delivery="submittingDelivery"
-          :review-error="reviewError"
-          :delivery-error="deliveryError"
-          @send-review="sendReview"
-          @deliver="deliver"
         />
       </template>
     </main>

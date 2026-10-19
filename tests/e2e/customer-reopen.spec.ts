@@ -16,7 +16,6 @@ test('an open customer tab sees the retained set when the studio reopens selecti
     } })
     if (path.endsWith('/photos')) return json({ items: [{ id: photoId, sourceFileId: 'drive-a', filename: 'A.jpg', width: 800, height: 1000, status: 'READY', sortOrder: 0, selected: status === 'PUBLISHED' }], nextCursor: null, total: 1, selectedCount: status === 'PUBLISHED' ? 1 : 0 })
     if (path.endsWith('/selection')) return json({ version: 2, selectedPhotoIds: [photoId] })
-    if (path.endsWith('/review')) return json({ review: null })
     return route.continue()
   })
   await page.goto(`/album/${albumId}`)

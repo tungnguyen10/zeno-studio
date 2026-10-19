@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 const albumId = '11111111-1111-4111-8111-111111111111'
 const studioId = '22222222-2222-4222-8222-222222222222'
@@ -8,6 +9,10 @@ test('Results locks its version for search, export, and the album filter link', 
   const requests: string[] = []
   await page.route(`**/api/studio/${studioId}/albums/${albumId}/**`, route => {
     const url = new URL(route.request().url())
+    if (url.pathname.endsWith('/results/export')) {
+      expect(url.searchParams.get('versionId')).toBe(versionId)
+      return route.fulfill({ status: 200, headers: { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="selection.csv"' }, body: 'filename,notes\r\nA.JPG,Chỉnh sáng\r\nB.JPG,\r\n' })
+    }
     if (url.pathname.endsWith('/results')) {
       requests.push(url.search)
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -15,7 +20,6 @@ test('Results locks its version for search, export, and the album filter link', 
         items: url.searchParams.get('notesFilter') === 'without' ? [] : [{ photoId: '44444444-4444-4444-8444-444444444444', filename: 'A.JPG', notes: [{ text: 'Chỉnh sáng' }] }], nextCursor: null,
       }) })
     }
-    if (url.pathname.endsWith('/production')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ canDeliver: false, items: [] }) })
     if (url.pathname.endsWith('/image')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg"/>' })
     if (url.pathname.endsWith('/filter-manifest')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ albumId, selectionVersionId: versionId, versionNumber: 2, finalizedAt: '2026-10-17T00:00:00Z', items: [] }) })
     return route.continue()
@@ -29,58 +33,11 @@ test('Results locks its version for search, export, and the album filter link', 
   await page.getByLabel('Ghi chú').selectOption('without')
   await expect(page.getByText('Không có ảnh phù hợp.')).toBeVisible()
   expect(requests.some(query => query.includes(`versionId=${versionId}`) && query.includes('notesFilter=without'))).toBe(true)
-})
-
-test('Results separates selection, production, and review steps with a clear review gate', async ({ page }) => {
-  await page.route(`**/api/studio/${studioId}/albums/${albumId}/**`, route => {
-    const url = new URL(route.request().url())
-    if (url.pathname.endsWith('/results')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      selectionVersionId: versionId, versionNumber: 2, finalizedAt: '2026-10-17T00:00:00Z', total: 1, notesCount: 0,
-      items: [{ photoId: '44444444-4444-4444-8444-444444444444', filename: 'A.JPG', notes: [] }], nextCursor: null,
-    }) })
-    if (url.pathname.endsWith('/production')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      canDeliver: false, review: null, items: [{ id: 'task-1', filename: 'A.JPG', status: 'PENDING' }],
-    }) })
-    if (url.pathname.endsWith('/image')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg"/>' })
-    return route.continue()
-  })
-
-  await page.goto(`/studio/albums/${albumId}/results?studio=${studioId}`)
-  const steps = page.getByRole('navigation', { name: 'Các bước xử lý' })
-  await expect(page.getByRole('region', { name: 'Danh sách ảnh đã chốt' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Bắt đầu chỉnh' })).toBeHidden()
-
-  await steps.getByRole('link', { name: 'Hậu kỳ' }).click()
-  await expect(page).toHaveURL(new RegExp('view=production'))
-  await expect(page.getByRole('heading', { name: 'Tiến độ hậu kỳ' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Bắt đầu chỉnh' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Danh sách ảnh đã chốt' })).toBeHidden()
-
-  await steps.getByRole('link', { name: 'Duyệt & bàn giao' }).click()
-  await expect(page).toHaveURL(new RegExp('view=delivery'))
-  await page.reload()
-  await expect(page.getByText('Cần đánh dấu 1/1 ảnh đã chỉnh trước khi mở vòng duyệt.')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Mở vòng duyệt' })).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Đánh dấu hoàn tất' })).toBeHidden()
-})
-
-test('Results explains when approved work is waiting for someone with delivery permission', async ({ page }) => {
-  await page.route(`**/api/studio/${studioId}/albums/${albumId}/**`, route => {
-    const url = new URL(route.request().url())
-    if (url.pathname.endsWith('/results')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      selectionVersionId: versionId, versionNumber: 2, finalizedAt: '2026-10-17T00:00:00Z', total: 1, notesCount: 0,
-      items: [{ photoId: '44444444-4444-4444-8444-444444444444', filename: 'A.JPG', notes: [] }], nextCursor: null,
-    }) })
-    if (url.pathname.endsWith('/production')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      canDeliver: false, review: { roundNumber: 1, status: 'APPROVED' }, items: [{ id: 'task-1', filename: 'A.JPG', status: 'APPROVED' }],
-    }) })
-    return route.continue()
-  })
-
-  await page.goto(`/studio/albums/${albumId}/results?studio=${studioId}&view=delivery`)
-  await expect(page.getByText('Chờ bàn giao', { exact: true })).toBeVisible()
-  await expect(page.getByText('Khách đã duyệt; tài khoản này chưa có quyền bàn giao.')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Đánh dấu hoàn tất' })).toBeHidden()
+  const downloadEvent = page.waitForEvent('download')
+  await page.getByText('Xuất danh sách / ghi chú').click()
+  await page.getByRole('button', { name: 'Selection CSV' }).click()
+  const download = await downloadEvent
+  expect(await readFile(await download.path(), 'utf8')).toContain('B.JPG')
 })
 
 test('Results keeps a large selection scrollable without rendering every photo row', async ({ page }) => {
@@ -92,7 +49,6 @@ test('Results keeps a large selection scrollable without rendering every photo r
     if (url.pathname.endsWith('/results')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       selectionVersionId: versionId, versionNumber: 2, finalizedAt: '2026-10-17T00:00:00Z', total: 100, notesCount: 0, items, nextCursor: null,
     }) })
-    if (url.pathname.endsWith('/production')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ canDeliver: false, review: null, items: [] }) })
     if (url.pathname.endsWith('/image')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg"/>' })
     return route.continue()
   })
@@ -103,4 +59,29 @@ test('Results keeps a large selection scrollable without rendering every photo r
   expect(await region.getByRole('listitem').count()).toBeLessThan(100)
   await region.evaluate(element => { element.scrollTop = element.scrollHeight })
   await expect(region.getByRole('heading', { name: 'IMG_0099.jpg' })).toBeVisible()
+})
+
+test('retired production, review, and delivery endpoints are unavailable', async ({ request }) => {
+  const paths = [
+    `/api/album/${albumId}/review`,
+    `/api/guest/albums/${albumId}/production`,
+    `/api/guest/albums/${albumId}/review`,
+    `/api/guest/albums/${albumId}/delivery`,
+    `/api/studio/${studioId}/albums/${albumId}/production`,
+    `/api/studio/${studioId}/albums/${albumId}/review`,
+    `/api/studio/${studioId}/albums/${albumId}/delivery`,
+  ]
+  for (const path of paths) {
+    expect((await request.get(path)).status(), path).toBe(404)
+    expect((await request.post(path, { data: {} })).status(), path).toBe(404)
+  }
+  for (const path of [
+    `/api/guest/albums/${albumId}/production/${versionId}`,
+    `/api/studio/${studioId}/albums/${albumId}/production/${versionId}`,
+  ]) expect((await request.patch(path, { data: {} })).status(), path).toBe(404)
+})
+
+test('guest filter manifest requires the admin cookie', async ({ request }) => {
+  const response = await request.get(`/api/guest/albums/${albumId}/selections/${versionId}/filter-manifest`)
+  expect(response.status()).toBe(403)
 })

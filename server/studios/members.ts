@@ -44,7 +44,7 @@ export async function getStudioMembers(pool: ConnectionPool, studioId: string, a
 export async function createStudioInvitation(
   pool: ConnectionPool, studioId: string, actorUserId: string, email: string, role: InvitedRole,
 ): Promise<{ id: string; email: string; role: InvitedRole; token: string; expiresAt: Date }> {
-  if (!['manager', 'member', 'retoucher'].includes(role)) throw new StudioOperationError('Vai trò không hợp lệ', 400)
+  if (!['manager', 'member'].includes(role)) throw new StudioOperationError('Vai trò không hợp lệ', 400)
   const recipient = normalizedEmail(email)
   const issued = issueAccessToken()
   const id = randomUUID()
@@ -113,7 +113,7 @@ export async function acceptStudioInvitation(
 export async function updateStudioMemberRole(
   pool: ConnectionPool, studioId: string, actorUserId: string, memberUserId: string, role: InvitedRole,
 ): Promise<void> {
-  if (!['manager', 'member', 'retoucher'].includes(role)) throw new StudioOperationError('Vai trò không hợp lệ', 400)
+  if (!['manager', 'member'].includes(role)) throw new StudioOperationError('Vai trò không hợp lệ', 400)
   await withDatabaseContext(pool, { studioId, userId: actorUserId, scope: 'member' }, async client => {
     if (await actorRole(client, studioId, actorUserId) !== 'owner') throw new StudioOperationError('Chỉ chủ studio có thể đổi vai trò', 403)
     const updated = await client.query<{ user_id: string }>(

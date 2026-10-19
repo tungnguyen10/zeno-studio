@@ -31,8 +31,6 @@ const busy = ref(false)
 const loading = ref(true)
 const error = ref('')
 const status = ref('')
-const review = ref<{ roundNumber: number; driveUrl: string | null; deliveryUrl: string | null; status: string } | null>(null)
-const revisionText = ref('')
 const thumbnailState = ref<Record<string, 'retry' | 'proxy' | 'original' | 'failed'>>({})
 const focusImageFailed = ref(false)
 const focusStage = ref<'drive' | 'retry' | 'original'>('drive')
@@ -77,7 +75,7 @@ const limitLabel = computed(() => {
 const subtitle = computed(() => {
   const o = overview.value
   if (!o) return ''
-  const prefix = o.status === 'PUBLISHED' ? (paged.total.value ? `${paged.total.value} ảnh · ` : '') : o.status === 'DELIVERED' ? 'Đã bàn giao · ' : 'Bộ ảnh đã chốt · '
+  const prefix = o.status === 'PUBLISHED' ? (paged.total.value ? `${paged.total.value} ảnh · ` : '') : 'Bộ ảnh đã chốt · '
   return `${prefix}Hạn ${new Intl.DateTimeFormat('vi-VN').format(new Date(o.expiresAt))}`
 })
 const limitHint = computed(() => {
@@ -111,10 +109,8 @@ async function refreshAlbumState() {
     selectionLoaded.value = false
     selectionVersion.value = 0
     selectedIds.value = []
-    review.value = null
     await loadSelection()
     await loadPhotos()
-    if (next.status === 'FINALIZED' || next.status === 'DELIVERED') await loadReview()
   } else await loadSelection()
 }
 
@@ -144,7 +140,6 @@ async function enter() {
     }
     await loadPhotos()
     await loadSelection()
-    if (overview.value.status === 'FINALIZED' || overview.value.status === 'DELIVERED') await loadReview()
     if (import.meta.client) {
       pollTimer = setInterval(() => {
         if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && !focusPhoto.value) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
@@ -152,21 +147,6 @@ async function enter() {
     }
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Link album không hợp lệ hoặc đã hết hạn' }
   finally { loading.value = false }
-}
-
-async function loadReview() {
-  review.value = (await $fetch<{ review: typeof review.value }>(`${root}/review`)).review
-}
-
-async function sendReview(decision: 'approve' | 'request_revision') {
-  if (busy.value) return
-  busy.value = true
-  try {
-    await $fetch(`${root}/review`, { method: 'POST', body: { decision, note: decision === 'request_revision' ? revisionText.value : '' } })
-    await loadReview()
-    status.value = decision === 'approve' ? 'Đã duyệt ảnh thành phẩm.' : 'Đã gửi yêu cầu sửa.'
-  } catch (cause) { status.value = cause instanceof Error ? cause.message : 'Không gửi được phản hồi' }
-  finally { busy.value = false }
 }
 
 async function joinAlbum() {
@@ -182,7 +162,6 @@ async function retryJoin() {
     if (!paged.items.value.length) await loadPhotos()
     selectionLoaded.value = false
     await loadSelection()
-    if (overview.value!.status === 'FINALIZED' || overview.value!.status === 'DELIVERED') await loadReview()
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể vào album' }
   finally { busy.value = false }
 }
@@ -478,7 +457,6 @@ onBeforeUnmount(() => {
           <h1 class="text-2xl font-semibold tracking-tight text-balance break-words sm:text-5xl">{{ overview.title }}</h1>
           <p class="mt-1.5 text-sm text-muted tabular-nums sm:mt-2">{{ subtitle }}</p>
         </div>
-        <AlbumReviewPanel v-if="review" v-model:revision-text="revisionText" :review="review" :can-respond="review.status === 'WAITING_REVIEW' && overview.joined" :busy="busy" @respond="sendReview" />
         <div v-if="overview.canJoin && error" class="surface mt-6 max-w-md p-5 shadow-sm sm:mt-8 sm:p-6">
           <p role="alert" class="text-sm text-danger">{{ error }}</p>
           <UiButton class="mt-4" :loading="busy" @click="retryJoin">Thử lại</UiButton>

@@ -1,6 +1,6 @@
 # Zeno Studio — Photo Workflow Platform V1
 
-Ứng dụng Nuxt 4 cho luồng chọn ảnh, ghi chú và bàn giao của studio. [Hướng dẫn sử dụng cho studio](docs/studio-user-guide.md) mô tả các luồng hiện có; [đặc tả V1](docs/photo-workflow-platform-v1-spec.md) là nguồn yêu cầu sản phẩm; [tiến độ](docs/implementation-progress.md) ghi rõ phần đã kiểm thử và các gate còn mở.
+Ứng dụng Nuxt 4 cho luồng tạo album, chọn ảnh và lọc file của studio. [Sơ đồ flow cốt lõi](docs/core-workflow.md) mô tả hai nhánh tạo album và đường đi đến folder đã lọc; [hướng dẫn sử dụng cho studio](docs/studio-user-guide.md), [đặc tả V1](docs/photo-workflow-platform-v1-spec.md) và [tiến độ](docs/implementation-progress.md) ghi chi tiết phạm vi và các gate còn mở.
 
 ## Chạy cục bộ
 
@@ -11,13 +11,13 @@ npm ci
 npm run dev
 ```
 
-Các trang hiện có: `/` (giới thiệu), `/create` (tạo album nhanh không cần đăng nhập), `/guest/albums/:id` (quản trị album bằng link bí mật), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` (xuất kết quả, hậu kỳ, duyệt và bàn giao), `/studio/albums/:id/filter` (lọc ảnh gốc từ snapshot đã chốt), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ độc lập). Công cụ lọc file dùng File System Access API; browser không hỗ trợ vẫn xem và xuất kết quả, đồng thời hiện hướng dẫn chuyển sang Chrome/Edge desktop.
+Các trang hiện có: `/` (giới thiệu), `/create` (tạo album nhanh không cần đăng nhập), `/guest/albums/:id` (quản trị album bằng link bí mật), `/studio` (tài khoản, danh sách và tạo album), `/studio/members`, `/studio/invite`, `/studio/albums/:id` (chốt bộ ảnh), `/studio/albums/:id/results` và `/guest/albums/:id/results` (xuất kết quả), `/studio/albums/:id/filter` và `/guest/albums/:id/filter` (lọc ảnh gốc từ snapshot đã chốt), `/album/:id?token=...` (gallery khách) và `/tools/file-filter` (lọc/copy file cục bộ độc lập). Công cụ lọc file dùng File System Access API; browser không hỗ trợ vẫn xem và xuất kết quả, đồng thời hiện hướng dẫn chuyển sang Chrome/Edge desktop.
 
 Từ Results của studio, **Lọc ảnh gốc** mở đúng phiên bản đã chốt. Chọn thư mục RAW, xem file khớp/thiếu/mơ hồ rồi xác nhận copy. Mặc định ứng dụng chỉ tạo `RAW/SELECTED` lúc xác nhận; có thể nhập path con trong RAW (dấu `/` hoặc `\`) hoặc chọn thư mục khác bằng picker. Ảnh gốc không bị sửa, file đích đã có được bỏ qua, báo cáo `RETOUCH_NOTES.csv` và `SELECTION_REPORT.csv` được ghi trong đích. Nguồn chỉ đọc cần một đích khác có quyền ghi. Dữ liệu RAW và quyền truy cập thư mục ở trong browser, không tải file RAW lên server.
 
 ## Tạo và chia sẻ album
 
-**Studio:** đăng nhập → tạo album nháp từ folder Drive công khai → kiểm tra và xuất bản → lấy link khách → có thể cấp thêm link khách trong danh sách studio. Khách mở link, nhập tên rồi chọn ảnh và ghi chú mà không cần tài khoản. Studio quản lý chốt ảnh, xuất kết quả, hậu kỳ, duyệt và bàn giao ở trang album.
+**Studio:** đăng nhập → tạo album nháp từ folder Drive công khai → kiểm tra và xuất bản → lấy link khách → có thể cấp thêm link khách trong danh sách studio. Khách mở link rồi chọn ảnh và ghi chú mà không cần tài khoản. Studio điều chỉnh bộ chọn, chốt snapshot, xuất kết quả và lọc RAW/JPEG ở trang album. Người giữ link quản trị album Tạo nhanh có cùng luồng chốt và lọc file.
 
 **Tạo nhanh:** mở `/create`, nhập tên và folder Drive công khai, chọn hạn 15/30 ngày và giới hạn ảnh → hệ thống xuất bản ngay và trả hai link riêng: link khách và link quản trị bí mật. Link quản trị đổi token trong fragment lấy cookie HTTP only; người tạo có thể cấp lại link khách và quản lý vòng đời album. Hãy lưu link quản trị trước khi rời trang vì chưa có cách khôi phục khi mất. Tạo nhanh giới hạn 10 lần thử mỗi giờ theo IP. Người có tài khoản có thể nhận album vào studio mình sở hữu; link quản trị guest bị thu hồi, còn album, kết quả và link khách được giữ nguyên. Album hết hạn chỉ nhận vào studio trong 30 ngày giữ metadata và không tự xuất bản lại.
 
@@ -28,7 +28,7 @@ Trong danh sách album tại `/studio`, album đã xuất bản có nút **Sao c
 1. Tạo project/branch Neon cho development và một branch hoặc database **riêng** cho integration test. Không dùng production cho `test:neon`.
 2. Tạo database login role cho ứng dụng bằng SQL với `LOGIN NOBYPASSRLS NOCREATEROLE`, khác với role owner dùng migration. **Không dùng `neon roles create` trực tiếp cho runtime role:** role tạo từ CLI trên project này mặc định có `BYPASSRLS` và `CREATEROLE`. Điền URL pooled của role ứng dụng vào `NUXT_DATABASE_URL`, URL direct của role owner vào `NUXT_DATABASE_DIRECT_URL`.
 3. Chạy `npm run db:migrate`. Lệnh tạo schema, role `app_runtime`, RLS và cấp role đó cho login role trong URL ứng dụng. Migration lưu SHA-256 checksum và báo lỗi nếu nội dung một file đã chạy bị thay đổi.
-4. Điền URL tương ứng của branch test vào `NUXT_DATABASE_TEST_URL` (pooled) và `NUXT_DATABASE_TEST_DIRECT_URL` (direct), rồi chạy `npm run test:neon` và `npm run test:album-neon`. Các script tạo/xóa fixtures và kiểm tra pooled concurrency, chọn ảnh, ghi chú, snapshot, review và bàn giao. Đã chạy trên nhánh `codex-v1-dev` ngày 2026-10-14.
+4. Điền URL tương ứng của branch test vào `NUXT_DATABASE_TEST_URL` (pooled) và `NUXT_DATABASE_TEST_DIRECT_URL` (direct), rồi chạy `npm run test:neon` và `npm run test:album-neon`. Các script tạo/xóa fixtures và kiểm tra pooled concurrency, chọn ảnh, ghi chú và snapshot. Bản script cũ đã chạy trên nhánh `codex-v1-dev` ngày 2026-10-14; cần chạy lại bản hiện tại trên test branch.
 
 Nitro chỉ dùng URL pooled. Migration chỉ dùng URL direct. Browser không nhận URL database. Các truy vấn tenant phải đi qua `withDatabaseContext`, đặt `app.studio_id`, `app.user_id`, `app.album_id`, `app.participant_id` và `app.scope` trong **cùng transaction** với truy vấn. RLS kiểm tra user có thuộc studio trước khi chấp nhận `studio_id`; API xác thực session hoặc token trước khi đặt context.
 

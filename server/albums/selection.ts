@@ -170,18 +170,14 @@ export async function finalizeManagedSelection(pool: ConnectionPool, manager: Al
     await client.query('INSERT INTO selection_versions (id, album_id, version_number, cycle) VALUES ($1, $2, $3, $4)', [versionId, albumId, versionNumber, album.current_cycle])
     // Notes are frozen only for photos the customer still has selected; hidden notes of unselected photos stay out.
     await client.query(
-      `WITH items AS (
-         INSERT INTO selection_version_items (id, album_id, selection_version_id, photo_id, filename, notes)
+      `INSERT INTO selection_version_items (id, album_id, selection_version_id, photo_id, filename, notes)
          SELECT gen_random_uuid(), $1, $2, p.id, p.filename,
            COALESCE((SELECT jsonb_agg(jsonb_build_object('text', n.body) ORDER BY n.created_at, n.id)
              FROM photo_notes n
              WHERE n.album_id = $1 AND n.photo_id = p.id AND n.body <> ''
                AND EXISTS (SELECT 1 FROM selections s JOIN selection_lists l ON l.id = s.list_id
                  WHERE l.round_id = $4 AND l.kind = 'shared' AND s.photo_id = p.id)), '[]'::jsonb)
-         FROM photos p WHERE p.album_id = $1 AND p.id = ANY($3::uuid[])
-         RETURNING id
-       )
-       INSERT INTO production_tasks (id, album_id, selection_version_item_id) SELECT gen_random_uuid(), $1, id FROM items`,
+         FROM photos p WHERE p.album_id = $1 AND p.id = ANY($3::uuid[])`,
       [albumId, versionId, selected, album.round_id])
     await client.query("UPDATE selection_rounds SET status = 'CLOSED' WHERE id = $1", [album.round_id])
     await client.query("UPDATE albums SET status = 'FINALIZED', updated_at = now() WHERE id = $1", [albumId])

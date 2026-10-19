@@ -9,10 +9,10 @@ const props = defineProps<{
   total: number
   hasMore: boolean
   loadingMore: boolean
-  filterLink?: string
+  filterLink: string
   imageBase?: string
 }>()
-const emit = defineEmits<{ loadMore: []; copy: []; export: [format: ResultExportFormat]; openFilter: [] }>()
+const emit = defineEmits<{ loadMore: []; copy: []; export: [format: ResultExportFormat] }>()
 const search = defineModel<string>('search', { required: true })
 const notesFilter = defineModel<'all' | 'with' | 'without'>('notesFilter', { required: true })
 
@@ -42,11 +42,10 @@ function imageUrl(item: ExportItem) {
     <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
       <div class="min-w-0">
         <h2 id="selection-heading" class="text-xl font-semibold sm:text-2xl">Ảnh đã chốt</h2>
-        <p class="mt-1 text-sm text-pretty text-muted">Tên file và yêu cầu chỉnh sửa được giữ theo phiên bản này.</p>
+        <p class="mt-1 text-sm text-pretty text-muted">Tên file và ghi chú được giữ theo phiên bản này.</p>
       </div>
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <UiButton v-if="filterLink" :to="filterLink" class="col-span-2">Lọc ảnh gốc</UiButton>
-        <UiButton v-else class="col-span-2" @click="emit('openFilter')">Lọc file trên máy</UiButton>
+        <UiButton :to="filterLink" class="col-span-2">Lọc ảnh gốc</UiButton>
         <UiButton variant="secondary" @click="emit('copy')">Copy tên file</UiButton>
         <UiMenu label="Xuất danh sách / ghi chú" :items="RESULT_EXPORTS" class="[&>button]:w-full [&>button]:justify-center sm:[&>button]:w-auto" @select="emit('export', $event)" />
       </div>

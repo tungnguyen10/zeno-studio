@@ -5,7 +5,7 @@ import { STUDIO_ROLE_LABELS, useStudioStore, type StudioRole } from '~/stores/st
 useSeoMeta({ title: 'Thành viên studio — Zeno Studio' })
 const route = useRoute()
 const store = useStudioStore()
-type InviteRole = 'manager' | 'member' | 'retoucher'
+type InviteRole = 'manager' | 'member'
 type Member = { userId: string; email: string | null; role: StudioRole }
 type Invitation = { id: string; email: string; role: StudioRole; expiresAt: string; acceptedAt: string | null; revokedAt: string | null }
 type Pending = { kind: 'member'; member: Member } | { kind: 'invitation'; invitation: Invitation }
@@ -164,7 +164,6 @@ const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm fon
               <select v-model="inviteRole" name="invite-role" :class="field">
                 <option v-if="store.studio?.role === 'owner'" value="manager">Quản lý</option>
                 <option value="member">Thành viên</option>
-                <option value="retoucher">Retoucher</option>
               </select>
             </label>
             <UiButton type="submit" class="w-full sm:w-auto" :loading="busy">Tạo lời mời</UiButton>
@@ -187,7 +186,7 @@ const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm fon
                 <span v-if="member.role === 'owner' || store.studio?.role !== 'owner'" class="self-start rounded-full bg-tint px-3 py-1 text-xs font-semibold text-muted sm:self-auto">{{ STUDIO_ROLE_LABELS[member.role] }}</span>
                 <span v-else class="flex items-center gap-2">
                   <select :value="member.role" :disabled="busy" :aria-label="`Vai trò của ${member.email || member.userId}`" class="control flex-1 sm:w-40 sm:flex-none" @change="changeRole(member, ($event.target as HTMLSelectElement).value as InviteRole)">
-                    <option value="manager">Quản lý</option><option value="member">Thành viên</option><option value="retoucher">Retoucher</option>
+                    <option value="manager">Quản lý</option><option value="member">Thành viên</option>
                   </select>
                   <button type="button" :disabled="busy" :class="dangerButton" @click="askRemoveMember(member)">Thu hồi</button>
                 </span>

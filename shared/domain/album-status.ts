@@ -18,29 +18,7 @@ export const ALBUM_FILTERS: ReadonlyArray<{ value: AlbumFilter; label: string }>
   { value: 'EXPIRED', label: ALBUM_STATUS_LABELS.EXPIRED },
 ]
 
-export const WORKFLOW_STEPS = ['Nháp', 'Khách chọn ảnh', 'Chốt & hậu kỳ', 'Bàn giao'] as const
-
-export const PRODUCTION_STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Chờ chỉnh',
-  RETOUCHING: 'Đang chỉnh',
-  WAITING_REVIEW: 'Chờ khách duyệt',
-  APPROVED: 'Khách đã duyệt',
-  REVISION_REQUESTED: 'Cần chỉnh lại',
-  DELIVERED: 'Đã bàn giao',
-}
-
-export const REVIEW_STATUS_LABELS: Record<string, string> = {
-  WAITING_REVIEW: 'Đang chờ bạn duyệt',
-  APPROVED: 'Đã duyệt',
-  REVISION_REQUESTED: 'Đã yêu cầu sửa',
-}
-
-// Tasks past retouching: waiting for review, approved or delivered.
-const RETOUCHED_STATUSES = new Set(['WAITING_REVIEW', 'APPROVED', 'DELIVERED'])
-
-export function countRetouched(tasks: ReadonlyArray<{ status: string }>): number {
-  return tasks.filter(task => RETOUCHED_STATUSES.has(task.status)).length
-}
+export const WORKFLOW_STEPS = ['Nháp', 'Khách chọn ảnh', 'Đã chốt · Lọc file'] as const
 
 export const EXPIRY_WARNING_DAYS = 3
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -64,7 +42,7 @@ export function workflowStepIndex(status: AlbumStatus): number | null {
     case 'DRAFT': return 0
     case 'PUBLISHED': return 1
     case 'FINALIZED': return 2
-    case 'DELIVERED': return 3
+    case 'DELIVERED': return 2
     default: return null
   }
 }
@@ -107,9 +85,9 @@ export function nextStep(album: NextStepInput, can: { publish: boolean; share: b
       return { kind: can.share ? 'share' : 'detail', hint: 'Chờ khách chọn ảnh' }
     }
     case 'FINALIZED':
-      return { kind: 'results', hint: album.latestVersionNumber ? `Đã chốt phiên bản ${album.latestVersionNumber}, bắt đầu hậu kỳ` : 'Đã chốt, bắt đầu hậu kỳ' }
+      return { kind: 'results', hint: album.latestVersionNumber ? `Đã chốt phiên bản ${album.latestVersionNumber}; xem kết quả hoặc lọc file` : 'Đã chốt; xem kết quả hoặc lọc file' }
     case 'DELIVERED':
-      return { kind: 'results', hint: 'Đã bàn giao cho khách' }
+      return { kind: 'results', hint: 'Bộ ảnh lịch sử; xem kết quả hoặc lọc file đã chốt' }
   }
 }
 

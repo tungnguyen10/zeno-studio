@@ -1,6 +1,3 @@
-export type ResultView = 'selection' | 'production' | 'delivery'
-export type ProductionItem = { id: string; filename: string; status: string }
-export type ProductionPage = { canDeliver: boolean; items: ProductionItem[]; review?: { roundNumber: number; status: string } | null }
 export type ResultSummary = { selectionVersionId: string; finalizedAt: string; versionNumber: number; total: number; notesCount: number }
 
 export const RESULT_EXPORTS = [

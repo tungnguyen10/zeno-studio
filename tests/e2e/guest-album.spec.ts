@@ -11,7 +11,7 @@ test('creates a published guest album and shows separate customer and admin link
     body: JSON.stringify({ id: albumId, status: 'PUBLISHED', photoCount: 1, adminToken, customerToken }),
   }))
   await page.goto('/')
-  await page.getByRole('link', { name: /Tạo album nhanh/ }).click()
+  await page.getByRole('link', { name: /Tạo album nhanh/ }).first().click()
   await expect(page.getByRole('button', { name: 'Tạo và xuất bản album' })).toBeEnabled()
   await page.getByLabel('Tên album').fill('Album khách')
   await page.getByLabel('Link folder Drive').fill('https://drive.google.com/drive/folders/folder123')
@@ -61,45 +61,27 @@ test('exchanges a guest admin link, shares a new customer link, and claims into 
   await expect(page).toHaveURL(`http://127.0.0.1:43627/studio/albums/${albumId}?studio=${studioId}`)
 })
 
-test('exports guest results and sends review and delivery from the management page', async ({ page }) => {
-  let reviewRequests = 0
-  let deliveryRequests = 0
-  let workflowStatus: 'ready' | 'approved' | 'delivered' = 'ready'
+test('exports guest results and opens Filter Files for the finalized version', async ({ page }) => {
+  const versionId = '33333333-3333-4333-8333-333333333333'
   await page.route(`**/api/guest/albums/${albumId}/results?*`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ selectionVersionId: '33333333-3333-4333-8333-333333333333', finalizedAt: '2026-10-17T00:00:00Z', versionNumber: 1, total: 1, notesCount: 0, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [] }] }),
+    body: JSON.stringify({ selectionVersionId: versionId, finalizedAt: '2026-10-17T00:00:00Z', versionNumber: 1, total: 1, notesCount: 1, nextCursor: null, items: [{ photoId: 'photo-1', filename: '01.jpg', notes: [{ text: 'Chỉnh sáng' }] }] }),
   }))
   await page.route(url => url.pathname === `/api/guest/albums/${albumId}/results/export` && url.searchParams.get('format') === 'selection-csv', route => route.fulfill({
     status: 200, headers: { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="selection.csv"' }, body: 'photo_id,filename\r\nphoto-1,01.jpg\r\n',
   }))
-  await page.route(`**/api/guest/albums/${albumId}/production`, route => route.fulfill({
+  await page.route(`**/api/guest/albums/${albumId}/selections/${versionId}/filter-manifest`, route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ canDeliver: true, review: workflowStatus === 'ready' ? null : { roundNumber: 1, status: 'APPROVED' }, items: [{ id: 'task-1', filename: '01.jpg', status: workflowStatus === 'ready' ? 'WAITING_REVIEW' : workflowStatus === 'approved' ? 'APPROVED' : 'DELIVERED' }] }),
+    body: JSON.stringify({ albumId, selectionVersionId: versionId, versionNumber: 1, finalizedAt: '2026-10-17T00:00:00Z', items: [{ photoId: 'photo-1', originalFilename: '01.jpg', notes: [{ text: 'Chỉnh sáng' }] }] }),
   }))
-  await page.route(`**/api/guest/albums/${albumId}/review`, route => {
-    reviewRequests++
-    workflowStatus = 'approved'
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ roundNumber: 1 }) })
-  })
-  await page.route(`**/api/guest/albums/${albumId}/delivery`, route => {
-    deliveryRequests++
-    workflowStatus = 'delivered'
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ versionNumber: 1 }) })
-  })
   await page.goto(`/guest/albums/${albumId}/results`)
   await expect(page.getByRole('heading', { name: '01.jpg' })).toBeVisible()
   const download = page.waitForEvent('download')
   await page.getByText('Xuất danh sách / ghi chú').click()
   await page.getByRole('button', { name: 'Selection CSV' }).click()
   expect((await download).suggestedFilename()).toBe('selection.csv')
-  await page.getByRole('navigation', { name: 'Các bước xử lý' }).getByRole('link', { name: 'Duyệt & bàn giao' }).click()
-  await expect(page.getByRole('button', { name: 'Đánh dấu hoàn tất' })).toBeHidden()
-  await page.getByLabel('Link folder Google Drive').fill('https://drive.google.com/drive/folders/edited')
-  await page.getByRole('button', { name: 'Mở vòng duyệt' }).click()
-  await expect(page.getByText('Đã mở vòng duyệt 1.')).toBeVisible()
-  expect(reviewRequests).toBe(1)
-  await page.getByLabel('Link Drive thành phẩm').fill('https://drive.google.com/drive/folders/final')
-  await page.getByRole('button', { name: 'Đánh dấu hoàn tất' }).click()
-  await expect(page.getByText('Đã bàn giao album.')).toBeVisible()
-  expect(deliveryRequests).toBe(1)
+  await page.getByRole('link', { name: 'Lọc ảnh gốc' }).click()
+  await expect(page).toHaveURL(`/guest/albums/${albumId}/filter?version=${versionId}`)
+  await page.getByText('Xem tên file').click()
+  await expect(page.getByText('01.jpg')).toBeVisible()
 })

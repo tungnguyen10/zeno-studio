@@ -87,13 +87,13 @@ async function main() {
     const invitee = await verifiedCookie('HTTP Invitee')
     const email = await owner.query<{ email: string }>('SELECT email FROM "user" WHERE id = $1', [invitee.id])
     const invitationResponse = await expectStatus(await appRequest(`/api/studio/${created.studio.id}/invitations`, ownerUser.cookie, 'POST', {
-      email: email.rows[0]!.email, role: 'retoucher',
+      email: email.rows[0]!.email, role: 'member',
     }), 200, 'invitation creation')
     const invitation = await invitationResponse.json() as { invitation: { token: string } }
     const acceptedResponse = await expectStatus(await appRequest('/api/studio/invitations/accept', invitee.cookie, 'POST', { token: invitation.invitation.token }), 200, 'invitation acceptance')
     const accepted = await acceptedResponse.json() as { studio: { id: string; role: string } }
-    if (accepted.studio.id !== created.studio.id || accepted.studio.role !== 'retoucher') throw new Error('Invitation returned incorrect studio')
-    await expectStatus(await appRequest(`/api/studio/${created.studio.id}/members`, invitee.cookie), 403, 'retoucher member list')
+    if (accepted.studio.id !== created.studio.id || accepted.studio.role !== 'member') throw new Error('Invitation returned incorrect studio')
+    await expectStatus(await appRequest(`/api/studio/${created.studio.id}/members`, invitee.cookie), 403, 'member list')
     await expectStatus(await appRequest(`/api/studio/${created.studio.id}/members/${invitee.id}`, ownerUser.cookie, 'PATCH', { role: 'member' }), 200, 'role change')
     await expectStatus(await appRequest(`/api/studio/${created.studio.id}/members/${invitee.id}`, ownerUser.cookie, 'DELETE'), 200, 'member revocation')
     const afterRevocation = await expectStatus(await appRequest('/api/studio', invitee.cookie), 200, 'revoked studio list')

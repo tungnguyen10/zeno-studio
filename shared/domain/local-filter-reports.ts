@@ -10,7 +10,7 @@ export function buildFilterReports(version: string, items: FilterManifestItem[],
     group.push(entry)
     byPhoto.set(entry.photoId, group)
   }
-  const notesRows: string[][] = [['selection_version', 'original_filename', 'copied_filename', 'relative_output_path', 'retouch_notes']]
+  const notesRows: string[][] = [['selection_version', 'original_filename', 'copied_filename', 'relative_output_path', 'photo_notes']]
   const reportRows: string[][] = [['original_filename', 'matched_source', 'output_path', 'status', 'reason']]
   for (const item of items) {
     const rows = byPhoto.get(item.photoId) ?? [{ photoId: item.photoId, sourcePath: '', outputPath: '', status: 'missing', reason: '' }]

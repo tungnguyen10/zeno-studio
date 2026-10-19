@@ -87,6 +87,11 @@ describe('selection workflow', () => {
     const state = await getSelectionState(pool, phone)
     expect(await getSelectionState(pool, phone, state.version)).toEqual({ version: state.version })
     await finalizeStudioSelection(pool, studio.id, 'shared-owner', album.id)
+    const filteredResult = await getSelectionResults(pool, studio.id, 'shared-owner', album.id, { search: 'A.JPG' })
+    expect(filteredResult.items).toHaveLength(1)
+    const entireSnapshot = await getSelectionResults(pool, studio.id, 'shared-owner', album.id, { versionId: filteredResult.selectionVersionId })
+    expect(entireSnapshot.items.map(item => item.filename)).toEqual(['A.JPG', 'B.JPG'])
+    expect(entireSnapshot.items[0]?.notes).toEqual([{ text: 'Từ điện thoại' }])
     const manager = { kind: 'member' as const, studioId: studio.id, userId: 'shared-owner' }
     const previousFirst = await listManagedAlbumPhotos(pool, manager, album.id, { limit: 1, filter: 'previous' })
     expect(previousFirst.items).toHaveLength(1)

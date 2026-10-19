@@ -6,7 +6,6 @@ import { finalizeStudioSelection, getSelectionResults, getSelectionState, reopen
 import { ensureStudio } from '../../server/studios/studio'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 import { hashAccessToken } from '../../server/security/access-token'
-import { completeDelivery, listProductionTasks, startReviewRound, submitCustomerReview, updateProductionTask } from '../../server/albums/production'
 
 const pooledUrl = process.env.NUXT_DATABASE_TEST_URL
 const directUrl = process.env.NUXT_DATABASE_TEST_DIRECT_URL
@@ -53,19 +52,7 @@ async function main() {
     const revoked = await owner.query('UPDATE album_tokens SET revoked_at = now() WHERE token_hash = $1', [hashAccessToken(joined.token)])
     if (revoked.rowCount !== 1) throw new Error('Token revocation fixture failed')
     if (await resolveAlbumAccess(runtime, joined.token)) throw new Error('Revoked token still resolves')
-    const deliveryAlbum = await createAlbum(runtime, source, { studioId, userId: actor, title: 'Delivery test', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'exact', count: 1 } })
-    const deliveryToken = (await publishAlbum(runtime, studioId, actor, deliveryAlbum.id)).customerToken
-    const deliveryAccess = (await resolveAlbumAccess(runtime, (await joinAlbum(runtime, (await resolveAlbumAccess(runtime, deliveryToken))!)).token))!
-    const deliveryPhoto = (await listAlbumPhotos(runtime, deliveryAccess)).items[0]!
-    await setPhotoSelection(runtime, deliveryAccess, deliveryPhoto.id, true, 0)
-    await finalizeStudioSelection(runtime, studioId, actor, deliveryAlbum.id)
-    const task = (await listProductionTasks(runtime, studioId, actor, deliveryAlbum.id)).items[0]!
-    await updateProductionTask(runtime, studioId, actor, deliveryAlbum.id, task.id, 'RETOUCHING')
-    await updateProductionTask(runtime, studioId, actor, deliveryAlbum.id, task.id, 'WAITING_REVIEW')
-    await startReviewRound(runtime, studioId, actor, deliveryAlbum.id, 'https://drive.google.com/drive/folders/edited')
-    if ((await submitCustomerReview(runtime, deliveryAccess, 'approve', '')).status !== 'APPROVED') throw new Error('Customer approval failed')
-    if ((await completeDelivery(runtime, studioId, actor, deliveryAlbum.id, 'https://drive.google.com/drive/folders/final')).versionNumber !== 1) throw new Error('Delivery failed')
-    process.stdout.write('Neon pooled album, concurrent saves, snapshots, review, delivery and revocation passed\n')
+    process.stdout.write('Neon pooled album, concurrent saves, snapshots and revocation passed\n')
   } finally {
     if (studioId) await owner.query('DELETE FROM studios WHERE id = $1', [studioId])
     await runtime.end()

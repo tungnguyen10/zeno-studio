@@ -77,7 +77,7 @@ const AUDIENCES = [
     points: [
       'Tạo album từ folder Google Drive, ảnh gốc vẫn nằm trong Drive của bạn.',
       'Nhận danh sách tên file kèm ghi chú chỉnh sửa, không cần đối chiếu qua tin nhắn.',
-      'Lọc RAW/JPEG đã chọn ngay trên máy và theo dõi từng vòng duyệt.',
+      'Lọc và copy RAW/JPEG theo bộ ảnh đã chốt ngay trên máy.',
     ],
   },
   {
@@ -85,7 +85,7 @@ const AUDIENCES = [
     points: [
       'Mở link là xem được, không cần tạo tài khoản.',
       'Chọn ảnh yêu thích và ghi chú mong muốn ngay trên điện thoại.',
-      'Xem lại thành phẩm và phản hồi trước khi nhận bàn giao.',
+      'Có thể sửa lựa chọn và ghi chú trước khi người quản trị chốt bộ ảnh.',
     ],
   },
 ]
@@ -113,7 +113,7 @@ onMounted(() => {
         <div>
           <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-line-strong bg-tint px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[.16em] text-brand sm:mb-5 sm:px-4 sm:py-2 sm:text-xs">Quy trình ảnh liền mạch</p>
           <h1 class="max-w-3xl text-[2.5rem] font-semibold leading-[1.08] tracking-[-.04em] text-balance sm:text-6xl lg:text-[5.1rem]">Từ bộ ảnh đầu tiên đến lời <em class="font-serif font-normal text-brand-soft">“ưng rồi”.</em></h1>
-          <p class="mt-5 max-w-xl text-base leading-7 text-pretty text-muted sm:mt-7 sm:text-lg sm:leading-8">Một nơi để khách chọn ảnh, ghi chú mong muốn chỉnh sửa và duyệt thành phẩm. Studio theo dõi từng bước, tìm đúng file và bàn giao gọn gàng.</p>
+          <p class="mt-5 max-w-xl text-base leading-7 text-pretty text-muted sm:mt-7 sm:text-lg sm:leading-8">Một nơi để khách chọn ảnh và ghi chú. Studio chốt bộ ảnh, xuất danh sách và lọc đúng file RAW/JPEG trên máy.</p>
           <div class="mt-7 grid gap-2.5 sm:mt-9 sm:flex sm:flex-wrap sm:gap-3">
             <NuxtLink to="/create" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full bg-brand px-6 font-semibold text-white shadow-lg shadow-brand/15 transition-colors hover:bg-brand-dark">Tạo album nhanh <span aria-hidden="true">&nbsp;↗</span></NuxtLink>
             <NuxtLink to="/studio" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-line-strong bg-white px-6 font-semibold transition-colors hover:border-brand-soft">Mở studio</NuxtLink>
