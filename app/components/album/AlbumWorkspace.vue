@@ -21,7 +21,7 @@ const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
-const failedThumbnails = ref<Record<string, true>>({})
+const thumbnailFallback = ref<Record<string, 'proxy' | 'failed'>>({})
 const layout = useGalleryLayout('zeno-studio-gallery-layout')
 const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`${props.apiRoot}/photos`, { query: { limit: params.limit, filter: params.filter, ...(params.cursor ? { cursor: params.cursor } : {}) } }))
 const filter = computed<PhotoFilter>({ get: () => paged.filter.value, set: value => { if (value !== paged.filter.value) void paged.reset(value) } })
@@ -103,11 +103,17 @@ async function reopen() {
 }
 
 function tileSrc(photo: Photo, mode: GalleryLayout) {
+  if (thumbnailFallback.value[photo.id] === 'proxy') return `${props.apiRoot}/photos/${photo.id}/image`
   return mode === 'grid' ? driveGridSrc(photo.sourceFileId, photo.width, photo.height) : driveThumbnailUrl(photo.sourceFileId, 'w', 480)
 }
 
 function tileSrcset(photo: Photo, mode: GalleryLayout) {
+  if (thumbnailFallback.value[photo.id]) return undefined
   return mode === 'grid' ? driveGridSrcset(photo.sourceFileId, photo.width, photo.height) : driveFitSrcset(photo.sourceFileId)
+}
+
+function handleTileError(photoId: string) {
+  thumbnailFallback.value[photoId] = !thumbnailFallback.value[photoId] && props.apiRoot.startsWith('/api/studio/') ? 'proxy' : 'failed'
 }
 
 onMounted(() => { void load() })
@@ -203,7 +209,7 @@ onMounted(() => { void load() })
               label="Ảnh trong album"
               @end="paged.loadMore"
             >
-              <template #default="{ item: photo, box, layout: mode, eager }">
+              <template #default="{ item: photo, box, layout: mode, eager, priority }">
                 <PhotoTile
                   :filename="photo.filename"
                   :layout="mode"
@@ -211,14 +217,15 @@ onMounted(() => { void load() })
                   :src="tileSrc(photo, mode)"
                   :srcset="tileSrcset(photo, mode)"
                   :eager="eager"
-                  :failed="!!failedThumbnails[photo.id]"
+                  :priority="priority"
+                  :failed="thumbnailFallback[photo.id] === 'failed'"
                   :action-label="canChoose ? `Chốt ${photo.filename}` : photo.filename"
                   :interactive="canChoose"
                   :pressed="canChoose ? isChosen(photo) : undefined"
                   :highlighted="canChoose && isChosen(photo)"
                   :caption-height="44"
                   @activate="canChoose && toggle(photo)"
-                  @error="failedThumbnails[photo.id] = true"
+                  @error="handleTileError(photo.id)"
                 >
                   <template v-if="photo.selected || photo.previouslyFinalized" #badge>
                     <span v-if="photo.previouslyFinalized" class="inline-flex min-h-7 items-center rounded-full bg-tint/95 px-2 text-xs font-semibold text-brand shadow-sm">Đã chốt trước</span>

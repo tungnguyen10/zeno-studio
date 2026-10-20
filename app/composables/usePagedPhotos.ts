@@ -4,7 +4,7 @@ export type PhotoFilter = 'all' | 'selected' | 'previous'
 export interface PhotoPageResponse<T> { items: T[]; nextCursor: string | null; total: number; selectedCount: number }
 export type PhotoPageFetcher<T> = (params: { cursor?: string; filter: PhotoFilter; limit: number }) => Promise<PhotoPageResponse<T>>
 
-export function usePagedPhotos<T extends { id: string }>(fetchPage: PhotoPageFetcher<T>, pageSize = 120) {
+export function usePagedPhotos<T extends { id: string }>(fetchPage: PhotoPageFetcher<T>, pageSize = 120, firstPageSize = Math.min(48, pageSize)) {
   const items = shallowRef<T[]>([])
   const ids = new Set<string>()
   const filter = ref<PhotoFilter>('all')
@@ -24,7 +24,7 @@ export function usePagedPhotos<T extends { id: string }>(fetchPage: PhotoPageFet
     loading.value = true
     error.value = ''
     try {
-      const page = await fetchPage({ cursor: nextCursor.value ?? undefined, filter: filter.value, limit: pageSize })
+      const page = await fetchPage({ cursor: nextCursor.value ?? undefined, filter: filter.value, limit: started.value ? pageSize : firstPageSize })
       if (run !== generation) return
       const fresh = page.items.filter(item => !ids.has(item.id))
       for (const item of fresh) ids.add(item.id)

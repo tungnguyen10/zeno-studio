@@ -14,11 +14,10 @@ const props = withDefaults(defineProps<{
   label: string
   captionHeight?: number
   listRowHeight?: number
-  eagerCount?: number
-}>(), { captionHeight: 48, listRowHeight: 96, eagerCount: 10 })
+}>(), { captionHeight: 48, listRowHeight: 96 })
 
 const emit = defineEmits<{ end: [] }>()
-defineSlots<{ default(props: { item: T; index: number; box: GalleryBox; layout: GalleryLayout; eager: boolean }): unknown }>()
+defineSlots<{ default(props: { item: T; index: number; box: GalleryBox; layout: GalleryLayout; eager: boolean; priority: boolean }): unknown }>()
 
 const container = ref<HTMLElement | null>(null)
 const width = ref(0)
@@ -37,6 +36,7 @@ const rows = computed<LayoutRow[]>(() => {
   return []
 })
 const isMasonry = computed(() => props.layout === 'masonry')
+const firstRowCount = computed(() => props.layout === 'list' ? 1 : props.layout === 'justified' ? (rows.value[0]?.items.length ?? 1) : columns.value)
 const count = computed(() => (isMasonry.value ? (width.value > 0 ? props.items.length : 0) : rows.value.length))
 
 const virtualizer = useWindowVirtualizer(computed(() => ({
@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
           :aria-setsize="total"
           :style="{ top: `${virtual.start - scrollMargin}px`, left: `${virtual.lane * (masonryColumnWidth + gap)}px`, width: `${masonryColumnWidth}px`, height: `${virtual.size}px` }"
         >
-          <slot :item="items[virtual.index]!" :index="virtual.index" :box="{ width: masonryColumnWidth, height: virtual.size }" :layout="layout" :eager="virtual.index < eagerCount" />
+          <slot :item="items[virtual.index]!" :index="virtual.index" :box="{ width: masonryColumnWidth, height: virtual.size }" :layout="layout" :eager="virtual.index < firstRowCount" :priority="virtual.index < Math.min(2, firstRowCount)" />
         </li>
       </template>
       <template v-else>
@@ -110,7 +110,7 @@ onBeforeUnmount(() => {
             :aria-setsize="total"
             :style="{ top: `${virtual.start - scrollMargin}px`, left: `${placed.left}px`, width: `${placed.width}px`, height: `${placed.height}px` }"
           >
-            <slot :item="items[placed.index]!" :index="placed.index" :box="{ width: placed.width, height: placed.height }" :layout="layout" :eager="placed.index < eagerCount" />
+            <slot :item="items[placed.index]!" :index="placed.index" :box="{ width: placed.width, height: placed.height }" :layout="layout" :eager="placed.index < firstRowCount" :priority="placed.index < Math.min(2, firstRowCount)" />
           </li>
         </template>
       </template>

@@ -36,4 +36,10 @@ test('studio album list can reveal a fresh customer share link on the published 
   await expect(published.getByRole('link', { name: /album\/.*token=/ })).toHaveAttribute('href', `http://127.0.0.1:43627/album/${publishedId}?token=${customerToken}`)
   await expect(published.getByRole('button', { name: 'Sao chép lại link' })).toBeVisible()
   expect(shareRequests).toBe(1)
+
+  // Reopening the page should reuse the cached link instead of minting another customer token.
+  await page.reload()
+  const publishedAfterReload = page.getByRole('article').filter({ hasText: 'Album đã xuất bản' })
+  await expect(publishedAfterReload.getByRole('link', { name: /album\/.*token=/ })).toHaveAttribute('href', `http://127.0.0.1:43627/album/${publishedId}?token=${customerToken}`)
+  expect(shareRequests).toBe(1)
 })

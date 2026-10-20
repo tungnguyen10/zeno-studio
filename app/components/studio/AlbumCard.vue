@@ -28,7 +28,7 @@ const BADGES: Record<AlbumStatus, string> = {
 </script>
 
 <template>
-  <article class="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4 sm:gap-4 sm:p-5">
+  <article class="flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-white p-4 sm:gap-4 sm:p-5">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h2 class="break-words text-lg font-semibold leading-snug">{{ album.title }}</h2>

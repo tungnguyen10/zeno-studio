@@ -55,12 +55,3 @@ export function driveFocusSrc(fileId: string, cap: number): string {
 export function driveFocusSrcset(fileId: string, cap: number): string {
   return FOCUS_WIDTHS.filter(candidate => candidate <= cap).map(candidate => `${driveThumbnailUrl(fileId, 'w', candidate)} ${candidate}w`).join(', ')
 }
-
-// A changed query forces a fresh request after a transient Drive failure.
-export function withRetryParam(url: string): string {
-  return `${url}&retry=1`
-}
-
-export function retryDelayMs(): number {
-  return 600 + Math.round(Math.random() * 600)
-}

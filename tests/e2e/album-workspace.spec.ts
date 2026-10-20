@@ -16,6 +16,25 @@ const viewports = [
   { name: 'desktop', viewport: { width: 1440, height: 900 } },
 ]
 
+test('studio thumbnails fall back to the existing authenticated image route', async ({ page }) => {
+  const proxied: string[] = []
+  await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 429, body: 'Rate limited' }))
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}/photos/${photos[0]!.id}/image`, route => {
+    proxied.push(route.request().url())
+    return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg })
+  })
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    id: albumId, title: 'Album ảnh', status: 'FINALIZED', expiresAt: '2030-01-01T00:00:00Z', canFinalize: true,
+    hasResults: true, previousCount: 0, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null }, photoCount: 1, selectedCount: 0,
+  }) }))
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}/photos?*`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    items: [{ ...photos[0], previouslyFinalized: false }], nextCursor: null, total: 1, selectedCount: 0,
+  }) }))
+  await page.goto(`/studio/albums/${albumId}?studio=${studioId}`)
+  await expect.poll(() => proxied.length).toBe(1)
+  await expect(page.getByText('Không tải được ảnh', { exact: true })).toHaveCount(0)
+})
+
 for (const { name, viewport } of viewports) {
   test.describe(`studio album workspace on ${name}`, () => {
     test.use({ viewport })

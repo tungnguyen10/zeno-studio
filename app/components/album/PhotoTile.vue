@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<{
   src: string
   srcset?: string
   eager: boolean
+  priority: boolean
   failed: boolean
   actionLabel: string
   interactive?: boolean
@@ -53,7 +54,7 @@ watch(() => props.src, () => { loaded.value = false })
         :sizes="srcset ? sizes : undefined"
         :alt="filename"
         :loading="eager ? 'eager' : 'lazy'"
-        :fetchpriority="eager ? 'high' : 'auto'"
+        :fetchpriority="priority ? 'high' : 'auto'"
         decoding="async"
         referrerpolicy="no-referrer"
         draggable="false"

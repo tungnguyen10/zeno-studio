@@ -41,13 +41,20 @@ const field = 'control mt-1.5'
 
 <template>
   <UiModal v-model:open="open" :title="created ? 'Album đã được tạo' : 'Tạo album từ Google Drive'" :description="created ? 'Xuất bản để lấy link gửi khách, hoặc để sau.' : 'Folder Drive cần chia sẻ công khai cho người có đường liên kết.'">
-    <div v-if="created" class="space-y-5">
-      <div class="rounded-xl bg-tint p-4 text-sm">
-        <p class="break-words font-semibold">{{ created.title }}</p>
-        <p class="mt-1 text-muted tabular-nums">{{ created.photoCount }} ảnh · Bản nháp</p>
+    <div v-if="created" class="min-w-0 space-y-4">
+      <div class="flex min-w-0 items-center gap-3 rounded-2xl bg-tint p-4 text-sm">
+        <span aria-hidden="true" class="grid size-10 shrink-0 place-items-center rounded-full bg-brand text-white">
+          <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.58l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" /></svg>
+        </span>
+        <div class="min-w-0">
+          <p class="break-words font-semibold">{{ created.title }}</p>
+          <p class="mt-0.5 text-muted tabular-nums">{{ created.photoCount }} ảnh · Bản nháp</p>
+        </div>
       </div>
-      <StudioAlbumShareActions :studio-id="studioId" :album-id="created.id" status="DRAFT" can-publish :can-share="false" primary @published="emit('changed')" />
-      <div class="flex flex-wrap gap-2">
+      <div class="grid min-w-0 gap-2">
+        <StudioAlbumShareActions :studio-id="studioId" :album-id="created.id" status="DRAFT" can-publish :can-share="false" primary @published="emit('changed')" />
+      </div>
+      <div class="grid grid-cols-2 gap-2 border-t border-line pt-4">
         <UiButton :to="`/studio/albums/${created.id}?studio=${studioId}`" variant="secondary" size="sm">Mở album</UiButton>
         <UiButton variant="ghost" size="sm" @click="open = false">Xong</UiButton>
       </div>

@@ -83,13 +83,19 @@ test.describe('studio dashboard', () => {
   })
 
   test('does not overflow horizontally on a narrow phone', async ({ page }) => {
-    await page.setViewportSize({ width: 360, height: 780 })
+    await page.setViewportSize({ width: 320, height: 780 })
     await signIn(page, [{ id: studioId, name: 'Studio có một cái tên rất rất dài để kiểm tra', role: 'owner' }])
     await page.route(`**/api/studio/${studioId}/albums`, route => json(route, { albums: [{ ...albums[1], title: 'Tên album rất dài '.repeat(8) }, albums[2]!] }))
     await page.goto('/studio')
     await expect(page.getByRole('article')).toHaveCount(2)
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-    expect(overflow).toBeLessThanOrEqual(0)
+    const statusFilters = page.getByRole('group', { name: 'Lọc album theo trạng thái' })
+    for (const width of [320, 360, 384]) {
+      await page.setViewportSize({ width, height: 780 })
+      const filterOverflow = await statusFilters.evaluate(element => element.scrollWidth - element.clientWidth)
+      expect(filterOverflow).toBeLessThanOrEqual(0)
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+      expect(overflow).toBeLessThanOrEqual(0)
+    }
   })
 })
 

@@ -22,6 +22,8 @@
     "test:studio-http": "tsx tests/live/studio-http.ts",
     "test:album-neon": "tsx tests/live/album-neon.ts",
     "test:drive-live": "node --env-file-if-exists=.env --import tsx scripts/check-drive-public.ts",
+    "measure:gallery": "node scripts/measure-gallery.mjs",
+    "measure:drive-images": "node --env-file-if-exists=.env --import tsx scripts/measure-drive-images.ts",
     "test:drive-http": "node --env-file-if-exists=.env --import tsx tests/live/drive-album-http.ts",
     "test:drive-preview-http": "node --env-file-if-exists=.env --import tsx tests/live/preview-drive-album-http.ts"
   },
@@ -37,6 +39,7 @@
     "nuxt": "^4.6.1",
     "pg": "^8.23.1",
     "pinia": "^4.0.3",
+    "qrcode": "^1.5.4",
     "tailwindcss": "^4.3.3",
     "vue": "^3.5.43",
     "vue-router": "^5.4.0"
@@ -46,6 +49,7 @@
     "@playwright/test": "^1.64.0",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",

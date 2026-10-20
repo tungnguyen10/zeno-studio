@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import QRCode from 'qrcode'
 import type { AlbumStatus } from '~~/shared/domain/album-status'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 
@@ -13,8 +14,23 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ published: [] }>()
 
+// Tokens are stored hashed server-side and can't be re-read, so cache the resolved link here
+// to avoid minting a new customer token every time the studio reopens this page.
+const storageKey = `zeno-studio:album-link:${props.albumId}`
+
 const link = ref('')
+onMounted(() => { link.value = localStorage.getItem(storageKey) ?? '' })
 const copied = ref(false)
+const qrDataUrl = ref('')
+const qrError = ref(false)
+// Regenerate lazily if the link ever changes, instead of showing a stale code.
+watch(link, () => { qrDataUrl.value = ''; qrError.value = false })
+
+async function toggleQr(event: Event) {
+  if (!(event.target as HTMLDetailsElement).open || qrDataUrl.value || !link.value) return
+  try { qrDataUrl.value = await QRCode.toDataURL(link.value, { margin: 1, width: 160 }) }
+  catch { qrError.value = true }
+}
 const busy = ref<'publish' | 'share' | null>(null)
 // `quiet` messages are announced to screen readers only; the button label already shows them.
 const message = ref<{ text: string; tone: 'info' | 'quiet' | 'error' } | null>(null)
@@ -36,6 +52,7 @@ async function request(action: 'publish' | 'share') {
   const copying = copy(pending)
   try {
     link.value = await pending
+    localStorage.setItem(storageKey, link.value)
     const ok = await copying
     if (action === 'publish') {
       publishedNow.value = true
@@ -85,11 +102,25 @@ async function copy(source: string | Promise<string>) {
       <svg v-else aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="size-4"><path d="M8.5 11.5a3 3 0 0 0 4.24 0l2.5-2.5a3 3 0 0 0-4.24-4.24L10 5.76" /><path d="M11.5 8.5a3 3 0 0 0-4.24 0l-2.5 2.5a3 3 0 0 0 4.24 4.24l1-1" /></svg>
       {{ busy === 'share' ? 'Đang lấy link…' : copied ? 'Đã sao chép' : 'Sao chép link khách' }}
     </button>
-    <div v-if="link" class="flex w-full min-w-0 items-center gap-1 rounded-xl border border-line bg-tint py-1 pl-3 pr-1 text-sm">
-      <a :href="link" target="_blank" rel="noopener noreferrer" :title="link" translate="no" class="focus-ring min-w-0 flex-1 truncate rounded py-2 text-muted underline-offset-4 hover:text-brand hover:underline">{{ link }}</a>
-      <button type="button" aria-label="Sao chép lại link" title="Sao chép lại link" class="focus-ring grid size-11 shrink-0 place-items-center rounded-lg text-brand hover:bg-white" @click="copy(link)">
-        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" class="size-4"><rect x="7" y="7" width="9" height="9" rx="2" /><path d="M13 7V5.5A1.5 1.5 0 0 0 11.5 4h-6A1.5 1.5 0 0 0 4 5.5v6A1.5 1.5 0 0 0 5.5 13H7" /></svg>
-      </button>
+    <div v-if="link" class="w-full min-w-0">
+      <p class="mb-1 text-xs font-semibold text-muted">Link khách hàng</p>
+      <div class="flex w-full min-w-0 items-center gap-1 rounded-xl border border-line bg-tint py-1 pl-3 pr-1 text-sm">
+        <a :href="link" target="_blank" rel="noopener noreferrer" :title="link" translate="no" class="focus-ring min-w-0 flex-1 truncate rounded py-2 text-muted underline-offset-4 hover:text-brand hover:underline">{{ link }}</a>
+        <button type="button" aria-label="Sao chép lại link" title="Sao chép lại link" class="focus-ring grid size-11 shrink-0 place-items-center rounded-lg text-brand hover:bg-white" @click="copy(link)">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" class="size-4"><rect x="7" y="7" width="9" height="9" rx="2" /><path d="M13 7V5.5A1.5 1.5 0 0 0 11.5 4h-6A1.5 1.5 0 0 0 4 5.5v6A1.5 1.5 0 0 0 5.5 13H7" /></svg>
+        </button>
+      </div>
+      <details class="group mt-2 rounded-xl border border-line bg-canvas px-3 text-sm" @toggle="toggleQr">
+        <summary class="focus-ring -mx-1 flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-1 font-semibold text-brand [&::-webkit-details-marker]:hidden">
+          <span>Mã QR cho khách quét</span>
+          <span aria-hidden="true" class="text-muted transition-transform group-open:rotate-180">▾</span>
+        </summary>
+        <div class="flex justify-center pb-3 pt-1">
+          <img v-if="qrDataUrl" :src="qrDataUrl" :alt="`Mã QR mở album cho khách: ${link}`" width="160" height="160" class="rounded-lg">
+          <p v-else-if="qrError" role="alert" class="text-sm text-danger">Không tạo được mã QR.</p>
+          <p v-else class="text-sm text-muted">Đang tạo mã QR…</p>
+        </div>
+      </details>
     </div>
     <p v-if="message?.tone === 'error'" role="alert" class="w-full text-sm text-danger">{{ message.text }}</p>
     <p v-else role="status" :class="message?.tone === 'info' ? 'w-full text-sm text-brand' : 'sr-only'">{{ message?.text }}</p>

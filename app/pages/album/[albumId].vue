@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { driveFitSrcset, driveFocusSrc, driveFocusSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl, focusWidthCap, retryDelayMs, withRetryParam } from '~/lib/drive-image'
+import { driveFitSrcset, driveFocusSrc, driveFocusSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl, focusWidthCap } from '~/lib/drive-image'
 import type { GalleryLayout } from '~/lib/gallery-layout'
 import { usePagedPhotos, type PhotoFilter, type PhotoPageResponse } from '~/composables/usePagedPhotos'
 import { useGalleryLayout } from '~/composables/useGalleryLayout'
@@ -31,9 +31,9 @@ const busy = ref(false)
 const loading = ref(true)
 const error = ref('')
 const status = ref('')
-const thumbnailState = ref<Record<string, 'retry' | 'proxy' | 'original' | 'failed'>>({})
+const thumbnailState = ref<Record<string, 'proxy' | 'original' | 'failed'>>({})
 const focusImageFailed = ref(false)
-const focusStage = ref<'drive' | 'retry' | 'original'>('drive')
+const focusStage = ref<'drive' | 'original'>('drive')
 const focusLoaded = ref(false)
 const focusWidthLimit = ref(2560)
 const stageEl = ref<HTMLElement | null>(null)
@@ -53,13 +53,14 @@ let statusTimer: ReturnType<typeof setTimeout> | undefined
 let selectionQueue: Promise<void> = Promise.resolve()
 const pendingSelections = ref(0)
 const heartPop = ref(false)
-const preloaded = new Set<string>()
+const preloaded = new Map<string, HTMLImageElement>()
+let navigationDirection: 1 | -1 = 1
 
 useSeoMeta({ title: () => overview.value ? `${overview.value.title} — Zeno Studio` : 'Album — Zeno Studio' })
 const visiblePhotos = computed(() => paged.items.value)
 const selectedSet = computed(() => new Set(selectedIds.value))
 const focusSelected = computed(() => !!focusPhoto.value && selectedSet.value.has(focusPhoto.value.id))
-const canSelect = computed(() => !!overview.value?.joined && overview.value.status === 'PUBLISHED')
+const canSelect = computed(() => !!overview.value?.joined && overview.value.status === 'PUBLISHED' && selectionLoaded.value)
 const focusIndex = computed(() => focusPhoto.value ? visiblePhotos.value.findIndex(photo => photo.id === focusPhoto.value!.id) : -1)
 const focusTotal = computed(() => Math.max(paged.total.value, visiblePhotos.value.length))
 const hasPrev = computed(() => focusIndex.value > 0)
@@ -138,11 +139,13 @@ async function enter() {
       try { await joinAlbum() }
       catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể vào album' }
     }
+    const selectionPromise = loadSelection().catch(() => { status.value = 'Chưa đồng bộ được lựa chọn. Đang thử lại…' })
     await loadPhotos()
-    await loadSelection()
+    loading.value = false
+    await selectionPromise
     if (import.meta.client) {
       pollTimer = setInterval(() => {
-        if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && !focusPhoto.value) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
+        if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && (!focusPhoto.value || !selectionLoaded.value)) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
       }, 4000)
     }
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Link album không hợp lệ hoặc đã hết hạn' }
@@ -209,6 +212,7 @@ function handleStageDoubleClick() {
 
 async function openPhoto(photo: Photo) {
   if (!focusPhoto.value && import.meta.client) {
+    navigationDirection = 1
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     focusPhoto.value = photo
     void nextTick(() => focusCloseButton.value?.focus())
@@ -219,6 +223,7 @@ async function openPhoto(photo: Photo) {
   focusLoaded.value = false
   focusWidthLimit.value = focusWidthCap()
   focusPhoto.value = photo
+  cancelPreloads(photo.id)
   noteText.value = ''
   noteSavedText.value = ''
   noteVersion.value = 0
@@ -244,6 +249,7 @@ async function closePhoto() {
   if (noteDirty.value && !await saveNote()) return
   noteReadRequest++
   focusPhoto.value = null
+  cancelPreloads()
   returnFocus?.focus({ preventScroll: true })
   returnFocus = null
 }
@@ -261,6 +267,7 @@ async function step(delta: 1 | -1) {
       target = visiblePhotos.value[index + 1]
     }
     if (!target || (noteDirty.value && !await saveNote())) return
+    navigationDirection = delta
     void openPhoto(target)
   } finally { navigating = false }
 }
@@ -309,22 +316,40 @@ function focusSizes(photo: Photo) {
   return box ? `${box.width}px` : '100vw'
 }
 
-function preloadNeighbours() {
-  const index = focusIndex.value
-  for (const photo of [visiblePhotos.value[index + 1], visiblePhotos.value[index - 1]]) {
-    if (!photo || preloaded.has(photo.id)) continue
-    preloaded.add(photo.id)
-    const image = new Image()
-    image.referrerPolicy = 'no-referrer'
-    image.sizes = focusSizes(photo)
-    image.srcset = driveFocusSrcset(photo.sourceFileId, focusWidthLimit.value)
-    image.src = driveFocusSrc(photo.sourceFileId, focusWidthLimit.value)
+function cancelPreloads(keepId?: string) {
+  for (const [id, image] of preloaded) {
+    if (id === keepId) continue
+    image.onload = null
+    image.onerror = null
+    image.srcset = ''
+    image.src = ''
+    preloaded.delete(id)
   }
 }
 
-function handleFocusImageLoad() {
+function preloadNext() {
+  const photo = visiblePhotos.value[focusIndex.value + navigationDirection]
+  cancelPreloads(photo?.id)
+  if (!photo || preloaded.has(photo.id) || focusWidthLimit.value <= 1280) return
+  const image = new Image()
+  image.fetchPriority = 'low'
+  image.referrerPolicy = 'no-referrer'
+  image.sizes = focusSizes(photo)
+  image.onerror = () => { if (preloaded.get(photo.id) === image) preloaded.delete(photo.id) }
+  preloaded.set(photo.id, image)
+  image.srcset = driveFocusSrcset(photo.sourceFileId, focusWidthLimit.value)
+  image.src = driveFocusSrc(photo.sourceFileId, focusWidthLimit.value)
+}
+
+async function handleFocusImageLoad(event: Event) {
+  const image = event.target as HTMLImageElement
+  const photoId = focusPhoto.value?.id
+  const stage = focusStage.value
+  if (!image.isConnected || !photoId) return
+  preloadNext()
+  try { await image.decode() } catch { /* A completed image can still be displayed if decode rejects. */ }
+  if (!image.isConnected || focusPhoto.value?.id !== photoId || focusStage.value !== stage) return
   focusLoaded.value = true
-  preloadNeighbours()
 }
 
 function onStageTouchStart(event: TouchEvent) {
@@ -383,7 +408,6 @@ function thumbnailBase(photo: Photo, mode: GalleryLayout) {
 function thumbnailSrc(photo: Photo, mode: GalleryLayout = layout.value) {
   const state = thumbnailState.value[photo.id]
   if (!state) return thumbnailBase(photo, mode)
-  if (state === 'retry') return withRetryParam(thumbnailBase(photo, mode))
   return state === 'proxy' ? `${root}/photos/${photo.id}/image?variant=thumbnail` : `${root}/photos/${photo.id}/image`
 }
 
@@ -392,21 +416,15 @@ function thumbnailSrcset(photo: Photo, mode: GalleryLayout = layout.value) {
   return mode === 'grid' ? driveGridSrcset(photo.sourceFileId, photo.width, photo.height) : driveFitSrcset(photo.sourceFileId)
 }
 
-// Direct Drive CDN, one delayed retry, then the authenticated proxy thumbnail, then the original.
+// The authenticated proxy uses Drive's official thumbnail link when the direct image request fails.
 function handleThumbnailError(photoId: string) {
   const state = thumbnailState.value[photoId]
-  if (!state) {
-    setTimeout(() => { if (!thumbnailState.value[photoId]) thumbnailState.value[photoId] = 'retry' }, retryDelayMs())
-    return
-  }
-  if (state === 'retry') thumbnailState.value[photoId] = 'proxy'
-  else thumbnailState.value[photoId] = state === 'proxy' ? 'original' : 'failed'
+  thumbnailState.value[photoId] = !state ? 'proxy' : state === 'proxy' ? 'original' : 'failed'
 }
 
 function focusSrc(photo: Photo) {
   if (focusStage.value === 'original') return `${root}/photos/${photo.id}/image`
-  const src = driveFocusSrc(photo.sourceFileId, focusWidthLimit.value)
-  return focusStage.value === 'retry' ? withRetryParam(src) : src
+  return driveFocusSrc(photo.sourceFileId, focusWidthLimit.value)
 }
 
 function focusSrcset(photo: Photo) {
@@ -415,10 +433,7 @@ function focusSrcset(photo: Photo) {
 
 function handleFocusImageError() {
   focusLoaded.value = false
-  if (focusStage.value === 'drive') {
-    const photoId = focusPhoto.value?.id
-    setTimeout(() => { if (focusPhoto.value?.id === photoId && focusStage.value === 'drive') focusStage.value = 'retry' }, retryDelayMs())
-  } else if (focusStage.value === 'retry') focusStage.value = 'original'
+  if (focusStage.value === 'drive') focusStage.value = 'original'
   else focusImageFailed.value = true
 }
 
@@ -432,6 +447,7 @@ onBeforeUnmount(() => {
   clearTimeout(statusTimer)
   window.removeEventListener('keydown', handleFocusKey)
   stageObserver?.disconnect()
+  cancelPreloads()
   document.documentElement.style.overflow = ''
 })
 </script>
@@ -470,6 +486,7 @@ onBeforeUnmount(() => {
             <p class="text-sm font-semibold text-muted">{{ filter === 'selected' ? 'Ảnh đã chọn' : '' }}</p>
             <GalleryLayoutSwitch v-model="layout" />
           </div>
+          <p v-if="overview.status === 'PUBLISHED' && !selectionLoaded" role="status" class="mb-3 px-1 text-xs text-muted sm:px-0">Đang đồng bộ lựa chọn…</p>
           <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
             <UiPhotoSkeleton v-for="n in 10" :key="n" heart class="aspect-[.8]" />
           </div>
@@ -485,7 +502,7 @@ onBeforeUnmount(() => {
               label="Ảnh trong album"
               @end="paged.loadMore"
             >
-              <template #default="{ item: photo, box, layout: mode, eager }">
+              <template #default="{ item: photo, box, layout: mode, eager, priority }">
                 <PhotoTile
                   :filename="photo.filename"
                   :layout="mode"
@@ -493,6 +510,7 @@ onBeforeUnmount(() => {
                   :src="thumbnailSrc(photo, mode)"
                   :srcset="thumbnailSrcset(photo, mode)"
                   :eager="eager"
+                  :priority="priority"
                   :failed="thumbnailState[photo.id] === 'failed'"
                   :action-label="`Mở ảnh ${photo.filename}`"
                   :caption-height="56"
@@ -500,7 +518,7 @@ onBeforeUnmount(() => {
                   @error="handleThumbnailError(photo.id)"
                 >
                   <template v-if="overview.status === 'PUBLISHED'" #action>
-                    <button type="button" class="focus-ring grid size-11 shrink-0 place-items-center rounded-full border text-lg shadow-sm transition-colors" :class="selectedSet.has(photo.id) ? 'border-heart bg-heart-soft text-heart' : 'border-line bg-white/90 text-muted'" :aria-label="`${selectedSet.has(photo.id) ? 'Bỏ chọn' : 'Chọn'} ${photo.filename}`" :aria-pressed="selectedSet.has(photo.id)" @click="toggle(photo)">♥</button>
+                    <button type="button" class="focus-ring grid size-11 shrink-0 place-items-center rounded-full border text-lg shadow-sm transition-colors disabled:cursor-wait disabled:opacity-50" :class="selectedSet.has(photo.id) ? 'border-heart bg-heart-soft text-heart' : 'border-line bg-white/90 text-muted'" :aria-label="`${selectedSet.has(photo.id) ? 'Bỏ chọn' : 'Chọn'} ${photo.filename}`" :aria-pressed="selectedSet.has(photo.id)" :disabled="!canSelect" @click="toggle(photo)">♥</button>
                   </template>
                 </PhotoTile>
               </template>
@@ -533,8 +551,7 @@ onBeforeUnmount(() => {
         <div ref="stageEl" class="relative flex min-h-0 flex-1 touch-manipulation items-center justify-center px-2 pb-2 select-none sm:px-20 sm:pb-6" @touchstart.passive="onStageTouchStart" @touchend.passive="onStageTouchEnd">
           <p v-if="focusImageFailed" role="alert" class="p-6 text-center text-white/80">Không tải được ảnh gốc từ Google Drive.</p>
           <div v-else class="photo-placeholder relative overflow-hidden rounded-md sm:rounded-lg" :class="focusBox ? '' : 'size-full'" :style="focusBox ? { width: `${focusBox.width}px`, height: `${focusBox.height}px` } : undefined" :data-loading="!focusLoaded ? '' : undefined" @dblclick="handleStageDoubleClick">
-            <img v-if="!focusLoaded && !thumbnailState[focusPhoto.id]" :src="thumbnailSrc(focusPhoto, 'justified')" alt="" aria-hidden="true" referrerpolicy="no-referrer" class="absolute inset-0 size-full object-cover blur-md">
-            <img v-if="focusBox" :key="focusPhoto.id" :src="focusSrc(focusPhoto)" :srcset="focusSrcset(focusPhoto)" :sizes="focusStage === 'drive' ? focusSizes(focusPhoto) : undefined" :alt="focusPhoto.filename" decoding="async" referrerpolicy="no-referrer" class="absolute inset-0 size-full object-contain transition-opacity duration-200" :class="focusLoaded ? 'opacity-100' : 'opacity-0'" @load="handleFocusImageLoad" @error="handleFocusImageError">
+            <img v-if="focusBox" :key="focusPhoto.id" :src="focusSrc(focusPhoto)" :srcset="focusSrcset(focusPhoto)" :sizes="focusStage === 'drive' ? focusSizes(focusPhoto) : undefined" :alt="focusPhoto.filename" decoding="async" fetchpriority="high" referrerpolicy="no-referrer" class="absolute inset-0 size-full object-contain transition-opacity duration-200" :class="focusLoaded ? 'opacity-100' : 'opacity-0'" @load="handleFocusImageLoad" @error="handleFocusImageError">
             <span aria-hidden="true" class="pointer-events-none absolute inset-0 grid place-items-center text-8xl text-white drop-shadow-lg transition-[opacity,transform] duration-300 motion-reduce:transition-none" :class="heartPop ? 'scale-100 opacity-100' : 'scale-50 opacity-0'">♥</span>
           </div>
           <button v-if="hasPrev" type="button" class="absolute left-2 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/45 backdrop-blur hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-white sm:left-4 sm:size-12" aria-label="Ảnh trước" @click="step(-1)">
@@ -546,7 +563,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <aside v-if="overview?.status === 'PUBLISHED'" class="max-h-[45dvh] shrink-0 overflow-y-auto overscroll-contain rounded-t-2xl bg-white px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-ink sm:max-h-none sm:w-80 sm:rounded-none sm:p-5 lg:w-96">
-        <button type="button" class="focus-ring min-h-12 w-full rounded-full border text-base font-semibold transition-colors" :class="focusSelected ? 'border-heart bg-heart text-white' : 'border-line-strong bg-white text-brand'" :aria-pressed="focusSelected" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
+        <button type="button" class="focus-ring min-h-12 w-full rounded-full border text-base font-semibold transition-colors disabled:cursor-wait disabled:opacity-50" :class="focusSelected ? 'border-heart bg-heart text-white' : 'border-line-strong bg-white text-brand'" :aria-pressed="focusSelected" :disabled="!canSelect" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
         <div v-if="focusSelected && noteLoading" role="status" aria-busy="true" aria-label="Đang tải ghi chú" class="mt-4">
           <UiSkeleton class="h-4 w-32" />
           <UiSkeleton class="mt-2 h-20 w-full rounded-xl sm:h-32" />

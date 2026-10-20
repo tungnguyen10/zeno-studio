@@ -86,10 +86,10 @@ function resetFilters() {
           </div>
 
           <div v-if="albums.length" class="mt-5 sm:mt-6">
-            <div role="group" aria-label="Lọc album theo trạng thái" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0 lg:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]">
-              <button v-for="item in filters" :key="item.value" type="button" :aria-pressed="filter === item.value" class="focus-ring min-h-16 min-w-[7.5rem] shrink-0 rounded-2xl border p-3 text-left transition-colors sm:min-h-[4.5rem] sm:min-w-0" :class="filter === item.value ? 'border-brand bg-brand text-white' : 'border-line bg-white hover:bg-tint'" @click="filter = item.value">
-                <span class="block text-xl font-semibold leading-none tabular-nums sm:text-2xl">{{ counts[item.value] }}</span>
-                <span class="mt-1.5 block whitespace-nowrap text-xs font-semibold">{{ item.label }}</span>
+            <div role="group" aria-label="Lọc album theo trạng thái" class="flex flex-wrap gap-1.5">
+              <button v-for="item in filters" :key="item.value" type="button" :aria-pressed="filter === item.value" class="focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-full border pl-3 pr-1.5 text-sm font-semibold transition-colors" :class="filter === item.value ? 'border-brand bg-brand text-white' : 'border-line bg-white hover:bg-tint'" @click="filter = item.value">
+                {{ item.label }}
+                <span class="grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs tabular-nums" :class="filter === item.value ? 'bg-white/20' : 'bg-tint text-muted'">{{ counts[item.value] }}</span>
               </button>
             </div>
             <label class="mt-4 block">

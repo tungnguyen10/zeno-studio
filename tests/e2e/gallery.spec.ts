@@ -152,19 +152,17 @@ async function mockSinglePhotoAlbum(page: import('@playwright/test').Page, proxi
   })
 }
 
-test('retries a transient Drive failure once before using the proxy', async ({ page }) => {
+test('uses the authenticated thumbnail proxy after one Drive failure', async ({ page }) => {
   const driveRequests: string[] = []
   const proxied: string[] = []
   await page.route('https://drive.google.com/thumbnail**', route => {
     driveRequests.push(route.request().url())
-    if (driveRequests.length === 1) return route.fulfill({ status: 429, body: 'Rate limited' })
-    return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#ddd"/></svg>' })
+    return route.fulfill({ status: 429, body: 'Rate limited' })
   })
   await mockSinglePhotoAlbum(page, proxied)
   await page.goto(`/album/${albumId}`)
-  await expect.poll(() => driveRequests.length).toBe(2)
-  expect(driveRequests[1]).toContain('retry=1')
-  expect(proxied).toEqual([])
+  await expect.poll(() => proxied).toContain('?variant=thumbnail')
+  expect(driveRequests).toHaveLength(1)
 })
 
 test('opens the focus view from Drive without hitting the proxy', async ({ page }) => {
