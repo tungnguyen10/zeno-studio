@@ -128,10 +128,9 @@ onMounted(() => { void load() })
       </div>
     </header>
 
-    <main class="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6 sm:pt-10 lg:px-8">
+    <main class="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6 sm:pt-8 lg:px-8">
       <div v-if="loading" role="status" aria-label="Đang tải album" aria-busy="true">
         <div class="space-y-3">
-          <UiSkeleton class="h-3 w-24 rounded-full" />
           <UiSkeleton class="h-9 w-2/3 max-w-sm rounded-xl" />
           <div class="flex flex-wrap gap-2 pt-1">
             <UiSkeleton v-for="n in 3" :key="n" class="h-7 w-28 rounded-full" />
@@ -157,8 +156,7 @@ onMounted(() => { void load() })
 
       <template v-else>
         <section aria-labelledby="album-title">
-          <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Chi tiết album</p>
-          <h1 id="album-title" class="mt-2 break-words text-2xl font-semibold tracking-tight text-balance sm:text-4xl">{{ workspace.title }}</h1>
+          <UiPageHeader :title="workspace.title" title-id="album-title" />
           <ul class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted sm:mt-4 sm:text-sm" aria-label="Thông tin album">
             <li class="rounded-full bg-brand px-3 py-1 font-semibold text-white">{{ statusLabel }}</li>
             <li class="tabular-nums">{{ workspace.photoCount }} ảnh</li>

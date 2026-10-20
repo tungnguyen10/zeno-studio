@@ -17,6 +17,8 @@ const error = ref('')
 const message = ref('')
 const customerLink = ref('')
 const adminLink = ref('')
+const createdTitle = ref('')
+const afterCreate = 'Tạo xong bạn nhận 2 link: link gửi khách và link quản trị bí mật — hãy lưu link quản trị, vì không lấy lại được nếu mất.'
 onMounted(() => { hydrated.value = true })
 
 async function create() {
@@ -33,53 +35,73 @@ async function create() {
     })
     customerLink.value = `${location.origin}/album/${result.id}?token=${result.customerToken}`
     adminLink.value = `${location.origin}/guest/albums/${result.id}#admin-${result.adminToken}`
-    message.value = 'Album đã xuất bản. Hãy lưu link quản trị trước khi rời trang.'
+    createdTitle.value = title.value
   } catch (cause) { error.value = studioAlbumErrorMessage(cause) }
   finally { busy.value = false }
 }
 
 async function copy(link: string, label: string) {
   try { await navigator.clipboard.writeText(link); message.value = `Đã sao chép ${label}.` }
-  catch { message.value = `Không sao chép được ${label}. Bạn có thể chọn và sao chép link bên dưới.` }
+  catch { message.value = `Không sao chép được ${label}. Bạn có thể mở link ở trên và sao chép trực tiếp.` }
 }
 </script>
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
-    <SiteHeader width="3xl">
+    <SiteHeader width="6xl">
       <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand">Vào studio</NuxtLink>
     </SiteHeader>
-    <main class="mx-auto max-w-3xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-16">
-      <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Không cần đăng nhập</p>
-      <h1 class="mt-2 text-3xl font-semibold tracking-tight text-balance sm:mt-3 sm:text-4xl">Tạo album nhanh</h1>
-      <p class="mt-2 text-pretty text-muted sm:mt-3">Dán folder Google Drive đã bật “Bất kỳ ai có đường liên kết”. Ảnh gốc vẫn nằm trong Drive của bạn.</p>
-      <form v-if="!adminLink" class="mt-6 space-y-5 rounded-3xl border border-line bg-white p-4 shadow-sm sm:mt-8 sm:p-8" @submit.prevent="create">
-        <AlbumDriveShareGuide open after-create="Tạo xong bạn nhận 2 link: link gửi khách và link quản trị bí mật — hãy lưu link quản trị, vì không lấy lại được nếu mất." />
-        <label class="block font-semibold">Tên album<UiInput v-model="title" required maxlength="150" name="album-title" autocomplete="off" class="mt-2" placeholder="Mai & Quang…" /></label>
-        <label class="block font-semibold">Link folder Drive<UiInput v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" class="mt-2" placeholder="https://drive.google.com/drive/folders/…" /></label>
-        <label class="flex min-h-11 cursor-pointer items-center gap-3 font-semibold"><input v-model="limited" type="checkbox" name="limited" class="focus-ring size-5 accent-brand"> Giới hạn số ảnh khách chọn</label>
-        <label v-if="limited" class="block font-semibold">Số ảnh tối đa<UiInput v-model="maxCount" required type="number" min="0" inputmode="numeric" name="max-count" class="mt-2" /></label>
-        <label class="block font-semibold">Hạn album<UiSelect v-model="expiresInDays" label="Hạn album" name="expires-in" :options="durationOptions" class="mt-2" /></label>
-        <UiButton type="submit" class="w-full sm:w-auto" :disabled="!hydrated" :loading="busy">{{ busy ? 'Đang kiểm tra Drive và tạo album…' : 'Tạo và xuất bản album' }}</UiButton>
-        <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
-      </form>
-      <section v-else class="mt-6 space-y-4 sm:mt-8 sm:space-y-5" aria-label="Link album vừa tạo">
-        <p role="status" class="rounded-xl bg-tint p-4 text-brand">{{ message }}</p>
-        <div class="surface p-4 sm:p-5">
-          <h2 class="text-lg font-semibold sm:text-xl">Link gửi khách</h2>
-          <p class="mt-1 text-sm text-muted">Gửi link này để khách xem, chọn và ghi chú ảnh.</p>
-          <a :href="customerLink" target="_blank" rel="noopener noreferrer" translate="no" class="focus-ring mt-3 block rounded break-all text-sm text-brand underline">{{ customerLink }}</a>
-          <UiButton variant="secondary" class="mt-4 w-full sm:w-auto" @click="copy(customerLink, 'link khách')">Sao chép link khách</UiButton>
+    <main class="mx-auto max-w-6xl px-4 pt-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-8 lg:px-8">
+      <UiPageHeader title="Tạo album nhanh" description="Không cần đăng nhập. Dán folder Google Drive đã bật “Bất kỳ ai có đường liên kết” — ảnh gốc vẫn nằm trong Drive của bạn." />
+      <div v-if="!adminLink" class="mt-5 grid items-start gap-5 sm:mt-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
+        <form class="space-y-4 rounded-3xl border border-line bg-white p-4 shadow-sm sm:p-6" @submit.prevent="create">
+          <AlbumDriveShareGuide class="lg:hidden" :after-create="afterCreate" />
+          <label class="block text-sm font-semibold">Tên album<UiInput v-model="title" required maxlength="150" name="album-title" autocomplete="off" class="mt-1.5" placeholder="Mai & Quang…" /></label>
+          <label class="block text-sm font-semibold">Link folder Drive<UiInput v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" class="mt-1.5" placeholder="https://drive.google.com/drive/folders/…" /></label>
+          <div class="grid items-start gap-3 min-[380px]:grid-cols-2">
+            <div>
+              <label class="block text-sm font-semibold">Tối đa ảnh chọn<UiInput v-model="maxCount" :required="limited" :disabled="!limited" type="number" min="0" inputmode="numeric" name="max-count" class="mt-1.5 disabled:opacity-50" /></label>
+              <label class="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input v-model="limited" :true-value="false" :false-value="true" type="checkbox" name="unlimited" class="focus-ring size-5 accent-brand"> Không giới hạn</label>
+            </div>
+            <label class="block text-sm font-semibold">Hạn album<UiSelect v-model="expiresInDays" label="Hạn album" name="expires-in" :options="durationOptions" class="mt-1.5" /></label>
+          </div>
+          <UiNotice v-if="error" tone="error">{{ error }}</UiNotice>
+          <div class="flex pt-1 sm:justify-end">
+            <UiButton type="submit" class="w-full sm:w-auto" :disabled="!hydrated" :loading="busy">{{ busy ? 'Đang kiểm tra Drive và tạo album…' : 'Tạo và xuất bản album' }}</UiButton>
+          </div>
+        </form>
+        <aside class="hidden lg:sticky lg:top-24 lg:block">
+          <AlbumDriveShareGuide open :after-create="afterCreate" />
+        </aside>
+      </div>
+      <section v-else class="mt-5 space-y-4 sm:mt-6" aria-label="Link album vừa tạo">
+        <div class="flex min-w-0 items-center gap-3 rounded-2xl bg-tint p-4 text-sm">
+          <span aria-hidden="true" class="grid size-10 shrink-0 place-items-center rounded-full bg-brand text-white">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.58l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" /></svg>
+          </span>
+          <div class="min-w-0">
+            <p class="break-words font-semibold">{{ createdTitle }}</p>
+            <p class="mt-0.5 text-muted">Album đã xuất bản. Hãy lưu link quản trị trước khi rời trang.</p>
+          </div>
         </div>
-        <div class="rounded-2xl border border-line-strong bg-white p-4 sm:p-5">
-          <h2 class="text-lg font-semibold sm:text-xl">Link quản trị bí mật</h2>
-          <p class="mt-1 text-sm text-pretty text-muted">Chỉ người có link này mới quản lý album. Hãy lưu lại; hiện chưa thể lấy lại nếu mất.</p>
-          <a :href="adminLink" translate="no" class="focus-ring mt-3 block rounded break-all text-sm text-brand underline">{{ adminLink }}</a>
-          <UiButton class="mt-4 w-full sm:w-auto" @click="copy(adminLink, 'link quản trị')">Sao chép link quản trị</UiButton>
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="rounded-2xl border border-line bg-white p-4 sm:p-5">
+            <h2 class="text-base font-semibold sm:text-lg">Link gửi khách</h2>
+            <p class="mt-1 text-sm text-pretty text-muted">Gửi link này để khách xem, chọn và ghi chú ảnh.</p>
+            <StudioAlbumShareLink :link="customerLink" copy-label="Sao chép link khách" class="mt-3" @copy="copy(customerLink, 'link khách')" />
+          </div>
+          <div class="rounded-2xl border border-line-strong bg-white p-4 sm:p-5">
+            <h2 class="text-base font-semibold sm:text-lg">Link quản trị bí mật</h2>
+            <p class="mt-1 text-sm text-pretty text-muted">Chỉ người có link này mới quản lý album. Hãy lưu lại; hiện chưa thể lấy lại nếu mất.</p>
+            <StudioAlbumShareLink :link="adminLink" label="Link quản trị" copy-label="Sao chép link quản trị" class="mt-3" @copy="copy(adminLink, 'link quản trị')" />
+          </div>
         </div>
-        <a :href="adminLink" class="focus-ring inline-flex min-h-11 items-center rounded font-semibold text-brand underline">Mở trang quản trị album <span aria-hidden="true">&nbsp;→</span></a>
+        <p role="status" class="text-sm text-brand">{{ message }}</p>
+        <div class="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
+          <UiButton :href="adminLink" variant="secondary">Mở trang quản trị album</UiButton>
+        </div>
       </section>
     </main>
-    <SiteFooter />
+    <SiteFooter width="6xl" />
   </div>
 </template>

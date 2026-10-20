@@ -92,14 +92,13 @@ async function copyFilenames() {
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
     <a href="#main-content" class="sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:not-sr-only focus:rounded-xl focus:bg-white focus:px-4 focus:py-3 focus:font-semibold focus:text-brand focus:outline-2 focus:outline-brand">Đến nội dung chính</a>
-    <header class="border-b border-line bg-canvas px-4 sm:px-5">
-      <div class="mx-auto flex h-16 max-w-6xl items-center">
+    <header class="border-b border-line bg-canvas">
+      <div class="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6 lg:px-8">
         <NuxtLink :to="backTo" class="focus-ring -ml-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-semibold text-brand hover:bg-tint">← {{ backLabel }}</NuxtLink>
       </div>
     </header>
-    <main id="main-content" class="mx-auto max-w-6xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-10">
-      <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Selection Results</p>
-      <h1 class="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Kết quả chọn ảnh</h1>
+    <main id="main-content" class="mx-auto max-w-6xl px-4 pt-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-8 lg:px-8">
+      <UiPageHeader title="Kết quả chọn ảnh" />
       <div v-if="busy" role="status" aria-busy="true" aria-label="Đang tải kết quả" class="mt-4">
         <UiSkeleton class="h-32 w-full rounded-2xl sm:h-36 sm:rounded-3xl" />
         <div class="mt-5 flex gap-2">

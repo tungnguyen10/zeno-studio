@@ -216,10 +216,8 @@ function downloadReport() {
       <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand">Vào studio</NuxtLink>
     </SiteHeader>
 
-    <main class="mx-auto max-w-6xl px-4 pt-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-10 lg:px-8">
-      <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Local File Filter</p>
-      <h1 class="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Lọc file theo danh sách ảnh</h1>
-      <p class="mt-4 max-w-3xl text-pretty text-muted">Dán tên ảnh khách đã chọn, tìm RAW/JPEG trong thư mục trên máy và copy đúng file sang thư mục đích · <span class="font-medium text-brand">Chỉ copy, không xóa file nguồn</span></p>
+    <main class="mx-auto max-w-6xl px-4 pt-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-8 lg:px-8">
+      <UiPageHeader title="Lọc file theo danh sách ảnh">Dán tên ảnh khách đã chọn, tìm RAW/JPEG trong thư mục trên máy và copy đúng file sang thư mục đích · <span class="font-medium text-brand">Chỉ copy, không xóa file nguồn</span></UiPageHeader>
 
       <UiNotice v-if="!supported" tone="warn" class="mt-6">
         Trình duyệt này không hỗ trợ chọn thư mục trực tiếp. Hãy mở công cụ trên Chrome hoặc Edge ở máy tính.
@@ -340,6 +338,6 @@ function downloadReport() {
         </div>
       </UiStepCard>
     </main>
-    <SiteFooter />
+    <SiteFooter width="6xl" />
   </div>
 </template>

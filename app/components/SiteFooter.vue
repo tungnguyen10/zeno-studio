@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { pageContainerClass, type PageWidth } from '~/lib/page-container'
+
+const props = withDefaults(defineProps<{ width?: PageWidth }>(), { width: '7xl' })
+const containerClass = pageContainerClass[props.width]
 const linkClass = 'focus-ring inline-flex min-h-11 items-center rounded hover:text-brand'
 </script>
 
 <template>
   <footer class="border-t border-line text-sm text-muted">
-    <div class="mx-auto max-w-7xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8">
+    <div class="mx-auto pb-[max(1.5rem,env(safe-area-inset-bottom))]" :class="containerClass">
       <div class="flex flex-col gap-4 py-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
           <NuxtLink to="/" aria-label="Zeno Studio – Trang chủ" class="focus-ring -ml-1 flex min-h-11 items-center rounded-lg px-1 text-ink">

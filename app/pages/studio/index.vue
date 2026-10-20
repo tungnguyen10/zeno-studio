@@ -127,13 +127,11 @@ function afterCreate() {
       <StudioHeader />
       <main class="mx-auto max-w-6xl px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-8 lg:px-8">
         <template v-if="store.studio">
-          <div class="flex items-end justify-between gap-3">
-            <div class="min-w-0">
-              <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Album</h1>
-              <p class="mt-1 text-sm text-pretty text-muted">Theo dõi từng album từ lúc xuất bản đến khi chốt bộ ảnh.</p>
-            </div>
-            <UiButton v-if="store.canManage" class="shrink-0" @click="createOpen = true"><span aria-hidden="true">+</span> Tạo album</UiButton>
-          </div>
+          <UiPageHeader title="Album" description="Theo dõi từng album từ lúc xuất bản đến khi chốt bộ ảnh.">
+            <template v-if="store.canManage" #actions>
+              <UiButton @click="createOpen = true"><span aria-hidden="true">+</span> Tạo album</UiButton>
+            </template>
+          </UiPageHeader>
 
           <div v-if="albums.length" class="mt-5 space-y-3 sm:mt-6">
             <div class="flex flex-wrap items-center justify-between gap-3">

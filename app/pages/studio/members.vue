@@ -128,8 +128,7 @@ const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm fon
   <div class="min-h-dvh bg-canvas text-ink">
     <StudioHeader v-if="store.studiosLoaded" />
     <main class="mx-auto max-w-6xl px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-8 lg:px-8">
-      <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Thành viên studio</h1>
-      <p v-if="store.studio && store.canManage" class="mt-1 text-sm text-pretty text-muted">Mời người mới và quản lý vai trò truy cập studio.</p>
+      <UiPageHeader title="Thành viên studio" :description="store.studio && store.canManage ? 'Mời người mới và quản lý vai trò truy cập studio.' : undefined" />
 
       <div v-if="!loaded" role="status" aria-busy="true" aria-label="Đang tải thành viên" class="mt-6 grid gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-[22rem_1fr]">
         <section class="rounded-2xl border border-line bg-white p-4 sm:p-6">

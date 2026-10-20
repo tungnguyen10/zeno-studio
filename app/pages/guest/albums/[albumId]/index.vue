@@ -68,9 +68,8 @@ async function claim() {
 
 <template>
   <div class="bg-canvas text-ink">
-    <section class="mx-auto max-w-5xl px-4 pt-6 sm:px-5 sm:pt-10">
-      <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Quản trị bằng link bí mật</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Album của bạn</h1>
+    <section class="mx-auto max-w-6xl px-4 pt-5 sm:px-6 sm:pt-8 lg:px-8">
+      <UiPageHeader title="Album của bạn" description="Quản trị album bằng link bí mật." />
       <div v-if="!ready && !error" role="status" aria-busy="true" aria-label="Đang kiểm tra link quản trị" class="surface mt-5 p-4 sm:mt-6 sm:p-5">
         <UiSkeleton class="h-4 w-full max-w-lg" />
         <UiSkeleton class="mt-2 h-4 w-2/3" />

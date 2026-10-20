@@ -1,11 +1,9 @@
 <script setup lang="ts">
-const props = withDefaults(defineProps<{ width?: '3xl' | '6xl' | '7xl' }>(), { width: '7xl' })
+import { pageContainerClass, type PageWidth } from '~/lib/page-container'
 
-const containerClass = {
-  '3xl': 'max-w-3xl px-4 sm:px-5',
-  '6xl': 'max-w-6xl px-4 sm:px-6 lg:px-8',
-  '7xl': 'max-w-7xl px-4 sm:px-8',
-}[props.width]
+const props = withDefaults(defineProps<{ width?: PageWidth }>(), { width: '7xl' })
+
+const containerClass = pageContainerClass[props.width]
 </script>
 
 <template>
