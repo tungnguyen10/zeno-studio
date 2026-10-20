@@ -88,7 +88,7 @@ watch(() => props.status, closeMenu)
           class="z-40 gap-2 rounded-2xl border border-line bg-white p-3 shadow-xl lg:static lg:inset-auto lg:z-auto lg:min-w-0 lg:max-w-full lg:flex-1 lg:flex-wrap lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
           :class="menuOpen ? 'fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] flex flex-col lg:flex-row' : 'hidden lg:flex lg:flex-row'"
         >
-          <div v-if="menuAction" class="contents [&_button]:w-full [&_button]:justify-start lg:[&_button]:w-auto lg:[&_button]:justify-center">
+          <div v-if="menuAction" class="flex flex-wrap items-center gap-2 lg:contents max-lg:[&_button:not([aria-label]):not(dialog_button)]:flex-1 max-lg:[&_button:not([aria-label]):not(dialog_button)]:justify-start">
             <slot name="actions" />
           </div>
           <UiButton v-if="previousResults" :to="resultsTo" variant="secondary" class="w-full justify-start lg:w-auto lg:justify-center">Xem bộ chốt trước</UiButton>

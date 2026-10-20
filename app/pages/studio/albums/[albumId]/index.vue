@@ -23,6 +23,8 @@ onMounted(() => { void store.ensureStudios(studioId) })
   >
     <template #actions="{ workspace, reload }">
       <StudioAlbumShareActions
+        compact
+        :album-title="workspace.title"
         :studio-id="studioId"
         :album-id="albumId"
         :status="effectiveStatus({ status: workspace.status as AlbumStatus, expiresAt: workspace.expiresAt })"
