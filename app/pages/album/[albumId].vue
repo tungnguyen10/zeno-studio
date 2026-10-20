@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
           <UiSkeleton class="mt-2 h-20 w-full rounded-xl sm:h-32" />
           <span class="sr-only">Đang tải ghi chú…</span>
         </div>
-        <label v-else-if="focusSelected" class="mt-4 block text-sm font-semibold">Ghi chú chỉnh sửa<textarea v-model="noteText" :disabled="noteLoading || noteLoadError" maxlength="5000" rows="3" name="photo-note" class="control mt-2 py-3 sm:min-h-36" placeholder="Bạn muốn chỉnh gì ở ảnh này?"></textarea></label>
+        <label v-else-if="focusSelected" class="mt-4 block text-sm font-semibold">Ghi chú chỉnh sửa<UiTextarea v-model="noteText" :disabled="noteLoading || noteLoadError" maxlength="5000" rows="3" name="photo-note" class="mt-2 py-3 sm:min-h-36" placeholder="Bạn muốn chỉnh gì ở ảnh này?" /></label>
         <p v-else-if="overview.joined" class="mt-3 text-center text-sm text-muted sm:text-left">Chọn ảnh này để ghi chú cần chỉnh sửa.</p>
         <UiButton v-if="noteLoadError && focusSelected" variant="secondary" size="sm" class="mt-3" @click="openPhoto(focusPhoto)">Thử tải lại ghi chú</UiButton>
         <p role="status" aria-live="polite" class="mt-1 min-h-5 text-xs text-muted">{{ status || (focusSelected && !noteLoading ? 'Ghi chú tự lưu khi bạn gõ.' : '') }}</p>

@@ -67,8 +67,8 @@ function downloadFilenames() {
               <label class="text-sm font-semibold">So khớp<UiSelect v-model="job.matchBy.value" label="So khớp" name="match-by" :options="[{ value: 'stem', label: 'Tên gốc JPG → RAW' }, { value: 'full', label: 'Tên file đầy đủ' }]" class="mt-1" /></label>
             </div>
             <label v-if="job.fileType.value === 'custom'" class="mt-3 block text-sm font-semibold">Phần mở rộng ảnh<UiInput v-model="job.customExtensions.value" name="custom-extensions" autocomplete="off" spellcheck="false" class="mt-1" placeholder=".tif, .png…" /></label>
-            <label class="mt-3 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input v-model="job.includeSidecar.value" type="checkbox" class="size-5 accent-brand"> Copy sidecar .xmp cùng ảnh đã khớp</label>
-            <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input v-model="job.preserveFolders.value" type="checkbox" class="size-5 accent-brand"> Giữ cấu trúc thư mục nguồn khi copy</label>
+            <label class="mt-3 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><UiCheckbox v-model="job.includeSidecar.value" /> Copy sidecar .xmp cùng ảnh đã khớp</label>
+            <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><UiCheckbox v-model="job.preserveFolders.value" /> Giữ cấu trúc thư mục nguồn khi copy</label>
             </fieldset>
           </details>
         </UiStepCard>
@@ -81,9 +81,9 @@ function downloadFilenames() {
           <div v-show="destinationOpen" id="destination-options" class="mt-3">
             <fieldset :disabled="job.phase.value === 'copying'" class="text-sm disabled:opacity-60">
               <legend class="sr-only">Chọn cách lưu file</legend>
-              <label class="flex min-h-11 cursor-pointer items-center gap-2"><input v-model="job.destinationMode.value" type="radio" value="auto" class="size-5 accent-brand"> Tự động: RAW/SELECTED</label>
-              <label class="flex min-h-11 cursor-pointer items-center gap-2"><input v-model="job.destinationMode.value" type="radio" value="relative" class="size-5 accent-brand"> Path con trong RAW</label>
-              <label class="flex min-h-11 cursor-pointer items-center gap-2"><input v-model="job.destinationMode.value" type="radio" value="picker" class="size-5 accent-brand"> Thư mục khác</label>
+              <label class="flex min-h-11 cursor-pointer items-center gap-2"><UiRadio v-model="job.destinationMode.value" name="destination-mode" value="auto" /> Tự động: RAW/SELECTED</label>
+              <label class="flex min-h-11 cursor-pointer items-center gap-2"><UiRadio v-model="job.destinationMode.value" name="destination-mode" value="relative" /> Path con trong RAW</label>
+              <label class="flex min-h-11 cursor-pointer items-center gap-2"><UiRadio v-model="job.destinationMode.value" name="destination-mode" value="picker" /> Thư mục khác</label>
             </fieldset>
             <label v-if="job.destinationMode.value === 'relative'" class="mt-2 block text-sm font-semibold">Path tương đối<UiInput v-model="job.relativePath.value" :disabled="job.phase.value === 'copying'" type="text" name="relative-path" autocomplete="off" spellcheck="false" :invalid="!!job.pathError.value" class="mt-1.5" placeholder="KhachA/DaLoc…" /></label>
             <UiButton v-if="job.destinationMode.value === 'picker'" variant="secondary" class="mt-2" :disabled="job.phase.value === 'copying'" @click="job.chooseExternalDestination">Chọn thư mục đích khác</UiButton>
@@ -129,7 +129,7 @@ function downloadFilenames() {
       </div>
       <div v-if="listCount > 50" class="mt-4 flex items-center gap-3 text-sm"><UiButton variant="secondary" size="sm" :disabled="previewPage === 0" @click="previewPage--">Trước</UiButton><span class="tabular-nums">Trang {{ previewPage + 1 }} / {{ Math.ceil(listCount / 50) }}</span><UiButton variant="secondary" size="sm" :disabled="(previewPage + 1) * 50 >= listCount" @click="previewPage++">Sau</UiButton></div>
       <div v-if="job.conflicts.value.length" class="mt-5 rounded-xl border border-warn-line bg-warn-soft p-4"><h3 class="font-semibold">File đích đã có sẽ được bỏ qua; tên trùng khác cần đổi</h3><p v-for="text in job.conflicts.value.slice(0, 30)" :key="text" class="mt-1 break-all text-sm" translate="no">{{ text }}</p><label v-for="item in job.planned.value.filter(file => job.conflicts.value.some(text => text.startsWith(file.outputPath + ':'))).slice(0, 30)" :key="item.id" class="mt-3 block text-sm">{{ item.sourcePath }} · đổi tên đích nếu muốn<UiInput v-model="job.outputNames.value[item.sourcePath]" autocomplete="off" spellcheck="false" class="mt-1" :placeholder="item.outputPath" /></label></div>
-      <label v-if="job.preview.value.missing.length" class="mt-5 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input v-model="job.missingConfirmed.value" type="checkbox" class="size-5 accent-brand"> Tiếp tục mà không copy {{ job.preview.value.missing.length }} ảnh thiếu</label>
+      <label v-if="job.preview.value.missing.length" class="mt-5 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><UiCheckbox v-model="job.missingConfirmed.value" /> Tiếp tục mà không copy {{ job.preview.value.missing.length }} ảnh thiếu</label>
       <p class="mt-4 break-all text-sm">Sẽ copy vào: <strong translate="no">{{ job.destinationLabel.value }}</strong></p>
       <UiButton v-if="job.phase.value === 'preview'" class="mt-4 w-full sm:w-auto" :disabled="!canCopy" :aria-describedby="!canCopy ? 'album-copy-blocker' : undefined" @click="job.runCopy()">Xác nhận copy {{ job.planned.value.length }} file</UiButton>
       <p v-if="job.phase.value === 'preview' && !canCopy" id="album-copy-blocker" class="mt-2 text-sm text-muted">{{ copyBlocker }}</p>

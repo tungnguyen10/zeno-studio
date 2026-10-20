@@ -6,16 +6,23 @@ const adminToken = 'a'.repeat(43)
 const customerToken = 'b'.repeat(43)
 
 test('creates a published guest album and shows separate customer and admin links', async ({ page }) => {
-  await page.route('**/api/guest/albums', route => route.fulfill({
-    status: 200, contentType: 'application/json',
-    body: JSON.stringify({ id: albumId, status: 'PUBLISHED', photoCount: 1, adminToken, customerToken }),
-  }))
+  let submittedLimit: unknown
+  await page.route('**/api/guest/albums', route => {
+    submittedLimit = (route.request().postDataJSON() as { limit: unknown }).limit
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ id: albumId, status: 'PUBLISHED', photoCount: 1, adminToken, customerToken }),
+    })
+  })
   await page.goto('/')
   await page.getByRole('link', { name: /Tạo album nhanh/ }).first().click()
   await expect(page.getByRole('button', { name: 'Tạo và xuất bản album' })).toBeEnabled()
   await page.getByLabel('Tên album').fill('Album khách')
   await page.getByLabel('Link folder Drive').fill('https://drive.google.com/drive/folders/folder123')
+  await page.getByRole('checkbox', { name: 'Không giới hạn' }).uncheck()
+  await page.getByLabel('Tối đa ảnh chọn').fill('12')
   await page.getByRole('button', { name: 'Tạo và xuất bản album' }).click()
+  expect(submittedLimit).toEqual({ kind: 'maximum', count: 12 })
   await expect(page.getByRole('link', { name: /album\/.*token=/ })).toHaveAttribute('href', `http://127.0.0.1:43627/album/${albumId}?token=${customerToken}`)
   await expect(page.getByRole('link', { name: /guest\/albums\/.*admin-/ })).toHaveAttribute('href', `http://127.0.0.1:43627/guest/albums/${albumId}#admin-${adminToken}`)
   await expect(page.getByText('Hãy lưu lại; hiện chưa thể lấy lại nếu mất.')).toBeVisible()

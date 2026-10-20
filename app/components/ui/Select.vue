@@ -8,6 +8,7 @@ export interface SelectOption<Value extends string | number | undefined> {
 }
 
 const props = defineProps<{
+  id?: string
   label: string
   options: ReadonlyArray<SelectOption<T>>
   name?: string
@@ -109,16 +110,17 @@ onBeforeUnmount(() => {
   <div ref="root" class="relative min-w-0">
     <input v-if="name" type="hidden" :name="name" :value="model" :disabled="disabled">
     <button
+      :id="id"
       ref="trigger"
       type="button"
       role="combobox"
       aria-haspopup="listbox"
       :aria-label="label"
-      :aria-controls="listId"
+      :aria-controls="open ? listId : undefined"
       :aria-expanded="open"
       :aria-activedescendant="activeId"
       :aria-invalid="invalid || undefined"
-      :disabled="disabled"
+      :disabled="disabled || !enabled.length"
       class="control focus-ring flex items-center justify-between gap-2 text-left"
       @click="setOpen(!open)"
       @keydown="onKeydown"
@@ -138,7 +140,7 @@ onBeforeUnmount(() => {
         :class="[active === index ? 'bg-tint text-brand' : 'text-ink', option.disabled && 'cursor-not-allowed opacity-50']"
         @pointerenter="!option.disabled && (active = index)"
         @pointerdown.prevent
-        @click="choose(index)"
+        @click.stop.prevent="choose(index)"
       >{{ option.label }}</li>
     </ul>
   </div>

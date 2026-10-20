@@ -66,7 +66,7 @@ button[aria-busy="true"] { cursor: progress; }
   }
 }
 
-/* Shared look for text inputs, selects and textareas. */
+/* Shared look for text inputs, dropdown triggers and textareas. */
 @utility control {
   display: block;
   width: 100%;

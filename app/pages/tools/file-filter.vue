@@ -249,7 +249,7 @@ function downloadReport() {
             <label for="requested" class="text-sm font-semibold">Tên file cần tìm</label>
             <UiButton v-if="requestedText" variant="ghost" size="sm" class="-mb-2 -mr-2" @click="requestedText = ''">Xóa</UiButton>
           </div>
-          <textarea id="requested" v-model="requestedText" rows="8" name="requested" autocomplete="off" spellcheck="false" placeholder="DSC_0123.JPG&#10;DSC_0124.JPG" aria-describedby="requested-hint" class="control mt-1.5 resize-y bg-canvas px-4 py-3 font-mono text-sm leading-7" />
+          <UiTextarea id="requested" v-model="requestedText" rows="8" name="requested" autocomplete="off" spellcheck="false" placeholder="DSC_0123.JPG&#10;DSC_0124.JPG" aria-describedby="requested-hint" class="mt-1.5 resize-y bg-canvas px-4 py-3 font-mono text-sm leading-7" />
           <p id="requested-hint" class="mt-1.5 text-xs text-muted tabular-nums">
             {{ requestedNames.length }} tên<template v-if="duplicateCount"> · bỏ {{ duplicateCount }} tên lặp</template> · mỗi dòng, dấu phẩy hoặc chấm phẩy
           </p>

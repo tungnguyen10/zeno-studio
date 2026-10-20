@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 import { publicPage } from '~~/shared/site'
 
@@ -10,6 +10,7 @@ const folderUrl = ref('')
 const expiresInDays = ref<15 | 30>(15)
 const durationOptions = [{ value: 15, label: '15 ngày' }, { value: 30, label: '30 ngày' }] as const
 const limited = ref(false)
+const unlimited = computed({ get: () => !limited.value, set: value => { limited.value = !value } })
 const maxCount = ref(30)
 const busy = ref(false)
 const hydrated = ref(false)
@@ -61,7 +62,7 @@ async function copy(link: string, label: string) {
           <div class="grid items-start gap-3 min-[380px]:grid-cols-2">
             <div>
               <label class="block text-sm font-semibold">Tối đa ảnh chọn<UiInput v-model="maxCount" :required="limited" :disabled="!limited" type="number" min="0" inputmode="numeric" name="max-count" class="mt-1.5 disabled:opacity-50" /></label>
-              <label class="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input v-model="limited" :true-value="false" :false-value="true" type="checkbox" name="unlimited" class="focus-ring size-5 accent-brand"> Không giới hạn</label>
+              <label class="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><UiCheckbox v-model="unlimited" name="unlimited" /> Không giới hạn</label>
             </div>
             <label class="block text-sm font-semibold">Hạn album<UiSelect v-model="expiresInDays" label="Hạn album" name="expires-in" :options="durationOptions" class="mt-1.5" /></label>
           </div>
