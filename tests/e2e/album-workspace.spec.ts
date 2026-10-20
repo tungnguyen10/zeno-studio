@@ -49,11 +49,15 @@ for (const { name, viewport } of viewports) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ versionNumber: 2, count: 1 }) })
       })
       await page.goto(`/studio/albums/${albumId}?studio=${studioId}`)
-      await page.getByRole('button', { name: 'Bộ chốt trước (1)' }).click()
+      await page.getByRole('button', { name: 'Bộ đã chốt (1)' }).click()
       await expect(page.getByRole('list', { name: 'Ảnh trong album' }).getByRole('listitem')).toHaveCount(1)
       await expect(page.getByText('Đã chốt trước', { exact: true })).toBeVisible()
+      await expect(page.getByRole('link', { name: /Xem kết quả/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: prior.filename })).toHaveCount(0)
+      if (viewport.width < 1024) await page.getByRole('button', { name: 'Thêm' }).click()
       await page.getByRole('button', { name: 'Mở vòng chọn mới' }).click()
       await expect(page.getByRole('button', { name: 'Chốt 1 ảnh' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Bộ chốt trước (1)' })).toBeVisible()
       await page.getByRole('button', { name: `Chốt ${prior.filename}` }).click()
       await page.getByRole('button', { name: /Tất cả/ }).click()
       await page.getByRole('button', { name: `Chốt ${replacement.filename}` }).click()
@@ -102,5 +106,100 @@ for (const { name, viewport } of viewports) {
       await page.getByRole('button', { name: 'Chốt 4 ảnh' }).click()
       await expect.poll(() => finalizeBody).toEqual({ include: [photos[2]!.id], exclude: [photos[0]!.id] })
     })
+  })
+}
+
+for (const width of [320, 1244]) {
+  test(`finalized workspace stays usable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }))
+    await page.route(`**/api/studio/${studioId}/albums/${albumId}`, route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({
+        id: albumId, title: 'Album chụp ảnh rất dài để kiểm tra giao diện trên màn hình hẹp', status: 'FINALIZED',
+        expiresAt: '2030-01-01T00:00:00Z', canFinalize: true, hasResults: true, previousCount: 4,
+        settings: { limitKind: 'maximum', limitMin: null, limitMax: 20 }, photoCount: photos.length, selectedCount: 4,
+      }),
+    }))
+    await page.route(`**/api/studio/${studioId}/albums/${albumId}/photos?*`, route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ items: photos.map(photo => ({ ...photo, previouslyFinalized: photo.selected })), nextCursor: null, total: photos.length, selectedCount: 4 }),
+    }))
+    await page.goto(`/studio/albums/${albumId}?studio=${studioId}`)
+    await expect(page.getByRole('heading', { name: /Album chụp ảnh rất dài/ })).toBeVisible()
+    await expect(page.getByText('Khách đã chọn 4')).toBeVisible()
+    await expect(page.getByRole('link', { name: /Xem kết quả/ })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    if (width < 1024) {
+      await expect(page.getByRole('button', { name: 'Thêm' })).toBeVisible()
+      await page.getByRole('button', { name: 'Thêm' }).click()
+      await expect(page.getByRole('button', { name: 'Mở vòng chọn mới' })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('button', { name: 'Thêm' })).toBeFocused()
+      await expect(page.getByRole('button', { name: 'Mở vòng chọn mới' })).toBeHidden()
+      await page.getByRole('button', { name: 'Thêm' }).click()
+      await page.mouse.click(2, 100)
+      await expect(page.getByRole('button', { name: 'Thêm' })).toBeFocused()
+    } else {
+      await expect(page.getByRole('button', { name: 'Mở vòng chọn mới' })).toBeVisible()
+    }
+    await page.screenshot({ path: `test-results/workspace-finalized-${width}.png` })
+  })
+}
+
+test('mobile finalized actions keep sharing feedback in the More panel', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const customerToken = 'a'.repeat(43)
+  let shareRequests = 0
+  await page.route('**/api/studio', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ studios: [{ id: studioId, name: 'Studio Mẫu', role: 'owner' }] }),
+  }))
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}/share`, route => {
+    shareRequests++
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ customerToken }) })
+  })
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}`, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      id: albumId, title: 'Album đã chốt', status: 'FINALIZED', expiresAt: '2030-01-01T00:00:00Z', canFinalize: true,
+      hasResults: true, previousCount: 4, settings: { limitKind: 'maximum', limitMin: null, limitMax: 20 }, photoCount: 12, selectedCount: 4,
+    }),
+  }))
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}/photos?*`, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], nextCursor: null, total: 12, selectedCount: 4 }),
+  }))
+  await page.goto(`/studio/albums/${albumId}?studio=${studioId}`)
+  await page.getByRole('button', { name: 'Thêm' }).click()
+  await expect(page.getByRole('button', { name: 'Sao chép link khách' })).toBeVisible()
+  await page.getByRole('button', { name: 'Sao chép link khách' }).click()
+  await expect(page.getByRole('link', { name: /album\/.*token=/ })).toHaveAttribute('href', `http://127.0.0.1:43627/album/${albumId}?token=${customerToken}`)
+  await expect(page.getByRole('button', { name: 'Thêm' })).toHaveAttribute('aria-expanded', 'true')
+  expect(shareRequests).toBe(1)
+  await page.setViewportSize({ width: 1244, height: 844 })
+  await expect(page.getByRole('link', { name: /album\/.*token=/ })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1244)
+})
+
+for (const scenario of [
+  { name: 'read-only', status: 'FINALIZED', expiresAt: '2030-01-01T00:00:00Z', role: 'retoucher' },
+  { name: 'expired', status: 'FINALIZED', expiresAt: '2020-01-01T00:00:00Z', role: 'owner' },
+  { name: 'historical', status: 'DELIVERED', expiresAt: '2030-01-01T00:00:00Z', role: 'retoucher' },
+]) {
+  test(`${scenario.name} album still opens results without unavailable actions`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.route('**/api/studio', route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ studios: [{ id: studioId, name: 'Studio Mẫu', role: scenario.role }] }),
+    }))
+    await page.route(`**/api/studio/${studioId}/albums/${albumId}`, route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({
+        id: albumId, title: 'Album lịch sử', status: scenario.status, expiresAt: scenario.expiresAt,
+        canFinalize: false, hasResults: true, previousCount: 4,
+        settings: { limitKind: 'maximum', limitMin: null, limitMax: 20 }, photoCount: 12, selectedCount: 4,
+      }),
+    }))
+    await page.route(`**/api/studio/${studioId}/albums/${albumId}/photos?*`, route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], nextCursor: null, total: 12, selectedCount: 4 }),
+    }))
+    await page.goto(`/studio/albums/${albumId}?studio=${studioId}`)
+    await expect(page.getByRole('link', { name: 'Xem kết quả' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Thêm' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Mở vòng chọn mới' })).toHaveCount(0)
   })
 }

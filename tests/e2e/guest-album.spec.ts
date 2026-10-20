@@ -61,6 +61,27 @@ test('exchanges a guest admin link, shares a new customer link, and claims into 
   await expect(page).toHaveURL(`http://127.0.0.1:43627/studio/albums/${albumId}?studio=${studioId}`)
 })
 
+test('guest admin gets the same finalized result and reopen controls on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  let status = 'FINALIZED'
+  await page.route(`**/api/guest/albums/${albumId}`, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ id: albumId, title: 'Guest album', status, expiresAt: '2030-01-01T00:00:00Z', canFinalize: true, hasResults: true, previousCount: 1, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null }, photoCount: 1, selectedCount: 1 }),
+  }))
+  await page.route(`**/api/guest/albums/${albumId}/photos?*`, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], nextCursor: null, total: 1, selectedCount: 1 }),
+  }))
+  await page.route(`**/api/guest/albums/${albumId}/reopen`, route => {
+    status = 'PUBLISHED'
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cycle: 2 }) })
+  })
+  await page.goto(`/guest/albums/${albumId}`)
+  await expect(page.getByRole('link', { name: 'Xem kết quả' })).toBeVisible()
+  await page.getByRole('button', { name: 'Thêm' }).click()
+  await page.getByRole('button', { name: 'Mở vòng chọn mới' }).click()
+  await expect(page.getByRole('button', { name: 'Chốt 1 ảnh' })).toBeVisible()
+})
+
 test('exports guest results and opens Filter Files for the finalized version', async ({ page }) => {
   const versionId = '33333333-3333-4333-8333-333333333333'
   await page.route(`**/api/guest/albums/${albumId}/results?*`, route => route.fulfill({

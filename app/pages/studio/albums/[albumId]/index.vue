@@ -18,6 +18,8 @@ onMounted(() => { void store.ensureStudios(studioId) })
     :back-to="`/studio?studio=${studioId}`"
     back-label="Album"
     :results-to="`/studio/albums/${albumId}/results?studio=${studioId}`"
+    :can-publish="store.canManage"
+    :can-share="store.canShare"
   >
     <template #actions="{ workspace, reload }">
       <StudioAlbumShareActions
@@ -26,7 +28,7 @@ onMounted(() => { void store.ensureStudios(studioId) })
         :status="effectiveStatus({ status: workspace.status as AlbumStatus, expiresAt: workspace.expiresAt })"
         :can-publish="store.canManage"
         :can-share="store.canShare"
-        primary
+        :primary="workspace.status === 'DRAFT'"
         @published="reload"
       />
     </template>

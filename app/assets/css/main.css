@@ -33,9 +33,31 @@ body { margin: 0; }
 body:has(dialog[open]) { overflow: hidden; }
 button, a, summary, [role="button"] { touch-action: manipulation; }
 button { cursor: pointer; }
-button:disabled { cursor: not-allowed; }
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
+button[aria-busy="true"] { cursor: progress; }
+:where(button, a[href], summary, [role="button"]):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
 [id] { scroll-margin-top: 5rem; }
 ::selection { background: #dfedc8; }
+
+@media (hover: none) and (pointer: coarse) {
+  :where(button:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]), a[href]:not([aria-disabled="true"]), summary, [role="button"]:not([aria-disabled="true"])) {
+    transition-property: transform, filter, background-color, box-shadow;
+    transition-duration: 140ms;
+    transition-timing-function: ease-out;
+  }
+  :where(button:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]), a[href]:not([aria-disabled="true"]), summary, [role="button"]:not([aria-disabled="true"])):active {
+    transform: scale(0.98);
+    filter: brightness(0.96);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  :where(button:not(:disabled), a[href], summary, [role="button"]):active { transform: none; }
+  :where(button:not(:disabled), a[href], summary, [role="button"]) { transition-duration: 0ms; }
+}
 
 @utility focus-ring {
   &:focus-visible {

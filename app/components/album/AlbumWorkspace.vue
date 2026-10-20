@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ALBUM_STATUS_LABELS, type AlbumStatus } from '~~/shared/domain/album-status'
+import { ALBUM_STATUS_LABELS, effectiveStatus, type AlbumStatus } from '~~/shared/domain/album-status'
 import { driveFitSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl } from '~/lib/drive-image'
 import type { GalleryLayout } from '~/lib/gallery-layout'
 import { usePagedPhotos, type PhotoFilter, type PhotoPageResponse } from '~/composables/usePagedPhotos'
 import { useGalleryLayout } from '~/composables/useGalleryLayout'
 import GalleryLayoutSwitch from './GalleryLayoutSwitch.vue'
+import AlbumActionBar from './AlbumActionBar.vue'
 import PhotoGallery from './PhotoGallery.vue'
 import PhotoTile from './PhotoTile.vue'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; sortOrder: number; selected: boolean; previouslyFinalized: boolean }
 type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; previousCount: number; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; photoCount: number; selectedCount: number }
-const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; resultsTo: string }>(), { backLabel: 'Quay lại' })
+const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; resultsTo: string; canPublish?: boolean; canShare?: boolean }>(), { backLabel: 'Quay lại', canPublish: false, canShare: false })
 const workspace = ref<Workspace | null>(null)
 // Studio edits are stored as differences from the customer's list so huge albums never ship full id arrays.
 const included = ref(new Set<string>())
@@ -25,7 +26,9 @@ const layout = useGalleryLayout('zeno-studio-gallery-layout')
 const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`${props.apiRoot}/photos`, { query: { limit: params.limit, filter: params.filter, ...(params.cursor ? { cursor: params.cursor } : {}) } }))
 const filter = computed<PhotoFilter>({ get: () => paged.filter.value, set: value => { if (value !== paged.filter.value) void paged.reset(value) } })
 
-const canChoose = computed(() => workspace.value?.status === 'PUBLISHED' && workspace.value.canFinalize)
+const currentStatus = computed<AlbumStatus | null>(() => workspace.value ? effectiveStatus({ status: workspace.value.status as AlbumStatus, expiresAt: workspace.value.expiresAt }) : null)
+const canChoose = computed(() => currentStatus.value === 'PUBLISHED' && !!workspace.value?.canFinalize)
+const actionAvailable = computed(() => currentStatus.value === 'DRAFT' ? props.canPublish : (currentStatus.value === 'PUBLISHED' || currentStatus.value === 'FINALIZED' || currentStatus.value === 'DELIVERED') && props.canShare)
 const filterTabs = computed(() => {
   const w = workspace.value
   if (!w) return []
@@ -33,12 +36,12 @@ const filterTabs = computed(() => {
     { id: 'all', label: 'Tất cả', count: w.photoCount },
     { id: 'selected', label: w.hasResults && w.status === 'PUBLISHED' ? 'Đang chọn' : 'Khách đã chọn', count: w.selectedCount },
   ]
-  if (w.hasResults) tabs.push({ id: 'previous', label: 'Bộ chốt trước', count: w.previousCount })
+  if (w.hasResults) tabs.push({ id: 'previous', label: currentStatus.value === 'PUBLISHED' ? 'Bộ chốt trước' : 'Bộ đã chốt', count: w.previousCount })
   return tabs
 })
 const expiresLabel = computed(() => workspace.value ? new Intl.DateTimeFormat('vi-VN').format(new Date(workspace.value.expiresAt)) : '')
 const chosenCount = computed(() => (workspace.value?.selectedCount ?? 0) - excluded.value.size + included.value.size)
-const statusLabel = computed(() => workspace.value ? ALBUM_STATUS_LABELS[workspace.value.status as AlbumStatus] ?? workspace.value.status : '')
+const statusLabel = computed(() => currentStatus.value ? ALBUM_STATUS_LABELS[currentStatus.value] : '')
 const limitLabel = computed(() => {
   const s = workspace.value?.settings
   if (!s || s.limitKind === 'unlimited') return 'Không giới hạn'
@@ -150,29 +153,34 @@ onMounted(() => { void load() })
         <section aria-labelledby="album-title">
           <p class="text-xs font-bold uppercase tracking-[.18em] text-brand-soft">Chi tiết album</p>
           <h1 id="album-title" class="mt-2 break-words text-2xl font-semibold tracking-tight text-balance sm:text-4xl">{{ workspace.title }}</h1>
-          <ul class="mt-3 flex flex-wrap gap-1.5 text-xs sm:mt-4 sm:gap-2 sm:text-sm" aria-label="Thông tin album">
+          <ul class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted sm:mt-4 sm:text-sm" aria-label="Thông tin album">
             <li class="rounded-full bg-brand px-3 py-1 font-semibold text-white">{{ statusLabel }}</li>
-            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted tabular-nums">{{ workspace.photoCount }} ảnh</li>
-            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted tabular-nums">Đang chọn {{ workspace.selectedCount }}</li>
-            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted">Giới hạn: {{ limitLabel }}</li>
-            <li class="rounded-full border border-line bg-white px-3 py-1 text-muted">Hạn <time :datetime="workspace.expiresAt">{{ expiresLabel }}</time></li>
+            <li class="tabular-nums">{{ workspace.photoCount }} ảnh</li>
+            <li class="tabular-nums">{{ currentStatus === 'PUBLISHED' ? 'Đang chọn' : 'Khách đã chọn' }} {{ workspace.selectedCount }}</li>
+            <li>Giới hạn: {{ limitLabel }}</li>
+            <li>Hạn <time :datetime="workspace.expiresAt">{{ expiresLabel }}</time></li>
           </ul>
-          <AlbumProgress :status="workspace.status" />
+          <AlbumProgress :status="currentStatus ?? workspace.status" />
         </section>
 
         <UiNotice v-if="error" tone="error" class="mt-5">{{ error }}</UiNotice>
         <UiNotice v-if="message" tone="success" class="mt-5 font-medium">{{ message }}</UiNotice>
 
-        <div class="mt-6 flex flex-col gap-3 sm:mt-7 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-            <UiTabs label="Lọc ảnh" :items="filterTabs" :current="filter" class="min-w-0" @select="filter = $event" />
-            <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" />
-          </div>
-          <div class="grid gap-2 sm:flex sm:flex-wrap">
-            <slot name="actions" :workspace="workspace" :reload="load" />
-            <UiButton v-if="workspace.hasResults" :to="resultsTo" variant="secondary">Xem kết quả đã chốt</UiButton>
-            <UiButton v-if="workspace.status === 'FINALIZED' && workspace.canFinalize" :loading="busy" @click="reopen">{{ busy ? 'Đang mở…' : 'Mở vòng chọn mới' }}</UiButton>
-          </div>
+        <AlbumActionBar
+          :status="currentStatus ?? workspace.status as AlbumStatus"
+          :has-results="workspace.hasResults"
+          :can-reopen="currentStatus === 'FINALIZED' && workspace.canFinalize"
+          :action-available="actionAvailable"
+          :results-to="resultsTo"
+          :busy="busy"
+          @reopen="reopen"
+        >
+          <template #actions><slot name="actions" :workspace="workspace" :reload="load" /></template>
+        </AlbumActionBar>
+
+        <div class="mt-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <UiTabs label="Lọc ảnh" :items="filterTabs" :current="filter" class="min-w-0 flex-1" @select="filter = $event" />
+          <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" />
         </div>
 
         <p v-if="canChoose" class="mt-4 text-sm text-pretty text-muted">Bấm vào ảnh để thêm hoặc bỏ khỏi bộ chốt. Ảnh khách đã chọn được đánh dấu sẵn; ghi chú được đóng băng trong phiên bản kết quả.</p>
@@ -205,6 +213,7 @@ onMounted(() => { void load() })
                   :eager="eager"
                   :failed="!!failedThumbnails[photo.id]"
                   :action-label="canChoose ? `Chốt ${photo.filename}` : photo.filename"
+                  :interactive="canChoose"
                   :pressed="canChoose ? isChosen(photo) : undefined"
                   :highlighted="canChoose && isChosen(photo)"
                   :caption-height="44"

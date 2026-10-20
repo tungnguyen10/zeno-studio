@@ -24,8 +24,9 @@ const VARIANTS: Record<Variant, string> = {
 }
 
 const NuxtLink = resolveComponent('NuxtLink')
-const tag = computed(() => props.to ? NuxtLink : props.href ? 'a' : 'button')
 const inactive = computed(() => props.disabled || props.loading)
+const inactiveLink = computed(() => inactive.value && !!(props.to || props.href))
+const tag = computed(() => inactiveLink.value ? 'span' : props.to ? NuxtLink : props.href ? 'a' : 'button')
 const classes = computed(() => [
   'focus-ring inline-flex min-h-11 select-none items-center justify-center gap-2 rounded-full text-center font-semibold transition-colors disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50',
   props.size === 'sm' ? 'px-4 text-sm' : 'px-5 text-sm sm:text-base',
@@ -37,11 +38,12 @@ const classes = computed(() => [
 <template>
   <component
     :is="tag"
-    :to="to"
-    :href="to ? undefined : href"
+    :to="inactiveLink ? undefined : to"
+    :href="inactiveLink || to ? undefined : href"
     :type="to || href ? undefined : type"
     :disabled="to || href ? undefined : inactive"
-    :aria-disabled="(to || href) && inactive ? 'true' : undefined"
+    :role="inactiveLink ? 'link' : undefined"
+    :aria-disabled="inactiveLink ? 'true' : undefined"
     :aria-busy="loading || undefined"
     :class="classes"
   >

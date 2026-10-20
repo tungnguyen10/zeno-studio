@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { GalleryLayout } from '~/lib/gallery-layout'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   filename: string
   layout: GalleryLayout
   box: { width: number; height: number }
@@ -11,10 +11,11 @@ const props = defineProps<{
   eager: boolean
   failed: boolean
   actionLabel: string
+  interactive?: boolean
   pressed?: boolean
   highlighted?: boolean
   captionHeight: number
-}>()
+}>(), { interactive: true })
 const emit = defineEmits<{ activate: []; error: [] }>()
 
 const overlayCaption = computed(() => props.layout === 'justified' || props.layout === 'masonry')
@@ -26,21 +27,23 @@ watch(() => props.src, () => { loaded.value = false })
 
 <template>
   <div
-    class="group relative flex size-full overflow-hidden border bg-white transition-[border-color,box-shadow]"
+    class="relative flex size-full overflow-hidden border bg-white transition-[border-color,box-shadow]"
     :class="[
+      interactive && 'group',
       layout === 'list' ? 'flex-row items-center gap-3 rounded-2xl p-2' : 'flex-col',
       overlayCaption ? 'rounded-xl' : layout === 'grid' ? 'rounded-2xl' : '',
       highlighted ? 'border-brand ring-2 ring-brand' : 'border-line',
     ]"
   >
-    <button
-      type="button"
+    <component
+      :is="interactive ? 'button' : 'div'"
+      :type="interactive ? 'button' : undefined"
       class="photo-placeholder relative block shrink-0 overflow-hidden focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-brand"
       :class="layout === 'list' ? 'h-20 w-16 rounded-lg' : 'w-full flex-1'"
       :data-loading="!loaded && !failed ? '' : undefined"
-      :aria-label="actionLabel"
-      :aria-pressed="pressed"
-      @click="emit('activate')"
+      :aria-label="interactive ? actionLabel : undefined"
+      :aria-pressed="interactive ? pressed : undefined"
+      @click="interactive && emit('activate')"
     >
       <span v-if="failed" role="img" :aria-label="`Không tải được ảnh ${filename}`" class="flex size-full items-center justify-center bg-white/60 p-2 text-center text-xs text-muted">Không tải được ảnh</span>
       <img
@@ -59,8 +62,8 @@ watch(() => props.src, () => { loaded.value = false })
         @load="loaded = true"
         @error="emit('error')"
       >
-      <span v-if="overlayCaption" class="pointer-events-none absolute inset-x-0 bottom-0 hidden truncate bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-6 text-left text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 sm:block">{{ filename }}</span>
-    </button>
+      <span v-if="overlayCaption" class="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-6 text-left text-xs text-white transition-opacity" :class="interactive ? 'hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 sm:block' : 'block opacity-100'">{{ filename }}</span>
+    </component>
     <div v-if="layout === 'grid'" class="flex shrink-0 items-center justify-between gap-2 px-3" :style="{ height: `${captionHeight}px` }">
       <span class="min-w-0 truncate text-xs" :title="filename" translate="no">{{ filename }}</span>
       <slot name="action" />

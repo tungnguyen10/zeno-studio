@@ -18,6 +18,16 @@ const shownMissing = computed(() => pageEntries.value.flatMap(item => item.kind 
 const shownAmbiguous = computed(() => pageEntries.value.flatMap(item => item.kind === 'ambiguous' ? [item.value] : []))
 const listCount = computed(() => filteredEntries.value.length)
 const canCopy = computed(() => job.phase.value === 'preview' && !job.pathError.value && job.unresolved.value === 0 && job.blockingConflicts.value.length === 0 && (!job.preview.value?.missing.length || job.missingConfirmed.value) && job.planned.value.length > 0 && (!job.sourceReadOnly.value || job.destinationMode.value === 'picker'))
+const copyBlocker = computed(() => {
+  if (!job.supported.value) return 'Trình duyệt chưa hỗ trợ copy thư mục.'
+  if (job.pathError.value) return job.pathError.value
+  if (job.unresolved.value > 0) return 'Chọn file hoặc bỏ qua các tên còn mơ hồ.'
+  if (job.blockingConflicts.value.length > 0) return 'Sửa tên file đích đang bị xung đột.'
+  if (job.preview.value?.missing.length && !job.missingConfirmed.value) return 'Xác nhận các ảnh thiếu trước khi copy.'
+  if (!job.planned.value.length) return 'Chưa có file phù hợp để copy.'
+  if (job.sourceReadOnly.value && job.destinationMode.value !== 'picker') return 'Chọn một thư mục đích khác cho nguồn chỉ đọc.'
+  return ''
+})
 const retryable = computed(() => job.outcomes.value.some(item => item.status === 'failed' || item.status === 'cancelled'))
 const showDestination = ref(false)
 const destinationOpen = computed(() => showDestination.value || job.destinationMode.value !== 'auto')
@@ -121,7 +131,8 @@ function downloadFilenames() {
       <div v-if="job.conflicts.value.length" class="mt-5 rounded-xl border border-warn-line bg-warn-soft p-4"><h3 class="font-semibold">File đích đã có sẽ được bỏ qua; tên trùng khác cần đổi</h3><p v-for="text in job.conflicts.value.slice(0, 30)" :key="text" class="mt-1 break-all text-sm" translate="no">{{ text }}</p><label v-for="item in job.planned.value.filter(file => job.conflicts.value.some(text => text.startsWith(file.outputPath + ':'))).slice(0, 30)" :key="item.id" class="mt-3 block text-sm">{{ item.sourcePath }} · đổi tên đích nếu muốn<input v-model="job.outputNames.value[item.sourcePath]" autocomplete="off" spellcheck="false" class="control mt-1" :placeholder="item.outputPath"></label></div>
       <label v-if="job.preview.value.missing.length" class="mt-5 flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input v-model="job.missingConfirmed.value" type="checkbox" class="size-5 accent-brand"> Tiếp tục mà không copy {{ job.preview.value.missing.length }} ảnh thiếu</label>
       <p class="mt-4 break-all text-sm">Sẽ copy vào: <strong translate="no">{{ job.destinationLabel.value }}</strong></p>
-      <UiButton v-if="job.phase.value === 'preview'" class="mt-4 w-full sm:w-auto" :disabled="!canCopy" @click="job.runCopy()">Xác nhận copy {{ job.planned.value.length }} file</UiButton>
+      <UiButton v-if="job.phase.value === 'preview'" class="mt-4 w-full sm:w-auto" :disabled="!canCopy" :aria-describedby="!canCopy ? 'album-copy-blocker' : undefined" @click="job.runCopy()">Xác nhận copy {{ job.planned.value.length }} file</UiButton>
+      <p v-if="job.phase.value === 'preview' && !canCopy" id="album-copy-blocker" class="mt-2 text-sm text-muted">{{ copyBlocker }}</p>
       <div v-if="job.phase.value === 'copying'" class="mt-5 text-sm" role="status"><p class="tabular-nums">{{ job.outcomes.value.length }}/{{ job.planned.value.length }} file · <span translate="no">{{ job.progressName.value }}</span></p><progress class="mt-2 w-full accent-brand" :value="job.outcomes.value.length" :max="job.planned.value.length" /><UiButton variant="secondary" size="sm" class="mt-2" @click="job.stop">Dừng sau file hiện tại</UiButton></div>
       <div v-if="job.phase.value === 'result'" class="mt-5 text-sm"><p class="tabular-nums">Hoàn tất {{ job.copyCounts.value.copied }} · Bỏ qua {{ job.copyCounts.value.skipped }} · Lỗi {{ job.copyCounts.value.failed }} · Chưa chạy {{ job.copyCounts.value.cancelled }}</p><p v-if="job.writtenReports.value.length" class="mt-2">Báo cáo trong đích: {{ job.writtenReports.value.join(', ') }}</p><UiButton v-if="retryable" variant="secondary" size="sm" class="mt-3" @click="job.runCopy(true)">Thử lại file lỗi/chưa chạy</UiButton><p v-if="job.outcomes.value.some(item => item.status === 'partial')" class="mt-2 text-warn">File dang dở được giữ nguyên. Chọn đích khác rồi quét lại để copy ảnh này.</p></div>
       <div class="mt-5 flex flex-wrap gap-2 sm:gap-3"><UiButton variant="secondary" size="sm" @click="job.downloadReport('notes')">Tải ghi chú CSV</UiButton><UiButton variant="secondary" size="sm" @click="job.downloadReport('report')">Tải báo cáo CSV</UiButton></div>
