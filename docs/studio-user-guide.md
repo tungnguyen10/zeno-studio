@@ -35,6 +35,8 @@ Folder cần truy cập được bằng link. Điều này có nghĩa người c
 
 Link khách là link có quyền truy cập: bất kỳ ai nhận được link đều có thể mở album trong thời hạn hiệu lực. Không đăng link khách ở nơi công khai nếu album chỉ dành cho một khách hàng.
 
+Trong danh sách `/studio`, dùng ô tìm kiếm, bộ lọc trạng thái và **Sắp xếp** để tìm album. Trên máy tính, danh sách mặc định là bảng và có thể chuyển sang thẻ; trên điện thoại luôn là thẻ. Chủ studio hoặc quản lý mở **Tùy chọn** trên album để sửa tên; với album còn là bản nháp, có thể sửa thêm giới hạn chọn và hạn 15/30 ngày trước khi xuất bản. **Lưu trữ** đưa album khỏi danh sách đang quản lý; mở **Đã lưu trữ** để xem hoặc khôi phục. Lưu trữ không khóa link khách và không gia hạn album. Chỉ bản nháp chưa xuất bản mới có thể xóa vĩnh viễn khỏi Zeno Studio; ảnh gốc trên Drive không bị xóa.
+
 ## 4. Tạo nhanh không cần đăng nhập
 
 1. Mở `/create`, nhập tên album và link folder Drive công khai.

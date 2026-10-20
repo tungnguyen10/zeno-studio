@@ -1,5 +1,6 @@
 export type AlbumStatus = 'DRAFT' | 'PUBLISHED' | 'FINALIZED' | 'EXPIRED' | 'DELIVERED'
 export type AlbumFilter = 'all' | AlbumStatus
+export type AlbumSort = 'newest' | 'name' | 'expiry'
 
 export const ALBUM_STATUS_LABELS: Record<AlbumStatus, string> = {
   DRAFT: 'Nháp',
@@ -105,4 +106,11 @@ export function filterAlbums<T extends AlbumTiming & { title: string }>(albums: 
   const needle = fold(query)
   return albums.filter(album =>
     (filter === 'all' || effectiveStatus(album, now) === filter) && (!needle || fold(album.title).includes(needle)))
+}
+
+export function sortAlbums<T extends AlbumTiming & { title: string }>(albums: ReadonlyArray<T>, sort: AlbumSort): T[] {
+  if (sort === 'newest') return [...albums]
+  return [...albums].sort((a, b) => sort === 'name'
+    ? a.title.localeCompare(b.title, 'vi')
+    : new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime())
 }

@@ -8,6 +8,7 @@ useSeoMeta({ title: createPage.title, description: createPage.description, ogTit
 const title = ref('')
 const folderUrl = ref('')
 const expiresInDays = ref<15 | 30>(15)
+const durationOptions = [{ value: 15, label: '15 ngày' }, { value: 30, label: '30 ngày' }] as const
 const limited = ref(false)
 const maxCount = ref(30)
 const busy = ref(false)
@@ -54,11 +55,11 @@ async function copy(link: string, label: string) {
       <p class="mt-2 text-pretty text-muted sm:mt-3">Dán folder Google Drive đã bật “Bất kỳ ai có đường liên kết”. Ảnh gốc vẫn nằm trong Drive của bạn.</p>
       <form v-if="!adminLink" class="mt-6 space-y-5 rounded-3xl border border-line bg-white p-4 shadow-sm sm:mt-8 sm:p-8" @submit.prevent="create">
         <AlbumDriveShareGuide open after-create="Tạo xong bạn nhận 2 link: link gửi khách và link quản trị bí mật — hãy lưu link quản trị, vì không lấy lại được nếu mất." />
-        <label class="block font-semibold">Tên album<input v-model="title" required maxlength="150" name="album-title" autocomplete="off" class="control mt-2" placeholder="Mai & Quang…"></label>
-        <label class="block font-semibold">Link folder Drive<input v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" class="control mt-2" placeholder="https://drive.google.com/drive/folders/…"></label>
+        <label class="block font-semibold">Tên album<UiInput v-model="title" required maxlength="150" name="album-title" autocomplete="off" class="mt-2" placeholder="Mai & Quang…" /></label>
+        <label class="block font-semibold">Link folder Drive<UiInput v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" class="mt-2" placeholder="https://drive.google.com/drive/folders/…" /></label>
         <label class="flex min-h-11 cursor-pointer items-center gap-3 font-semibold"><input v-model="limited" type="checkbox" name="limited" class="focus-ring size-5 accent-brand"> Giới hạn số ảnh khách chọn</label>
-        <label v-if="limited" class="block font-semibold">Số ảnh tối đa<input v-model.number="maxCount" required type="number" min="0" inputmode="numeric" name="max-count" class="control mt-2"></label>
-        <label class="block font-semibold">Hạn album<select v-model.number="expiresInDays" name="expires-in" class="control mt-2"><option :value="15">15 ngày</option><option :value="30">30 ngày</option></select></label>
+        <label v-if="limited" class="block font-semibold">Số ảnh tối đa<UiInput v-model="maxCount" required type="number" min="0" inputmode="numeric" name="max-count" class="mt-2" /></label>
+        <label class="block font-semibold">Hạn album<UiSelect v-model="expiresInDays" label="Hạn album" name="expires-in" :options="durationOptions" class="mt-2" /></label>
         <UiButton type="submit" class="w-full sm:w-auto" :disabled="!hydrated" :loading="busy">{{ busy ? 'Đang kiểm tra Drive và tạo album…' : 'Tạo và xuất bản album' }}</UiButton>
         <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
       </form>

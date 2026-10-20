@@ -13,6 +13,8 @@ const members = ref<Member[]>([])
 const invitations = ref<Invitation[]>([])
 const inviteEmail = ref('')
 const inviteRole = ref<InviteRole>('member')
+const memberRoleOptions = [{ value: 'manager', label: 'Quản lý' }, { value: 'member', label: 'Thành viên' }] as const
+const inviteRoleOptions = computed(() => store.studio?.role === 'owner' ? memberRoleOptions : memberRoleOptions.slice(1))
 const inviteLink = ref('')
 const busy = ref(false)
 const loaded = ref(false)
@@ -75,6 +77,10 @@ async function changeRole(member: Member, role: InviteRole) {
   finally { busy.value = false }
 }
 
+function changeMemberRole(member: Member, role: StudioRole) {
+  if (role === 'manager' || role === 'member') void changeRole(member, role)
+}
+
 function askRemoveMember(member: Member) {
   pending.value = { kind: 'member', member }
   confirmOpen.value = true
@@ -114,7 +120,7 @@ onMounted(() => {
   void load()
 })
 
-const field = 'control mt-2'
+const field = 'mt-2'
 const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm font-semibold text-danger hover:bg-danger-soft disabled:opacity-50'
 </script>
 
@@ -158,19 +164,16 @@ const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm fon
           <p class="mt-2 text-sm text-pretty text-muted">Liên kết chỉ dùng cho email được mời và hết hạn sau 7 ngày.</p>
           <form class="mt-5 space-y-4" @submit.prevent="createInvitation">
             <label class="block text-sm font-semibold">Email người nhận
-              <input v-model="inviteEmail" type="email" required name="invite-email" autocomplete="off" spellcheck="false" autocapitalize="off" :class="field" placeholder="artist@studio.vn">
+              <UiInput v-model="inviteEmail" type="email" required name="invite-email" autocomplete="off" spellcheck="false" autocapitalize="off" :class="field" placeholder="artist@studio.vn" />
             </label>
             <label class="block text-sm font-semibold">Vai trò
-              <select v-model="inviteRole" name="invite-role" :class="field">
-                <option v-if="store.studio?.role === 'owner'" value="manager">Quản lý</option>
-                <option value="member">Thành viên</option>
-              </select>
+              <UiSelect v-model="inviteRole" label="Vai trò" name="invite-role" :options="inviteRoleOptions" :class="field" />
             </label>
             <UiButton type="submit" class="w-full sm:w-auto" :loading="busy">Tạo lời mời</UiButton>
           </form>
           <div v-if="inviteLink" class="mt-5 rounded-xl bg-tint p-4">
             <label class="block text-sm font-semibold">Liên kết mời — chỉ hiện lần này
-              <input :value="inviteLink" readonly translate="no" class="control mt-2 text-xs" @focus="($event.target as HTMLInputElement).select()">
+              <UiInput :model-value="inviteLink" readonly translate="no" class="mt-2 text-xs" @focus="($event.target as HTMLInputElement).select()" />
             </label>
             <UiButton variant="secondary" size="sm" class="mt-3" @click="copyInvitation">Sao chép liên kết</UiButton>
           </div>
@@ -185,9 +188,7 @@ const dangerButton = 'focus-ring min-h-11 shrink-0 rounded-full px-4 text-sm fon
                 <span class="min-w-0 break-all font-medium">{{ member.email || member.userId }}</span>
                 <span v-if="member.role === 'owner' || store.studio?.role !== 'owner'" class="self-start rounded-full bg-tint px-3 py-1 text-xs font-semibold text-muted sm:self-auto">{{ STUDIO_ROLE_LABELS[member.role] }}</span>
                 <span v-else class="flex items-center gap-2">
-                  <select :value="member.role" :disabled="busy" :aria-label="`Vai trò của ${member.email || member.userId}`" class="control flex-1 sm:w-40 sm:flex-none" @change="changeRole(member, ($event.target as HTMLSelectElement).value as InviteRole)">
-                    <option value="manager">Quản lý</option><option value="member">Thành viên</option>
-                  </select>
+                  <UiSelect :model-value="member.role" :disabled="busy" :label="`Vai trò của ${member.email || member.userId}`" :options="memberRoleOptions" class="flex-1 sm:w-40 sm:flex-none" @update:model-value="changeMemberRole(member, $event)" />
                   <button type="button" :disabled="busy" :class="dangerButton" @click="askRemoveMember(member)">Thu hồi</button>
                 </span>
               </li>

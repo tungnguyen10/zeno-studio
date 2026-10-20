@@ -27,37 +27,37 @@ test.describe('studio dashboard', () => {
     await page.goto('/studio')
 
     await expect(page.getByRole('heading', { name: 'Album', level: 1 })).toBeVisible()
-    await expect(page.getByRole('article')).toHaveCount(5)
+    await expect(page.locator('tbody tr')).toHaveCount(5)
     const filters = page.getByRole('group', { name: 'Lọc album theo trạng thái' })
     await expect(filters.getByRole('button', { name: /Tất cả/ })).toContainText('5')
     await expect(filters.getByRole('button', { name: /Hết hạn/ })).toContainText('1')
 
-    const picking = page.getByRole('article').filter({ hasText: 'Mai & Quang' })
+    const picking = page.getByRole('row').filter({ hasText: 'Mai & Quang' })
     await expect(picking).toContainText('Khách đã chọn 12/30 ảnh')
     await expect(picking).toContainText('Còn 2 ngày')
     await expect(picking.getByRole('link', { name: 'Xem & chốt ảnh' })).toHaveAttribute('href', `/studio/albums/${albums[1]!.id}?studio=${studioId}`)
 
-    const finalized = page.getByRole('article').filter({ hasText: 'Sinh nhật Bin' })
+    const finalized = page.getByRole('row').filter({ hasText: 'Sinh nhật Bin' })
     await expect(finalized).toContainText('phiên bản 2')
     await expect(finalized.getByRole('link', { name: 'Xem kết quả' })).toHaveAttribute('href', `/studio/albums/${albums[2]!.id}/results?studio=${studioId}`)
 
-    const expired = page.getByRole('article').filter({ hasText: 'Album cũ' })
+    const expired = page.getByRole('row').filter({ hasText: 'Album cũ' })
     await expect(expired).toContainText('Đã hết hạn')
     await expect(expired.getByRole('button', { name: 'Sao chép link khách' })).toHaveCount(0)
 
     await filters.getByRole('button', { name: /Đã chốt/ }).click()
-    await expect(page.getByRole('article')).toHaveCount(1)
+    await expect(page.locator('tbody tr')).toHaveCount(1)
     await expect(page.getByText('Hiển thị 1/5 album')).toBeVisible()
 
     await filters.getByRole('button', { name: /Tất cả/ }).click()
     await page.getByRole('searchbox', { name: 'Tìm album theo tên' }).fill('dam cuoi')
-    await expect(page.getByRole('article')).toHaveCount(1)
-    await expect(page.getByRole('article')).toContainText('Đám cưới Lan')
+    await expect(page.locator('tbody tr')).toHaveCount(1)
+    await expect(page.locator('tbody tr')).toContainText('Đám cưới Lan')
 
     await page.getByRole('searchbox', { name: 'Tìm album theo tên' }).fill('không có')
     await expect(page.getByText('Không có album phù hợp')).toBeVisible()
     await page.getByRole('button', { name: 'Xóa bộ lọc' }).click()
-    await expect(page.getByRole('article')).toHaveCount(5)
+    await expect(page.locator('tbody tr')).toHaveCount(5)
   })
 
   test('shows an empty state with a create action', async ({ page }) => {
@@ -74,10 +74,11 @@ test.describe('studio dashboard', () => {
     await page.route(`**/api/studio/${studioId}/albums`, route => json(route, { albums: [albums[0]] }))
     await page.route(`**/api/studio/${otherStudioId}/albums`, route => json(route, { albums: [albums[2]] }))
     await page.goto('/studio')
-    await expect(page.getByRole('article')).toContainText('Đám cưới Lan')
+    await expect(page.locator('tbody tr')).toContainText('Đám cưới Lan')
 
-    await page.getByRole('combobox', { name: 'Chọn studio' }).selectOption(otherStudioId)
-    await expect(page.getByRole('article')).toContainText('Sinh nhật Bin')
+    await page.getByRole('combobox', { name: 'Chọn studio' }).click()
+    await page.getByRole('option', { name: 'Studio Hai' }).click()
+    await expect(page.locator('tbody tr')).toContainText('Sinh nhật Bin')
     await expect(page).toHaveURL(new RegExp(`studio=${otherStudioId}`))
     await expect(page.getByRole('link', { name: 'Thành viên' })).toHaveAttribute('href', `/studio/members?studio=${otherStudioId}`)
   })
@@ -128,18 +129,19 @@ test.describe('create album dialog', () => {
     await dialog.getByLabel('Tên album').fill('Album mới')
     await dialog.getByLabel('Link folder Drive').fill('https://drive.google.com/drive/folders/abc')
     await dialog.getByLabel('Tối đa ảnh chọn').fill('40')
-    await dialog.getByLabel('Hạn album').selectOption('15')
+    await dialog.getByRole('combobox', { name: 'Hạn album' }).click()
+    await dialog.getByRole('option', { name: '15 ngày' }).click()
     await dialog.getByRole('button', { name: 'Tạo album nháp' }).click()
 
     const done = page.getByRole('dialog', { name: 'Album đã được tạo' })
     await expect(done).toBeVisible()
     expect(created).toEqual({ title: 'Album mới', folderUrl: 'https://drive.google.com/drive/folders/abc', expiresInDays: 15, limit: { kind: 'maximum', count: 40 } })
-    await expect(page.getByRole('article').filter({ hasText: 'Album mới' })).toContainText('Nháp')
+    await expect(page.getByRole('row').filter({ hasText: 'Album mới' })).toContainText('Nháp')
 
     await done.getByRole('button', { name: 'Xuất bản' }).click()
     await expect(done.getByRole('link', { name: /album\/.*token=/ })).toHaveAttribute('href', `http://127.0.0.1:43627/album/${newAlbum.id}?token=${customerToken}`)
     expect(published).toBe(1)
-    await expect(page.getByRole('article').filter({ hasText: 'Album mới' })).toContainText('Khách đang chọn')
+    await expect(page.getByRole('row').filter({ hasText: 'Album mới' })).toContainText('Khách đang chọn')
 
     await page.keyboard.press('Escape')
     await expect(done).toBeHidden()

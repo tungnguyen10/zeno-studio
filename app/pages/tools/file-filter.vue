@@ -283,10 +283,10 @@ function downloadReport() {
               <span class="font-normal text-muted">{{ { raw: 'RAW', jpeg: 'JPEG', all: 'RAW + JPEG', custom: 'Tùy chỉnh' }[fileType] }} · {{ matchBy === 'stem' ? 'theo tên gốc' : 'tên đầy đủ' }}</span>
             </summary>
             <div class="mt-2 grid gap-3 sm:grid-cols-2">
-              <label class="text-sm font-semibold">Loại file<select v-model="fileType" name="file-type" class="control mt-1"><option value="raw">RAW</option><option value="jpeg">JPEG</option><option value="all">RAW + JPEG</option><option value="custom">Tùy chỉnh</option></select></label>
-              <label class="text-sm font-semibold">So khớp<select v-model="matchBy" name="match-by" class="control mt-1"><option value="stem">Tên gốc JPG → RAW</option><option value="full">Tên file đầy đủ</option></select></label>
+              <label class="text-sm font-semibold">Loại file<UiSelect v-model="fileType" label="Loại file" name="file-type" :options="[{ value: 'raw', label: 'RAW' }, { value: 'jpeg', label: 'JPEG' }, { value: 'all', label: 'RAW + JPEG' }, { value: 'custom', label: 'Tùy chỉnh' }]" class="mt-1" /></label>
+              <label class="text-sm font-semibold">So khớp<UiSelect v-model="matchBy" label="So khớp" name="match-by" :options="[{ value: 'stem', label: 'Tên gốc JPG → RAW' }, { value: 'full', label: 'Tên file đầy đủ' }]" class="mt-1" /></label>
             </div>
-            <label v-if="fileType === 'custom'" class="mt-3 block text-sm font-semibold">Phần mở rộng (cách nhau bằng dấu phẩy)<input v-model="customExtensions" name="custom-extensions" autocomplete="off" spellcheck="false" placeholder=".tif, .png…" class="control mt-1"></label>
+            <label v-if="fileType === 'custom'" class="mt-3 block text-sm font-semibold">Phần mở rộng (cách nhau bằng dấu phẩy)<UiInput v-model="customExtensions" name="custom-extensions" autocomplete="off" spellcheck="false" placeholder=".tif, .png…" class="mt-1" /></label>
             <p class="mt-3 text-xs text-pretty text-muted">{{ matchBy === 'stem' ? 'Bỏ đuôi file khi so khớp: tên JPG khách chọn sẽ tìm đúng file RAW cùng tên.' : 'Tên file phải trùng hoàn toàn, kể cả phần đuôi.' }}</p>
           </details>
 
@@ -311,7 +311,7 @@ function downloadReport() {
           <h3 class="font-semibold">Chọn file cho tên trùng</h3>
           <div class="mt-3 grid gap-3 lg:grid-cols-2">
             <label v-for="item in preview.ambiguous" :key="item.requested" class="block rounded-xl border border-line p-3 text-sm sm:p-4"><span class="break-all font-medium" translate="no">{{ item.requested }}</span>
-              <select v-model="resolvedPaths[item.requested]" class="control mt-2"><option value="">Không copy file này</option><option v-for="file in item.files" :key="file.path" :value="file.path">{{ file.path }}</option></select>
+              <UiSelect v-model="resolvedPaths[item.requested]" :label="item.requested" :options="[{ value: '', label: 'Không copy file này' }, ...item.files.map(file => ({ value: file.path, label: file.path }))]" class="mt-2" />
             </label>
           </div>
         </div>

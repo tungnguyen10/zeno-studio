@@ -57,7 +57,7 @@ async function resendVerification() {
   } finally { busy.value = false }
 }
 
-const input = 'control mt-2 min-h-12 px-4'
+const input = 'mt-2 min-h-12 px-4'
 const tab = 'focus-ring min-h-11 flex-1 rounded-full px-4 py-2.5 transition-colors'
 const textButton = 'focus-ring min-h-11 rounded text-sm font-medium text-brand underline underline-offset-4 disabled:opacity-60'
 </script>
@@ -72,13 +72,13 @@ const textButton = 'focus-ring min-h-11 rounded text-sm font-medium text-brand u
     <p class="mt-2 text-sm leading-6 text-pretty text-muted">{{ mode === 'recovery' ? 'Nhập email để nhận liên kết đặt lại mật khẩu.' : 'Dùng email của bạn để tiếp tục công việc với Zeno Studio.' }}</p>
     <form class="mt-6 space-y-4 sm:mt-7" @submit.prevent="submit">
       <label v-if="mode === 'register'" class="block text-sm font-semibold">Tên studio hoặc tên của bạn
-        <input v-model="name" required name="name" autocomplete="name" :class="input" placeholder="Studio An Nhiên…">
+        <UiInput v-model="name" required name="name" autocomplete="name" :class="input" placeholder="Studio An Nhiên…" />
       </label>
       <label class="block text-sm font-semibold">Email
-        <input v-model="email" required type="email" name="email" autocomplete="email" spellcheck="false" autocapitalize="off" :class="input" placeholder="you@studio.vn">
+        <UiInput v-model="email" required type="email" name="email" autocomplete="email" spellcheck="false" autocapitalize="off" :class="input" placeholder="you@studio.vn" />
       </label>
       <label v-if="mode !== 'recovery'" class="block text-sm font-semibold">Mật khẩu
-        <input v-model="password" required type="password" name="password" minlength="8" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" :class="input" placeholder="Tối thiểu 8 ký tự">
+        <UiInput v-model="password" required type="password" name="password" minlength="8" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" :class="input" placeholder="Tối thiểu 8 ký tự" />
       </label>
       <UiButton type="submit" block class="min-h-12" :disabled="!hydrated" :loading="busy">{{ busy ? 'Đang xử lý…' : mode === 'login' ? 'Đăng nhập' : mode === 'register' ? 'Tạo tài khoản' : 'Gửi liên kết' }}</UiButton>
     </form>

@@ -18,6 +18,7 @@ export interface AlbumSummary {
   // Upper bound of the selection limit, or null when there is none.
   selectionLimit: number | null
   latestVersionNumber: number | null
+  archivedAt: Date | null
 }
 
 export interface CreateAlbumInput {
@@ -29,7 +30,7 @@ export interface CreateAlbumInput {
   limit: SelectionLimit
 }
 
-async function requireAlbumPermission(client: QueryClient, studioId: string, userId: string, action: 'album.create' | 'album.view' | 'album.publish'): Promise<void> {
+async function requireAlbumPermission(client: QueryClient, studioId: string, userId: string, action: 'album.create' | 'album.view' | 'album.publish' | 'album.settings'): Promise<void> {
   const result = await client.query<{ role: Role }>('SELECT role FROM studio_members WHERE studio_id = $1 AND user_id = $2', [studioId, userId])
   if (!result.rows[0] || !canPerform(result.rows[0].role, action)) throw new StudioOperationError('Không có quyền thao tác album', 403)
 }
@@ -106,7 +107,7 @@ export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapt
   })
   const limit = input.limit
   const selectionLimit = limit.kind === 'range' ? limit.max : limit.kind === 'maximum' || limit.kind === 'exact' ? limit.count : null
-  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length, selectedCount: 0, selectionLimit, latestVersionNumber: null }
+  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length, selectedCount: 0, selectionLimit, latestVersionNumber: null, archivedAt: null }
 }
 
 export async function insertAlbumRecords(
@@ -151,8 +152,8 @@ export async function insertAlbumRecords(
 export async function getStudioAlbums(pool: ConnectionPool, studioId: string, userId: string): Promise<AlbumSummary[]> {
   return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
     await requireAlbumPermission(client, studioId, userId, 'album.view')
-    const result = await client.query<{ id: string; title: string; status: AlbumSummary['status']; expires_at: Date; photo_count: number; selected_count: number; limit_max: number | null; latest_version: number | null }>(
-      `SELECT a.id, a.title, a.status, a.expires_at,
+    const result = await client.query<{ id: string; title: string; status: AlbumSummary['status']; expires_at: Date; archived_at: Date | null; photo_count: number; selected_count: number; limit_max: number | null; latest_version: number | null }>(
+      `SELECT a.id, a.title, a.status, a.expires_at, a.archived_at,
          (SELECT count(*)::integer FROM photos p WHERE p.album_id = a.id) AS photo_count,
          (SELECT count(*)::integer FROM selections s
             JOIN selection_lists l ON l.id = s.list_id
@@ -164,8 +165,69 @@ export async function getStudioAlbums(pool: ConnectionPool, studioId: string, us
        WHERE a.studio_id = $1 ORDER BY a.created_at DESC`, [studioId])
     return result.rows.map(row => ({
       id: row.id, title: row.title, status: row.status, expiresAt: row.expires_at, photoCount: row.photo_count,
-      selectedCount: row.selected_count, selectionLimit: row.limit_max, latestVersionNumber: row.latest_version,
+      selectedCount: row.selected_count, selectionLimit: row.limit_max, latestVersionNumber: row.latest_version, archivedAt: row.archived_at,
     }))
+  })
+}
+
+export interface UpdateStudioAlbumInput {
+  title: string
+  expiresInDays?: 15 | 30
+  limit?: SelectionLimit
+}
+
+export async function updateStudioAlbum(pool: ConnectionPool, studioId: string, userId: string, albumId: string, input: UpdateStudioAlbumInput): Promise<void> {
+  if (!input.title?.trim() || input.title.trim().length > 150) throw new StudioOperationError('Tên album phải dài 1–150 ký tự', 400)
+  if (input.expiresInDays !== undefined && input.expiresInDays !== 15 && input.expiresInDays !== 30) throw new StudioOperationError('Hạn album phải là 15 hoặc 30 ngày', 400)
+  if (input.limit !== undefined) validateAlbumInput({ title: input.title, expiresInDays: input.expiresInDays ?? 15, limit: input.limit })
+  await withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
+    await requireAlbumPermission(client, studioId, userId, 'album.settings')
+    const result = await client.query<{ status: AlbumSummary['status']; active: boolean }>(
+      'SELECT status, expires_at > now() AS active FROM albums WHERE id = $1 AND studio_id = $2 FOR UPDATE', [albumId, studioId])
+    const album = result.rows[0]
+    if (!album) throw new StudioOperationError('Album không tồn tại', 404)
+    if (!album.active || album.status === 'EXPIRED') throw new StudioOperationError('Album đã hết hạn', 409)
+    if (album.status !== 'DRAFT' && (input.expiresInDays !== undefined || input.limit !== undefined)) {
+      throw new StudioOperationError('Chỉ có thể sửa giới hạn và hạn của album nháp', 409)
+    }
+    await client.query('UPDATE albums SET title = $1, updated_at = now() WHERE id = $2', [input.title.trim(), albumId])
+    if (input.expiresInDays !== undefined) {
+      await client.query("UPDATE albums SET expires_at = created_at + ($1::integer * interval '1 day') WHERE id = $2", [input.expiresInDays, albumId])
+      await client.query('UPDATE album_settings SET duration_days = $1 WHERE album_id = $2', [input.expiresInDays, albumId])
+    }
+    if (input.limit !== undefined) {
+      const limit = input.limit
+      const minimum = limit.kind === 'range' ? limit.min : limit.kind === 'minimum' || limit.kind === 'exact' ? limit.count : null
+      const maximum = limit.kind === 'range' ? limit.max : limit.kind === 'maximum' || limit.kind === 'exact' ? limit.count : null
+      await client.query('UPDATE album_settings SET limit_kind = $1, limit_min = $2, limit_max = $3 WHERE album_id = $4', [limit.kind, minimum, maximum, albumId])
+    }
+  })
+}
+
+async function setArchived(pool: ConnectionPool, studioId: string, userId: string, albumId: string, archived: boolean): Promise<void> {
+  await withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
+    await requireAlbumPermission(client, studioId, userId, 'album.settings')
+    const result = await client.query<{ id: string }>('SELECT id FROM albums WHERE id = $1 AND studio_id = $2 FOR UPDATE', [albumId, studioId])
+    if (!result.rows[0]) throw new StudioOperationError('Album không tồn tại', 404)
+    await client.query('UPDATE albums SET archived_at = CASE WHEN $1::boolean THEN now() ELSE NULL END, updated_at = now() WHERE id = $2', [archived, albumId])
+  })
+}
+
+export const archiveStudioAlbum = (pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<void> =>
+  setArchived(pool, studioId, userId, albumId, true)
+
+export const restoreStudioAlbum = (pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<void> =>
+  setArchived(pool, studioId, userId, albumId, false)
+
+export async function deleteDraftAlbum(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<void> {
+  await withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
+    await requireAlbumPermission(client, studioId, userId, 'album.settings')
+    const result = await client.query<{ status: string; published_at: Date | null }>(
+      'SELECT status, published_at FROM albums WHERE id = $1 AND studio_id = $2 FOR UPDATE', [albumId, studioId])
+    const album = result.rows[0]
+    if (!album) throw new StudioOperationError('Album không tồn tại', 404)
+    if (album.status !== 'DRAFT' || album.published_at) throw new StudioOperationError('Chỉ có thể xóa album nháp chưa xuất bản', 409)
+    await client.query('DELETE FROM albums WHERE id = $1', [albumId])
   })
 }
 

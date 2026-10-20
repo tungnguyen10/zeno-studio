@@ -1,7 +1,7 @@
 <script setup lang="ts" generic="K extends string">
 import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 
-defineProps<{ label: string; items: ReadonlyArray<{ key: K; label: string }> }>()
+defineProps<{ label: string; items: ReadonlyArray<{ key: K; label: string }>; iconOnly?: boolean }>()
 const emit = defineEmits<{ select: [key: K] }>()
 
 const open = ref(false)
@@ -56,6 +56,20 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
 <template>
   <div ref="root" class="relative" @keydown="onKeydown" @focusout="onFocusOut">
     <button
+      v-if="iconOnly"
+      ref="trigger"
+      type="button"
+      class="focus-ring grid size-11 place-items-center rounded-full border border-line bg-white text-brand transition-colors hover:bg-tint"
+      :aria-label="label"
+      :title="label"
+      :aria-expanded="open"
+      :aria-controls="panelId"
+      @click="open = !open"
+    >
+      <svg viewBox="0 0 20 20" class="size-5" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="15.5" cy="10" r="1.5" /></svg>
+    </button>
+    <button
+      v-else
       ref="trigger"
       type="button"
       class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full border border-line bg-white px-5 text-sm font-semibold text-brand transition-colors hover:bg-tint"

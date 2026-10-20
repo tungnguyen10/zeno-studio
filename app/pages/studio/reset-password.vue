@@ -53,10 +53,10 @@ async function submit() {
         <p class="mt-3 leading-7 text-muted">Chọn mật khẩu mới cho tài khoản studio.</p>
         <form class="mt-6 space-y-4 sm:mt-7" @submit.prevent="submit">
           <label class="block text-sm font-semibold">Mật khẩu mới
-            <input v-model="newPassword" required type="password" name="new-password" minlength="8" autocomplete="new-password" :aria-invalid="!!feedback" class="control mt-2 min-h-12 px-4">
+            <UiInput v-model="newPassword" required type="password" name="new-password" minlength="8" autocomplete="new-password" :invalid="!!feedback" class="mt-2 min-h-12 px-4" />
           </label>
           <label class="block text-sm font-semibold">Xác nhận mật khẩu
-            <input v-model="confirmation" required type="password" name="confirm-password" minlength="8" autocomplete="new-password" :aria-invalid="!!feedback" class="control mt-2 min-h-12 px-4">
+            <UiInput v-model="confirmation" required type="password" name="confirm-password" minlength="8" autocomplete="new-password" :invalid="!!feedback" class="mt-2 min-h-12 px-4" />
           </label>
           <UiButton type="submit" block class="min-h-12" :loading="busy">{{ busy ? 'Đang xử lý…' : 'Lưu mật khẩu mới' }}</UiButton>
         </form>

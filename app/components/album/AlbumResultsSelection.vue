@@ -54,14 +54,10 @@ function imageUrl(item: ExportItem) {
 
     <div class="surface mt-4 grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-end">
       <UiField v-slot="{ id }" label="Tìm tên file">
-        <input :id="id" v-model="search" type="search" name="result-search" autocomplete="off" spellcheck="false" enterkeyhint="search" class="control" placeholder="Ví dụ DSC_0123…">
+        <UiInput :id="id" v-model="search" type="search" name="result-search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="Ví dụ DSC_0123…" />
       </UiField>
       <UiField v-slot="{ id }" label="Ghi chú">
-        <select :id="id" v-model="notesFilter" name="result-notes" class="control">
-          <option value="all">Tất cả</option>
-          <option value="with">Có ghi chú</option>
-          <option value="without">Chưa có ghi chú</option>
-        </select>
+        <UiSelect :id="id" v-model="notesFilter" label="Ghi chú" name="result-notes" :options="[{ value: 'all', label: 'Tất cả' }, { value: 'with', label: 'Có ghi chú' }, { value: 'without', label: 'Chưa có ghi chú' }]" />
       </UiField>
     </div>
 

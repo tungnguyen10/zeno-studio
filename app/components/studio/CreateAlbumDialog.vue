@@ -10,6 +10,7 @@ const title = ref('')
 const folderUrl = ref('')
 const limit = ref(30)
 const days = ref<15 | 30>(15)
+const durationOptions = [{ value: 15, label: '15 ngày' }, { value: 30, label: '30 ngày' }] as const
 const busy = ref(false)
 const error = ref('')
 const created = ref<{ id: string; title: string; photoCount: number } | null>(null)
@@ -36,7 +37,6 @@ async function submit() {
   finally { busy.value = false }
 }
 
-const field = 'control mt-1.5'
 </script>
 
 <template>
@@ -62,11 +62,11 @@ const field = 'control mt-1.5'
 
     <form v-else class="space-y-4" @submit.prevent="submit">
       <AlbumDriveShareGuide after-create="Album được tạo ở dạng nháp; xuất bản để lấy link gửi khách." />
-      <label class="block text-sm font-semibold">Tên album<input v-model="title" required maxlength="150" autofocus name="album-title" autocomplete="off" :class="field" placeholder="Mai & Quang…"></label>
-      <label class="block text-sm font-semibold">Link folder Drive<input v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" :class="field" placeholder="https://drive.google.com/drive/folders/…"></label>
+      <label class="block text-sm font-semibold">Tên album<UiInput v-model="title" required maxlength="150" autofocus name="album-title" autocomplete="off" class="mt-1.5" placeholder="Mai & Quang…" /></label>
+      <label class="block text-sm font-semibold">Link folder Drive<UiInput v-model="folderUrl" required type="url" inputmode="url" name="folder-url" autocomplete="off" spellcheck="false" class="mt-1.5" placeholder="https://drive.google.com/drive/folders/…" /></label>
       <div class="grid gap-3 min-[380px]:grid-cols-2">
-        <label class="block text-sm font-semibold">Tối đa ảnh chọn<input v-model.number="limit" required type="number" min="0" inputmode="numeric" name="selection-limit" :class="field"></label>
-        <label class="block text-sm font-semibold">Hạn album<select v-model.number="days" name="expires-in" :class="field"><option :value="15">15 ngày</option><option :value="30">30 ngày</option></select></label>
+        <label class="block text-sm font-semibold">Tối đa ảnh chọn<UiInput v-model="limit" required type="number" min="0" inputmode="numeric" name="selection-limit" class="mt-1.5" /></label>
+        <label class="block text-sm font-semibold">Hạn album<UiSelect v-model="days" label="Hạn album" name="expires-in" :options="durationOptions" class="mt-1.5" /></label>
       </div>
       <UiNotice v-if="error" tone="error">{{ error }}</UiNotice>
       <div class="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">

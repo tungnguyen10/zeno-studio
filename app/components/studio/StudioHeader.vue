@@ -9,9 +9,9 @@ const router = useRouter()
 const withStudio = computed(() => store.studio ? { studio: store.studio.id } : {})
 const onAlbums = computed(() => route.path === '/studio')
 const onMembers = computed(() => route.path.startsWith('/studio/members'))
+const studioOptions = computed(() => store.studios.map(item => ({ value: item.id, label: item.name })))
 
-function switchStudio(event: Event) {
-  const id = (event.target as HTMLSelectElement).value
+function switchStudio(id: string) {
   store.select(id)
   void router.replace({ query: { ...route.query, studio: id } })
 }
@@ -74,9 +74,7 @@ const tabActive = 'bg-brand text-white shadow-sm'
         <template v-if="store.studio">
           <span aria-hidden="true" class="hidden h-7 w-px shrink-0 bg-line sm:block" />
           <div class="min-w-0 text-sm">
-            <select v-if="store.studios.length > 1" aria-label="Chọn studio" :value="store.studio.id" :class="['min-h-11 w-full max-w-56 truncate rounded-xl border border-line bg-white pl-3 pr-8 font-semibold', focusRing]" @change="switchStudio">
-              <option v-for="item in store.studios" :key="item.id" :value="item.id">{{ item.name }}</option>
-            </select>
+            <UiSelect v-if="store.studios.length > 1" :model-value="store.studio.id" label="Chọn studio" :options="studioOptions" class="w-56 max-w-full font-semibold" @update:model-value="switchStudio" />
             <div v-else class="min-w-0 leading-tight">
               <p class="truncate font-semibold" :title="store.studio.name">{{ store.studio.name }}</p>
               <p class="truncate text-xs text-muted">{{ STUDIO_ROLE_LABELS[store.studio.role] }}</p>

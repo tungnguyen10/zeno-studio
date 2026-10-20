@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  countByFilter, daysLeft, effectiveStatus, filterAlbums, nextStep, workflowStepIndex,
+  countByFilter, daysLeft, effectiveStatus, filterAlbums, nextStep, sortAlbums, workflowStepIndex,
   type AlbumStatus,
 } from '../../shared/domain/album-status'
 
@@ -33,6 +33,14 @@ describe('album status', () => {
     expect(filterAlbums(albums, 'PUBLISHED', '', now).map(item => item.title)).toEqual(['Mai & Quang'])
     expect(filterAlbums(albums, 'all', 'dam cuoi', now).map(item => item.title)).toEqual(['Đám cưới'])
     expect(filterAlbums(albums, 'EXPIRED', 'xyz', now)).toEqual([])
+  })
+
+  it('sorts by name or nearest expiry without mutating newest-first order', () => {
+    const albums = [album('Zebra', 'DRAFT', 8), album('Ánh', 'PUBLISHED', 2), album('Mai', 'DRAFT', 5)]
+    expect(sortAlbums(albums, 'newest').map(item => item.title)).toEqual(['Zebra', 'Ánh', 'Mai'])
+    expect(sortAlbums(albums, 'name').map(item => item.title)).toEqual(['Ánh', 'Mai', 'Zebra'])
+    expect(sortAlbums(albums, 'expiry').map(item => item.title)).toEqual(['Ánh', 'Mai', 'Zebra'])
+    expect(albums[0]?.title).toBe('Zebra')
   })
 
 })

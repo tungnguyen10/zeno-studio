@@ -11,7 +11,7 @@ export interface StudioAlbumWorkspace {
   canFinalize: boolean
   hasResults: boolean
   previousCount: number
-  settings: { limitKind: string; limitMin: number | null; limitMax: number | null }
+  settings: { limitKind: string; limitMin: number | null; limitMax: number | null; durationDays: 15 | 30 }
   photoCount: number
   selectedCount: number
 }
@@ -22,8 +22,8 @@ export async function getStudioAlbumWorkspace(pool: ConnectionPool, studioId: st
 
 export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: AlbumManager, albumId: string): Promise<StudioAlbumWorkspace> {
   return withManagedAlbum(pool, manager, albumId, 'album.view', async (client, session) => {
-    const result = await client.query<{ id: string; title: string; status: string; expires_at: Date; limit_kind: string; limit_min: number | null; limit_max: number | null; has_results: boolean }>(
-      `SELECT a.id, a.title, a.status, a.expires_at, s.limit_kind, s.limit_min, s.limit_max,
+    const result = await client.query<{ id: string; title: string; status: string; expires_at: Date; limit_kind: string; limit_min: number | null; limit_max: number | null; duration_days: 15 | 30; has_results: boolean }>(
+      `SELECT a.id, a.title, a.status, a.expires_at, s.limit_kind, s.limit_min, s.limit_max, s.duration_days,
          EXISTS (SELECT 1 FROM selection_versions v WHERE v.album_id = a.id) AS has_results
        FROM albums a JOIN album_settings s ON s.album_id = a.id WHERE a.id = $1`, [albumId])
     const album = result.rows[0]
@@ -36,7 +36,7 @@ export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: Al
       id: album.id, title: album.title, status: album.status, expiresAt: album.expires_at,
       canFinalize: session.canFinalize, hasResults: album.has_results,
       previousCount: previous.rows[0]?.count ?? 0,
-      settings: { limitKind: album.limit_kind, limitMin: album.limit_min, limitMax: album.limit_max },
+      settings: { limitKind: album.limit_kind, limitMin: album.limit_min, limitMax: album.limit_max, durationDays: album.duration_days },
       photoCount: counts.total, selectedCount: counts.selectedCount,
     }
   })
