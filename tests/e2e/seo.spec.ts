@@ -29,11 +29,11 @@ test('robots.txt blocks private routes and links the sitemap', async ({ request,
   expect(body).toContain(`Sitemap: ${new URL(baseURL!).origin}/sitemap.xml`)
 })
 
-test('sitemap lists only public pages', async ({ request }) => {
+test('sitemap lists exactly the public pages', async ({ request, baseURL }) => {
   const body = await (await request.get('/sitemap.xml')).text()
-  expect(body).toContain('/tools/file-filter</loc>')
-  expect(body).not.toContain('/album/')
-  expect(body).not.toContain('/guest/')
+  const listedUrls = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1])
+  const origin = new URL(baseURL!).origin
+  expect(listedUrls).toEqual(PUBLIC_PAGES.map(page => `${origin}${page.path}`))
 })
 
 test('llms.txt summarises the product', async ({ request }) => {
@@ -53,11 +53,14 @@ test('home page exposes canonical, social and structured data', async ({ page })
 })
 
 for (const publicRoute of PUBLIC_PAGES) {
-  test(`SSR SEO metadata for ${publicRoute.path}`, async ({ request, baseURL }) => {
+  test(`SSR SEO metadata for ${publicRoute.path}`, async ({ request, page, baseURL }) => {
     const origin = new URL(baseURL!).origin
     const url = `${origin}${publicRoute.path}`
     const html = await (await request.get(publicRoute.path)).text()
     const image = `${origin}/images/og/zeno-studio.png`
+    await page.goto(publicRoute.path)
+    await expect(page).toHaveTitle(publicRoute.title)
+    expect(html.match(/<link\b[^>]*rel="canonical"[^>]*>/g)).toHaveLength(1)
     expect(attr(tag(html, 'rel', 'canonical'), 'href')).toBe(url)
     expect(attr(tag(html, 'property', 'og:url'), 'content')).toBe(url)
     expect(attr(tag(html, 'name', 'description'), 'content')).toBe(publicRoute.description)
@@ -80,7 +83,15 @@ test('canonical and social URL omit public query strings', async ({ request, bas
   expect(attr(tag(html, 'property', 'og:url'), 'content')).toBe(canonical)
 })
 
-test('capability-token routes are not indexable', async ({ request }) => {
-  const response = await request.get('/guest/albums/00000000-0000-0000-0000-000000000000')
-  expect(response.headers()['x-robots-tag']).toBe('noindex, nofollow')
+test('album, guest and studio private routes are not indexable', async ({ request }) => {
+  const privatePaths = [
+    '/album/00000000-0000-0000-0000-000000000000?token=secret',
+    '/guest/albums/00000000-0000-0000-0000-000000000000',
+    '/studio/albums/00000000-0000-0000-0000-000000000000',
+    '/studio/members',
+  ]
+  for (const path of privatePaths) {
+    const response = await request.get(path, { maxRedirects: 0 })
+    expect(response.headers()['x-robots-tag'], path).toBe('noindex, nofollow')
+  }
 })

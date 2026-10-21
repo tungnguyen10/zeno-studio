@@ -21,6 +21,7 @@ const browser = await chromium.launch()
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 })
   await page.setContent(html, { waitUntil: 'load' })
+  await page.evaluate(() => document.fonts.ready)
   await page.locator('#og-art').screenshot({ path: output })
 } finally {
   await browser.close()
