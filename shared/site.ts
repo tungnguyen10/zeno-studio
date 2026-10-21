@@ -1,7 +1,13 @@
 export const SITE_NAME = 'Zeno Studio'
 export const SITE_TAGLINE = 'Tạo album, chọn ảnh và lọc file cho studio ảnh'
 export const SITE_DESCRIPTION = 'Zeno Studio giúp studio tạo album từ Google Drive, để khách chọn ảnh và ghi chú trên điện thoại, rồi xuất danh sách và lọc file RAW/JPEG trên máy.'
-export const SITE_OG_IMAGE = { path: '/images/hero/couple.jpg', width: 720, height: 478, alt: 'Cặp đôi trong bộ ảnh cưới ngoài trời' }
+export const SITE_OG_IMAGE = {
+  path: '/images/og/zeno-studio.png',
+  width: 1200,
+  height: 630,
+  type: 'image/png' as const,
+  alt: 'Zeno Studio của Zeno Corp: tạo album, chọn ảnh và lọc file cho studio ảnh',
+}
 
 export const ORGANIZATION = {
   name: 'Zeno Corp',

@@ -5,6 +5,7 @@ const route = useRoute()
 const siteUrl = useSiteUrl()
 // Path only: query strings can carry capability tokens.
 const pageUrl = computed(() => `${siteUrl}${route.path === '/' ? '/' : route.path.replace(/\/+$/, '')}`)
+const socialImageUrl = `${siteUrl}${SITE_OG_IMAGE.path}`
 
 useHead({ link: [{ rel: 'canonical', href: pageUrl }] })
 useSeoMeta({
@@ -12,11 +13,14 @@ useSeoMeta({
   ogLocale: 'vi_VN',
   ogType: 'website',
   ogUrl: pageUrl,
-  ogImage: `${siteUrl}${SITE_OG_IMAGE.path}`,
+  ogImage: socialImageUrl,
+  ogImageType: SITE_OG_IMAGE.type,
   ogImageWidth: SITE_OG_IMAGE.width,
   ogImageHeight: SITE_OG_IMAGE.height,
   ogImageAlt: SITE_OG_IMAGE.alt,
   twitterCard: 'summary_large_image',
+  twitterImage: socialImageUrl,
+  twitterImageAlt: SITE_OG_IMAGE.alt,
 })
 </script>
 
