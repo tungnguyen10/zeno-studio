@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test'
 
+test('branded OG image is public and has the intended dimensions', async ({ request }) => {
+  const response = await request.get('/images/og/zeno-studio.png')
+  expect(response.ok()).toBe(true)
+  expect(response.headers()['content-type']).toContain('image/png')
+  const image = await response.body()
+  expect(image.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
+  expect(image.readUInt32BE(16)).toBe(1200)
+  expect(image.readUInt32BE(20)).toBe(630)
+  expect(image.length).toBeLessThanOrEqual(1_000_000)
+})
+
 test('robots.txt blocks private routes and links the sitemap', async ({ request, baseURL }) => {
   const response = await request.get('/robots.txt')
   expect(response.ok()).toBe(true)
