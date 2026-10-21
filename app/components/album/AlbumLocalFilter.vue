@@ -60,10 +60,10 @@ function downloadFilenames() {
           <p v-if="job.source.value" class="mt-3 break-all text-sm font-medium text-brand" translate="no"><span aria-hidden="true">✓ </span>{{ job.source.value.name }}{{ job.sourceReadOnly.value ? ' · chỉ đọc' : '' }}</p>
           <p v-if="job.phase.value === 'scanning'" class="mt-3 text-sm tabular-nums" role="status">Đang quét {{ job.scanCount.value }} mục…</p>
           <UiButton v-if="job.phase.value === 'scanning'" variant="ghost" size="sm" class="mt-2" @click="job.stop">Dừng quét</UiButton>
-          <details class="mt-5 rounded-xl border border-line px-4 py-1 open:pb-4"><summary class="focus-ring flex min-h-11 cursor-pointer items-center rounded text-sm font-semibold text-muted">Tùy chọn nâng cao</summary>
+          <details class="mt-5 rounded-xl border border-line px-4 py-1 open:pb-4"><summary class="focus-ring flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded text-sm font-semibold text-muted">Tùy chọn nâng cao<span class="font-normal">{{ job.fileType.value === 'raw' && job.matchBy.value === 'stem' ? 'Danh sách JPG → file RAW' : 'Tùy chỉnh' }}</span></summary>
             <fieldset :disabled="job.phase.value === 'copying'" class="disabled:opacity-60">
             <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <label class="text-sm font-semibold">Loại file<UiSelect v-model="job.fileType.value" label="Loại file" name="file-type" :options="[{ value: 'raw', label: 'RAW' }, { value: 'jpeg', label: 'JPEG' }, { value: 'all', label: 'RAW + JPEG' }, { value: 'custom', label: 'Custom' }]" class="mt-1" /></label>
+              <label class="text-sm font-semibold">Loại file<UiSelect v-model="job.fileType.value" label="Loại file" name="file-type" :options="[{ value: 'raw', label: 'RAW' }, { value: 'jpeg', label: 'JPEG' }, { value: 'all', label: 'RAW + JPEG' }, { value: 'custom', label: 'Tùy chỉnh' }]" class="mt-1" /></label>
               <label class="text-sm font-semibold">So khớp<UiSelect v-model="job.matchBy.value" label="So khớp" name="match-by" :options="[{ value: 'stem', label: 'Tên gốc JPG → RAW' }, { value: 'full', label: 'Tên file đầy đủ' }]" class="mt-1" /></label>
             </div>
             <label v-if="job.fileType.value === 'custom'" class="mt-3 block text-sm font-semibold">Phần mở rộng ảnh<UiInput v-model="job.customExtensions.value" name="custom-extensions" autocomplete="off" spellcheck="false" class="mt-1" placeholder=".tif, .png…" /></label>

@@ -278,7 +278,7 @@ function downloadReport() {
           <details class="mt-3 rounded-2xl border border-line px-3 sm:px-4 open:pb-4">
             <summary class="focus-ring flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded text-sm font-semibold">
               Tùy chọn so khớp
-              <span class="font-normal text-muted">{{ { raw: 'RAW', jpeg: 'JPEG', all: 'RAW + JPEG', custom: 'Tùy chỉnh' }[fileType] }} · {{ matchBy === 'stem' ? 'theo tên gốc' : 'tên đầy đủ' }}</span>
+              <span class="font-normal text-muted">{{ fileType === 'raw' && matchBy === 'stem' ? 'Danh sách JPG → file RAW' : `${{ raw: 'RAW', jpeg: 'JPEG', all: 'RAW + JPEG', custom: 'Tùy chỉnh' }[fileType]} · ${matchBy === 'stem' ? 'theo tên gốc' : 'tên đầy đủ'}` }}</span>
             </summary>
             <div class="mt-2 grid gap-3 sm:grid-cols-2">
               <label class="text-sm font-semibold">Loại file<UiSelect v-model="fileType" label="Loại file" name="file-type" :options="[{ value: 'raw', label: 'RAW' }, { value: 'jpeg', label: 'JPEG' }, { value: 'all', label: 'RAW + JPEG' }, { value: 'custom', label: 'Tùy chỉnh' }]" class="mt-1" /></label>
