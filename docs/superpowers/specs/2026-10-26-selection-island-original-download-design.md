@@ -1,6 +1,6 @@
 # Tải ảnh gốc từ Selection Island
 
-**Trạng thái:** Thiết kế đã được duyệt để viết spec ngày 26/10/2026; chờ người dùng duyệt bản spec này trước khi lập kế hoạch triển khai.
+**Trạng thái:** Người dùng đã duyệt spec ngày 26/10/2026; chuyển sang lập kế hoạch triển khai.
 
 ## Mục tiêu và phạm vi
 
