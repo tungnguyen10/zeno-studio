@@ -8,7 +8,7 @@ const props = defineProps<{
   plan: ClientDownloadPlan | null; busy: boolean; error: string;
   shareEligible: boolean; shareReady: boolean; shareStatus: string;
   transferBusy: boolean; transferPart: number | null; transferBytes: number;
-  completedCount: number; failedParts: Record<number, string>; transferMessage: string
+  completedParts: ReadonlySet<number>; failedParts: Record<number, string>; transferMessage: string
 }>()
 const emit = defineEmits<{ close: []; mode: [mode: DownloadMode]; clear: []; prepare: [];
   prepareFiles: []; share: []; downloadPart: [index: number]; cancel: [] }>()
@@ -64,7 +64,7 @@ const prepareLabel = computed(() => props.mode === 'basket'
           <button type="button" class="focus-ring min-h-11 rounded-full border border-brand px-4 text-sm font-semibold text-brand disabled:opacity-50" :disabled="transferBusy" @click="emit('prepareFiles')">{{ transferBusy ? 'Đang chuẩn bị…' : 'Chuẩn bị ảnh gốc' }}</button>
           <button v-if="shareReady" type="button" class="focus-ring min-h-11 rounded-full bg-brand px-4 text-sm font-semibold text-white" @click="emit('share')">Mở bảng lưu/chia sẻ</button>
         </div>
-        <ol class="mt-3 space-y-2"><li v-for="part in plan.parts" :key="part.index" class="rounded-xl border border-line bg-canvas px-3 py-2 text-sm"><span class="break-all font-medium">Phần {{ part.index + 1 }}: {{ part.filename }}</span><span class="block text-muted">{{ part.count }} ảnh · {{ (part.byteLength / 1048576).toFixed(1) }} MB</span><button type="button" class="focus-ring mt-2 min-h-11 rounded-full bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="transferBusy" @click="emit('downloadPart', part.index)">{{ failedParts[part.index] ? `Thử lại phần ${part.index + 1}` : `Tải phần ${part.index + 1}` }}</button><span v-if="completedCount && !failedParts[part.index] && transferPart !== part.index" class="ml-2 text-xs text-brand">Đã chuyển</span></li></ol>
+        <ol class="mt-3 space-y-2"><li v-for="part in plan.parts" :key="part.index" class="rounded-xl border border-line bg-canvas px-3 py-2 text-sm"><span class="break-all font-medium">Phần {{ part.index + 1 }}: {{ part.filename }}</span><span class="block text-muted">{{ part.count }} ảnh · {{ (part.byteLength / 1048576).toFixed(1) }} MB</span><button type="button" class="focus-ring mt-2 min-h-11 rounded-full bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="transferBusy" @click="emit('downloadPart', part.index)">{{ failedParts[part.index] ? `Thử lại phần ${part.index + 1}` : `Tải phần ${part.index + 1}` }}</button><span v-if="completedParts.has(part.index) && !failedParts[part.index] && transferPart !== part.index" class="ml-2 text-xs text-brand">Đã chuyển</span></li></ol>
         <p v-if="plan.unavailable.length" class="mt-3 text-sm text-danger">{{ plan.unavailable.length }} ảnh không khả dụng trên Drive.</p>
         <p v-if="transferBusy && transferPart !== null" role="status" class="mt-3 text-sm text-muted">Đang tải phần {{ transferPart + 1 }} · {{ (transferBytes / 1048576).toFixed(1) }} MB</p>
         <button v-if="transferBusy" type="button" class="focus-ring mt-2 min-h-11 rounded-full border border-line-strong px-4 text-sm font-semibold text-ink" @click="emit('cancel')">Dừng tải</button>
