@@ -23,7 +23,9 @@ const {
   plan: downloadPlan, busy: downloadBusy, error: downloadError,
   toggleBasket, clearBasket, setMode: setDownloadMode, openSheet: openDownloadSheet,
   closeSheet: closeDownloadSheet, prepare: prepareDownload,
-} = useAlbumDownload(root)
+  preparedSingleId, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
+  completedParts, failedParts, transferMessage, prepareFiles, prepareSingle, sharePrepared, downloadPart, cancelTransfer,
+} = useAlbumDownload(root, () => refreshAlbumState())
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
 const selectionVersion = ref(0)
@@ -393,7 +395,7 @@ function onStageTouchEnd(event: TouchEvent) {
 }
 
 function handleFocusKey(event: KeyboardEvent) {
-  if (!focusPhoto.value) return
+  if (!focusPhoto.value || downloadSheetOpen.value) return
   if (event.key === 'Escape') { void closePhoto(); return }
   if (event.target instanceof HTMLElement && event.target.closest('textarea, input')) return
   if (event.key === 'ArrowRight') { event.preventDefault(); void step(1) }
@@ -580,6 +582,11 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
           </button>
         </div>
+        <div v-if="overview?.download?.canSingle" class="flex flex-wrap items-center justify-center gap-2 px-3 pb-3 sm:hidden">
+          <button type="button" class="focus-ring min-h-11 rounded-full border border-white/50 px-4 text-sm font-semibold disabled:opacity-50" :disabled="transferBusy" @click="prepareSingle(focusPhoto.id)">{{ transferBusy ? 'Đang chuẩn bị…' : 'Chuẩn bị ảnh gốc' }}</button>
+          <button v-if="preparedSingleId === focusPhoto.id && shareReady" type="button" class="focus-ring min-h-11 rounded-full bg-white px-4 text-sm font-semibold text-brand" @click="sharePrepared">Mở bảng lưu/chia sẻ</button>
+          <p v-if="transferMessage || shareStatus" role="status" class="w-full text-center text-xs text-white/80">{{ transferMessage || shareStatus }}</p>
+        </div>
       </div>
       <aside v-if="overview?.status === 'PUBLISHED'" class="max-h-[45dvh] shrink-0 overflow-y-auto overscroll-contain rounded-t-2xl bg-white px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-ink sm:max-h-none sm:w-80 sm:rounded-none sm:p-5 lg:w-96">
         <button type="button" class="focus-ring min-h-12 w-full rounded-full border text-base font-semibold transition-colors disabled:cursor-wait disabled:opacity-50" :class="focusSelected ? 'border-heart bg-heart text-white' : 'border-line-strong bg-white text-brand'" :aria-pressed="focusSelected" :disabled="!canSelect" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
@@ -594,6 +601,6 @@ onBeforeUnmount(() => {
         <p role="status" aria-live="polite" class="mt-1 min-h-5 text-xs text-muted">{{ status || (focusSelected && !noteLoading ? 'Ghi chú tự lưu khi bạn gõ.' : '') }}</p>
       </aside>
     </div>
-    <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" />
+    <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" :share-eligible="shareEligible" :share-ready="shareReady" :share-status="shareStatus" :transfer-busy="transferBusy" :transfer-part="transferPart" :transfer-bytes="transferBytes" :completed-count="completedParts.size" :failed-parts="failedParts" :transfer-message="transferMessage" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" @prepare-files="prepareFiles" @share="sharePrepared" @download-part="downloadPart" @cancel="cancelTransfer" />
   </div>
 </template>
