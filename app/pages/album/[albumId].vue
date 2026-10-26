@@ -8,6 +8,9 @@ import { useGalleryLayout } from '~/composables/useGalleryLayout'
 import GalleryLayoutSwitch from '~/components/album/GalleryLayoutSwitch.vue'
 import PhotoGallery from '~/components/album/PhotoGallery.vue'
 import PhotoTile from '~/components/album/PhotoTile.vue'
+import SelectionIsland from '~/components/album/SelectionIsland.vue'
+import DownloadSheet from '~/components/album/DownloadSheet.vue'
+import { useAlbumDownload } from '~/composables/useAlbumDownload'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number; selected: boolean }
 type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
@@ -15,6 +18,12 @@ type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: num
 const route = useRoute()
 const albumId = String(route.params.albumId)
 const root = `/api/album/${albumId}`
+const {
+  basket: downloadBasket, mode: downloadMode, sheetOpen: downloadSheetOpen,
+  plan: downloadPlan, busy: downloadBusy, error: downloadError,
+  toggleBasket, clearBasket, setMode: setDownloadMode, openSheet: openDownloadSheet,
+  closeSheet: closeDownloadSheet, prepare: prepareDownload,
+} = useAlbumDownload(root)
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
 const selectionVersion = ref(0)
@@ -62,6 +71,7 @@ const visiblePhotos = computed(() => paged.items.value)
 const selectedSet = computed(() => new Set(selectedIds.value))
 const focusSelected = computed(() => !!focusPhoto.value && selectedSet.value.has(focusPhoto.value.id))
 const canSelect = computed(() => !!overview.value?.joined && overview.value.status === 'PUBLISHED' && selectionLoaded.value)
+const canBasket = computed(() => !!overview.value?.download?.canSelected)
 const focusIndex = computed(() => focusPhoto.value ? visiblePhotos.value.findIndex(photo => photo.id === focusPhoto.value!.id) : -1)
 const focusTotal = computed(() => Math.max(paged.total.value, visiblePhotos.value.length))
 const hasPrev = computed(() => focusIndex.value > 0)
@@ -183,6 +193,15 @@ function toggle(photo: Photo) {
   setSelected(photo.id, wanted)
   pendingSelections.value++
   selectionQueue = selectionQueue.then(() => saveSelection(photo.id, wanted)).finally(() => { pendingSelections.value-- })
+}
+
+function showDownloadSheet() {
+  if (downloadMode.value === 'selected' && !overview.value?.download?.selectedCount) setDownloadMode('basket')
+  openDownloadSheet()
+}
+
+async function prepareCurrentDownload() {
+  await prepareDownload(() => selectionQueue)
 }
 
 async function saveSelection(photoId: string, wanted: boolean) {
@@ -518,8 +537,11 @@ onBeforeUnmount(() => {
                   @activate="openPhoto(photo)"
                   @error="handleThumbnailError(photo.id)"
                 >
-                  <template v-if="overview.status === 'PUBLISHED'" #action>
-                    <button type="button" class="focus-ring grid size-11 shrink-0 place-items-center rounded-full border text-lg shadow-sm transition-colors disabled:cursor-wait disabled:opacity-50" :class="selectedSet.has(photo.id) ? 'border-heart bg-heart-soft text-heart' : 'border-line bg-white/90 text-muted'" :aria-label="`${selectedSet.has(photo.id) ? 'Bỏ chọn' : 'Chọn'} ${photo.filename}`" :aria-pressed="selectedSet.has(photo.id)" :disabled="!canSelect" @click="toggle(photo)">♥</button>
+                  <template v-if="overview.status === 'PUBLISHED' || (downloadMode === 'basket' && canBasket)" #action>
+                    <div class="flex items-center gap-1">
+                      <label v-if="downloadMode === 'basket' && canBasket" class="focus-ring grid min-h-11 min-w-11 place-items-center rounded-full bg-white/95 shadow-sm" :title="`Tải ${photo.filename}`"><input type="checkbox" class="size-5 accent-brand" :aria-label="`Tải ${photo.filename}`" :checked="downloadBasket.has(photo.id)" @change="toggleBasket(photo.id)"></label>
+                      <button v-if="overview.status === 'PUBLISHED'" type="button" class="focus-ring grid size-11 shrink-0 place-items-center rounded-full border text-lg shadow-sm transition-colors disabled:cursor-wait disabled:opacity-50" :class="selectedSet.has(photo.id) ? 'border-heart bg-heart-soft text-heart' : 'border-line bg-white/90 text-muted'" :aria-label="`${selectedSet.has(photo.id) ? 'Bỏ chọn' : 'Chọn'} ${photo.filename}`" :aria-pressed="selectedSet.has(photo.id)" :disabled="!canSelect" @click="toggle(photo)">♥</button>
+                    </div>
                   </template>
                 </PhotoTile>
               </template>
@@ -534,19 +556,14 @@ onBeforeUnmount(() => {
     </main>
     <div v-if="!focusPhoto && overview && !overview.canJoin" class="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <p role="status" aria-live="polite" class="max-w-sm rounded-full bg-ink/90 px-4 py-2 text-center text-sm text-white shadow-lg transition-opacity motion-reduce:transition-none" :class="status ? 'opacity-100' : 'opacity-0'">{{ status }}</p>
-      <div v-if="canSelect" class="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-full bg-brand py-1.5 pl-5 pr-1.5 text-white shadow-lg">
-        <p class="min-w-0 flex-1 leading-tight">
-          <span class="block text-sm font-semibold tabular-nums"><span aria-hidden="true">♥ </span>{{ selectedIds.length }} ảnh đã chọn</span>
-          <span v-if="limitHint" class="block truncate text-xs text-white/75">{{ limitHint }}</span>
-        </p>
-        <button type="button" class="min-h-11 shrink-0 rounded-full bg-white px-4 text-sm font-semibold text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" :aria-pressed="filter === 'selected'" @click="filter = filter === 'selected' ? 'all' : 'selected'">{{ filter === 'selected' ? 'Xem tất cả' : 'Xem ảnh đã chọn' }}</button>
-      </div>
+      <SelectionIsland :can-select="canSelect" :selected-count="selectedIds.length" :status="overview.status" :limit-hint="limitHint" :filter-selected="filter === 'selected'" :download="overview.download" :basket-count="downloadBasket.size" @toggle-filter="filter = filter === 'selected' ? 'all' : 'selected'" @download="showDownloadSheet" />
     </div>
     <div v-if="focusPhoto" class="fixed inset-0 z-30 flex flex-col overscroll-contain bg-night text-white sm:flex-row" role="dialog" aria-modal="true" :aria-label="focusPhoto.filename">
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <div class="flex items-center gap-3 px-3 pt-[max(.5rem,env(safe-area-inset-top))] pb-2 sm:px-5 sm:py-3">
           <p class="shrink-0 text-sm font-semibold tabular-nums text-white/90">{{ focusIndex + 1 }} / {{ focusTotal }}</p>
           <h2 class="min-w-0 flex-1 truncate text-sm text-white/70" :title="focusPhoto.filename">{{ focusPhoto.filename }}</h2>
+          <label v-if="downloadMode === 'basket' && canBasket" class="grid size-11 shrink-0 place-items-center rounded-full bg-white/10" :title="`Tải ${focusPhoto.filename}`"><input type="checkbox" class="size-5 accent-brand" :aria-label="`Tải ${focusPhoto.filename}`" :checked="downloadBasket.has(focusPhoto.id)" @change="toggleBasket(focusPhoto.id)"></label>
           <a v-if="overview?.download?.canSingle" :href="`${root}/photos/${focusPhoto.id}/download`" :aria-label="`Tải ảnh gốc ${focusPhoto.filename}`" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" title="Tải ảnh gốc">↓</a>
           <button ref="focusCloseButton" type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Đóng ảnh" @click="closePhoto">✕</button>
         </div>
@@ -577,5 +594,6 @@ onBeforeUnmount(() => {
         <p role="status" aria-live="polite" class="mt-1 min-h-5 text-xs text-muted">{{ status || (focusSelected && !noteLoading ? 'Ghi chú tự lưu khi bạn gõ.' : '') }}</p>
       </aside>
     </div>
+    <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" />
   </div>
 </template>
