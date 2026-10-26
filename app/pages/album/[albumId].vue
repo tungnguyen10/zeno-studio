@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { DownloadCapabilities } from '~~/shared/domain/download-policy'
 import { driveFitSrcset, driveFocusSrc, driveFocusSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl, focusWidthCap } from '~/lib/drive-image'
 import type { GalleryLayout } from '~/lib/gallery-layout'
 import { usePagedPhotos, type PhotoFilter, type PhotoPageResponse } from '~/composables/usePagedPhotos'
@@ -9,7 +10,7 @@ import PhotoGallery from '~/components/album/PhotoGallery.vue'
 import PhotoTile from '~/components/album/PhotoTile.vue'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number; selected: boolean }
-type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null } }
+type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
 type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
 const route = useRoute()
 const albumId = String(route.params.albumId)
@@ -546,6 +547,7 @@ onBeforeUnmount(() => {
         <div class="flex items-center gap-3 px-3 pt-[max(.5rem,env(safe-area-inset-top))] pb-2 sm:px-5 sm:py-3">
           <p class="shrink-0 text-sm font-semibold tabular-nums text-white/90">{{ focusIndex + 1 }} / {{ focusTotal }}</p>
           <h2 class="min-w-0 flex-1 truncate text-sm text-white/70" :title="focusPhoto.filename">{{ focusPhoto.filename }}</h2>
+          <a v-if="overview?.download?.canSingle" :href="`${root}/photos/${focusPhoto.id}/download`" :aria-label="`Tải ảnh gốc ${focusPhoto.filename}`" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" title="Tải ảnh gốc">↓</a>
           <button ref="focusCloseButton" type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Đóng ảnh" @click="closePhoto">✕</button>
         </div>
         <div ref="stageEl" class="relative flex min-h-0 flex-1 touch-manipulation items-center justify-center px-2 pb-2 select-none sm:px-20 sm:pb-6" @touchstart.passive="onStageTouchStart" @touchend.passive="onStageTouchEnd">
