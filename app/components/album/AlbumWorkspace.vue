@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import type { DownloadSettings } from '~~/shared/domain/download-policy'
 import { ALBUM_STATUS_LABELS, effectiveStatus, type AlbumStatus } from '~~/shared/domain/album-status'
 import { driveFitSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl } from '~/lib/drive-image'
 import type { GalleryLayout } from '~/lib/gallery-layout'
@@ -11,7 +12,7 @@ import PhotoGallery from './PhotoGallery.vue'
 import PhotoTile from './PhotoTile.vue'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; sortOrder: number; selected: boolean; previouslyFinalized: boolean }
-type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; previousCount: number; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; photoCount: number; selectedCount: number }
+type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; previousCount: number; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; downloadSettings: DownloadSettings; canEditDownloadSettings: boolean; photoCount: number; selectedCount: number }
 const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; resultsTo: string; canPublish?: boolean; canShare?: boolean }>(), { backLabel: 'Quay lại', canPublish: false, canShare: false })
 const workspace = ref<Workspace | null>(null)
 // Studio edits are stored as differences from the customer's list so huge albums never ship full id arrays.
@@ -21,6 +22,8 @@ const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
+const downloadSettings = ref<DownloadSettings>({ enabled: false, allowSingle: true, allowSelected: true, allowAll: false, availableWhen: 'anytime' })
+const savingDownloadSettings = ref(false)
 const thumbnailFallback = ref<Record<string, 'proxy' | 'failed'>>({})
 const layout = useGalleryLayout('zeno-studio-gallery-layout')
 const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`${props.apiRoot}/photos`, { query: { limit: params.limit, filter: params.filter, ...(params.cursor ? { cursor: params.cursor } : {}) } }))
@@ -67,6 +70,7 @@ async function load() {
   error.value = ''
   try {
     workspace.value = await $fetch<Workspace>(props.apiRoot)
+    downloadSettings.value = { ...workspace.value.downloadSettings }
     included.value = new Set()
     excluded.value = new Set()
     await paged.reset(workspace.value.hasResults || filter.value !== 'previous' ? filter.value : 'all')
@@ -77,6 +81,19 @@ async function load() {
 function retry() {
   loading.value = true
   void load()
+}
+
+async function saveDownloadSettings() {
+  if (!workspace.value?.canEditDownloadSettings || savingDownloadSettings.value) return
+  savingDownloadSettings.value = true
+  error.value = ''
+  message.value = ''
+  try {
+    await $fetch(`${props.apiRoot}/download`, { method: 'PATCH', body: downloadSettings.value })
+    await load()
+    message.value = 'Đã lưu quyền tải ảnh.'
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không lưu được quyền tải ảnh' }
+  finally { savingDownloadSettings.value = false }
 }
 
 async function finalize() {
@@ -181,6 +198,28 @@ onMounted(() => { void load() })
         >
           <template #actions><slot name="actions" :workspace="workspace" :reload="load" /></template>
         </AlbumActionBar>
+
+        <section v-if="workspace.canEditDownloadSettings" class="mt-6 rounded-2xl border border-line bg-white p-4 sm:p-6" aria-labelledby="download-settings-title">
+          <h2 id="download-settings-title" class="text-lg font-semibold">Quyền tải ảnh gốc</h2>
+          <p class="mt-1 text-sm text-muted">Áp dụng cho link khách của album này. Thay đổi có hiệu lực với lần tải tiếp theo.</p>
+          <form class="mt-4 space-y-4" @submit.prevent="saveDownloadSettings">
+            <label class="flex min-h-11 items-center gap-3 text-sm font-medium"><input v-model="downloadSettings.enabled" type="checkbox" class="size-5 accent-brand"> Cho khách tải ảnh gốc</label>
+            <fieldset :disabled="!downloadSettings.enabled" class="space-y-2 disabled:opacity-60">
+              <legend class="mb-2 text-sm font-semibold">Cho phép tải</legend>
+              <label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="downloadSettings.allowSingle" type="checkbox" class="size-5 accent-brand"> Từng ảnh trong trình xem</label>
+              <label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="downloadSettings.allowSelected" type="checkbox" class="size-5 accent-brand"> Bộ ảnh đang chọn hoặc đã chốt và tập ảnh khách tự chọn</label>
+              <label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="downloadSettings.allowAll" type="checkbox" class="size-5 accent-brand"> Toàn album</label>
+            </fieldset>
+            <div>
+              <label for="download-available-when" class="block text-sm font-semibold">Thời điểm cho tải</label>
+              <select id="download-available-when" v-model="downloadSettings.availableWhen" :disabled="!downloadSettings.enabled" class="focus-ring mt-2 min-h-11 w-full rounded-xl border border-line-strong bg-white px-3 text-sm sm:max-w-sm">
+                <option value="anytime">Bất cứ lúc nào sau khi xuất bản</option>
+                <option value="after_finalize">Sau khi Studio chốt vòng hiện tại</option>
+              </select>
+            </div>
+            <UiButton type="submit" :loading="savingDownloadSettings">{{ savingDownloadSettings ? 'Đang lưu…' : 'Lưu quyền tải' }}</UiButton>
+          </form>
+        </section>
 
         <div class="mt-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <UiTabs label="Lọc ảnh" :items="filterTabs" :current="filter" class="min-w-0 flex-1" @select="filter = $event" />

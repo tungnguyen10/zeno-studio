@@ -7,8 +7,8 @@ export type AlbumManager =
   | { kind: 'member'; studioId: string; userId: string }
   | { kind: 'guest'; albumId: string; token: string }
 
-type ManagerAction = 'album.view' | 'selection.finalize'
-export type ManagerSession = { studioId: string; actorKind: 'member' | 'guest_admin'; actorId: string | null; canFinalize: boolean }
+type ManagerAction = 'album.view' | 'album.settings' | 'selection.finalize'
+export type ManagerSession = { studioId: string; actorKind: 'member' | 'guest_admin'; actorId: string | null; canFinalize: boolean; canEditDownloadSettings: boolean }
 
 export async function withManagedAlbum<T>(
   pool: ConnectionPool, manager: AlbumManager, albumId: string, action: ManagerAction,
@@ -31,7 +31,7 @@ export async function withManagedAlbum<T>(
         throw new StudioOperationError('Album đã hết hạn', 410)
       }
       return work(client, { studioId: album.rows[0].studio_id, actorKind: 'guest_admin', actorId: null,
-        canFinalize: album.rows[0].active })
+        canFinalize: album.rows[0].active, canEditDownloadSettings: album.rows[0].active })
     })
   }
   return withDatabaseContext(pool, { studioId: manager.studioId, userId: manager.userId, scope: 'member' }, async client => {
@@ -41,6 +41,7 @@ export async function withManagedAlbum<T>(
     const album = await client.query<{ id: string }>('SELECT id FROM albums WHERE id = $1 AND studio_id = $2', [albumId, manager.studioId])
     if (!album.rows[0]) throw new StudioOperationError('Album không tồn tại', 404)
     return work(client, { studioId: manager.studioId, actorKind: 'member', actorId: manager.userId,
-      canFinalize: canPerform(member.rows[0].role, 'selection.finalize') })
+      canFinalize: canPerform(member.rows[0].role, 'selection.finalize'),
+      canEditDownloadSettings: canPerform(member.rows[0].role, 'album.settings') })
   })
 }
