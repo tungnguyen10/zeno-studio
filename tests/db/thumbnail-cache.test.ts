@@ -12,6 +12,7 @@ for (const number of Array.from({ length: 17 }, (_, index) => index)) {
   const filename = `${String(number).padStart(3, '0')}_${names[number]}.sql`
   await db.exec(await readFile(new URL(`../../db/migrations/${filename}`, import.meta.url), 'utf8'))
 }
+await db.exec(await readFile(new URL('../../db/migrations/021_album_download.sql', import.meta.url), 'utf8'))
 await db.exec('SET ROLE app_runtime')
 const pool = { async connect() { return { query: (sql: string, values?: unknown[]) => db.query(sql, values), release() {} } } }
 afterAll(async () => { await db.close() })

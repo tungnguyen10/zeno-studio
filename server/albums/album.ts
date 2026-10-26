@@ -133,14 +133,15 @@ export async function insertAlbumRecords(
     const batch = photos.slice(start, start + 250)
     const values: unknown[] = []
     const placeholders = batch.map((photo, offset) => {
-      const base = offset * 12
+      const base = offset * 14
       values.push(randomUUID(), albumId, sourceId, photo.id, photo.filename, photo.mimeType,
         photo.resourceKey ?? null, photo.width ?? null, photo.height ?? null, start + offset,
-        photo.thumbnailLink ?? null, photo.thumbnailLink ? new Date() : null)
-      return `(${Array.from({ length: 12 }, (_, column) => `$${base + column + 1}`).join(', ')})`
+        photo.thumbnailLink ?? null, photo.thumbnailLink ? new Date() : null,
+        photo.sizeBytes ?? null, photo.md5Checksum ?? null)
+      return `(${Array.from({ length: 14 }, (_, column) => `$${base + column + 1}`).join(', ')})`
     })
     await client.query(
-      `INSERT INTO photos (id, album_id, source_id, source_file_id, filename, mime_type, resource_key, width, height, sort_order, thumbnail_url, thumbnail_checked_at) VALUES ${placeholders.join(', ')}`,
+      `INSERT INTO photos (id, album_id, source_id, source_file_id, filename, mime_type, resource_key, width, height, sort_order, thumbnail_url, thumbnail_checked_at, source_size_bytes, source_md5_checksum) VALUES ${placeholders.join(', ')}`,
       values,
     )
   }

@@ -15,13 +15,13 @@ describe('Google Drive adapter', () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       nextPageToken: 'next',
       files: [
-        { id: 'image-1', name: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key', thumbnailLink: 'https://lh3.googleusercontent.com/image-1' },
+        { id: 'image-1', name: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key', thumbnailLink: 'https://lh3.googleusercontent.com/image-1', size: '1234', md5Checksum: 'abc', capabilities: { canDownload: true } },
         { id: 'text-1', name: 'notes.txt', mimeType: 'text/plain' },
       ],
     }), { status: 200 }))
     const adapter = new GoogleDriveAdapter('api-key', fetcher)
     const page = await adapter.listPhotos({ folderId: 'abc_123', resourceKey: '0-secret' })
-    expect(page.items).toEqual([{ id: 'image-1', filename: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key', thumbnailLink: 'https://lh3.googleusercontent.com/image-1' }])
+    expect(page.items).toEqual([{ id: 'image-1', filename: 'A.jpg', mimeType: 'image/jpeg', resourceKey: 'file-key', thumbnailLink: 'https://lh3.googleusercontent.com/image-1', sizeBytes: 1234, md5Checksum: 'abc', canDownload: true }])
     expect(page.nextPageToken).toBe('next')
     const [url, init] = fetcher.mock.calls[0]!
     expect(new URL(url).searchParams.get('q')).toBe("'abc_123' in parents and trashed = false")

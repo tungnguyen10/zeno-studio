@@ -2,6 +2,9 @@ export interface SourcePhoto {
   id: string
   filename: string
   mimeType: string
+  sizeBytes?: number
+  md5Checksum?: string
+  canDownload?: boolean
   resourceKey?: string
   thumbnailLink?: string
   width?: number

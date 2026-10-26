@@ -40,6 +40,9 @@ interface DriveFile {
   id?: string
   name?: string
   mimeType?: string
+  size?: string
+  md5Checksum?: string
+  capabilities?: { canDownload?: boolean }
   resourceKey?: string
   thumbnailLink?: string
   imageMediaMetadata?: { width?: number; height?: number }
@@ -62,7 +65,7 @@ export class GoogleDriveAdapter implements PhotoSourceAdapter {
     if (!driveId.test(folder.folderId)) throw new Error('Invalid Google Drive folder ID')
     const url = new URL('https://www.googleapis.com/drive/v3/files')
     url.searchParams.set('q', `'${folder.folderId}' in parents and trashed = false`)
-    url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,resourceKey,thumbnailLink,imageMediaMetadata(width,height))')
+    url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,size,md5Checksum,capabilities(canDownload),resourceKey,thumbnailLink,imageMediaMetadata(width,height))')
     url.searchParams.set('pageSize', '1000')
     url.searchParams.set('supportsAllDrives', 'true')
     url.searchParams.set('includeItemsFromAllDrives', 'true')
@@ -76,6 +79,10 @@ export class GoogleDriveAdapter implements PhotoSourceAdapter {
       .filter(file => file.id && file.name && file.mimeType?.startsWith('image/'))
       .map(file => ({
         id: file.id!, filename: file.name!, mimeType: file.mimeType!,
+        ...(file.size !== undefined && Number.isSafeInteger(Number(file.size)) && Number(file.size) >= 0
+          ? { sizeBytes: Number(file.size) } : {}),
+        ...(file.md5Checksum ? { md5Checksum: file.md5Checksum } : {}),
+        ...(typeof file.capabilities?.canDownload === 'boolean' ? { canDownload: file.capabilities.canDownload } : {}),
         ...(file.resourceKey ? { resourceKey: file.resourceKey } : {}),
         ...(file.thumbnailLink ? { thumbnailLink: file.thumbnailLink } : {}),
         ...(file.imageMediaMetadata?.width ? { width: file.imageMediaMetadata.width } : {}),
