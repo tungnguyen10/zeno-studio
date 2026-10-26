@@ -2,7 +2,7 @@
 
 Tài liệu này hướng dẫn luồng hiện có trong Zeno Studio: tạo album từ Google Drive, gửi khách chọn ảnh và ghi chú, chốt lựa chọn, xuất danh sách và lọc ảnh gốc trên máy. Xem [sơ đồ flow cốt lõi](./core-workflow.md).
 
-> **Lưu ý về trạng thái:** Hướng dẫn phản ánh code được rà soát ngày 20/10/2026. Drive đã xác minh ở local/Preview nhưng cổng Drive trên Production vẫn khóa; các tính năng có thể chưa bật trên môi trường bạn đang dùng. Việc gửi email thật cũng chưa được nghiệm thu end-to-end. Đặc tả sản phẩm không đồng nghĩa tính năng đã được phát hành. Xem [tiến độ triển khai](./implementation-progress.md) trước khi đưa luồng vào vận hành thật.
+> **Lưu ý về trạng thái:** Hướng dẫn phản ánh code ngày 26/10/2026. Tải ảnh gốc đã qua kiểm thử local và Neon test với folder JPEG mẫu; Preview, định dạng/fixture khác và thiết bị thật chưa nghiệm thu. Cổng Drive trên Production vẫn khóa. Xem [tiến độ triển khai](./implementation-progress.md) trước khi đưa luồng vào vận hành thật.
 
 ## 1. Chọn cách tạo album
 
@@ -58,6 +58,14 @@ Gửi link khách cho khách hàng. Khách không cần tạo tài khoản hoặ
 4. Xem số ảnh đã chọn và giới hạn trong thanh phía dưới.
 
 Mọi người mở cùng link dùng **một danh sách chọn chung** và ghi chú chung cho mỗi ảnh; đây không phải các phiếu chọn riêng theo từng người. Khách có thể sửa lựa chọn trước khi studio chốt. Link khách có thể được cấp lại từ workspace; link cũ vẫn hoạt động cho tới khi album hết hạn hoặc token bị thu hồi.
+
+### Cho khách tải ảnh gốc
+
+Trong trang quản lý album, chủ studio/quản lý hoặc người giữ link quản trị Tạo nhanh mở **Quyền tải ảnh** và bật tải. Có thể cho tải từng ảnh, ảnh đã chọn và toàn album riêng biệt, hoặc chỉ mở tải sau khi Studio chốt vòng hiện tại. Album mới và album cũ đều tắt mặc định. Nếu đã chốt rồi mở vòng mới, quyền “sau khi chốt” chờ vòng mới được chốt.
+
+Khách dùng nút tải trong Focus để lấy một ảnh, hoặc mở **Tải xuống** từ Selection Island. “Ảnh đã chọn” là tim đã lưu khi album đang chọn; sau khi chốt là đúng bộ ảnh Studio đã chốt. **Chọn ảnh khác để tải** tạo giỏ tạm, không đổi tim hay ghi chú và mất khi tải lại trang. Trên điện thoại, bấm **Chuẩn bị ảnh gốc**, rồi bấm **Mở bảng lưu/chia sẻ** và chọn nơi lưu trong hệ điều hành; ứng dụng không biết ảnh đã vào Photos hay chưa. Nếu trình duyệt không hỗ trợ, dùng nút tải file/ZIP. Trên máy tính, bấm từng phần ZIP đánh số để lưu; dừng một phần vẫn giữ giỏ để thử lại. Mỗi ZIP tối đa 50 ảnh/96 MiB, share mobile tối đa 12 ảnh/48 MiB. Một ảnh vượt ngưỡng ZIP được tải riêng.
+
+Folder Drive vẫn là nguồn ảnh và đang chia sẻ công khai theo link. Tắt quyền tải trong ZENO chặn endpoint tải của ZENO, nhưng không thu hồi quyền truy cập trực tiếp vào Drive; nếu cần, đổi quyền chia sẻ tại Drive.
 
 ## 6. Kiểm tra và chốt bộ ảnh
 

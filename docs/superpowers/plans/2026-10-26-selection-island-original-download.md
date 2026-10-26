@@ -1,5 +1,7 @@
 # Selection Island Original Download Implementation Plan
 
+**Execution status (2026-10-26):** Tasks 1–10 are implemented and committed on `main`; Task 11 local and live Neon test checks passed, with Preview scale, additional Drive fixtures, and real-device gates pending. The step checkboxes below remain the original planning checklist; see [implementation progress](../../implementation-progress.md) for verified state.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let customers download original Google Drive image bytes singly or in bounded multi-file batches from the existing gallery, subject to per-album settings.

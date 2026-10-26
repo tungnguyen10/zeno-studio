@@ -23,6 +23,12 @@ Từ Results của studio, **Lọc ảnh gốc** mở đúng phiên bản đã c
 
 Trong danh sách album tại `/studio`, album đã xuất bản có nút **Sao chép link khách**. Nút cấp link khách mới, tự sao chép vào clipboard và hiển thị gọn dưới album để mở hoặc sao chép lại. Link khách đã gửi trước đó vẫn hợp lệ cho đến khi album hết hạn hoặc token bị thu hồi.
 
+## Tải ảnh gốc trong gallery khách
+
+Album mới và cũ mặc định **tắt tải ảnh**. Chủ studio/quản lý hoặc người giữ link quản trị Tạo nhanh có thể bật riêng tải một ảnh, tập ảnh khách chọn và toàn album; có thể yêu cầu chờ chốt vòng hiện tại. Khi mở vòng chọn mới, chế độ chờ chốt khóa lại cho tới lần chốt mới. “Tải ảnh đã chọn” lấy tim đã lưu khi album đang chọn, và bộ ảnh Studio đã chốt sau khi chốt. Giỏ tải tạm thời độc lập với tim và mất khi tải lại trang.
+
+Khách mở Focus để tải một ảnh, hoặc mở **Tải xuống** trong Selection Island để lập kế hoạch tải nhiều ảnh. Mobile có bước chuẩn bị rồi bấm riêng để mở bảng lưu/chia sẻ khi trình duyệt hỗ trợ; web không thể xác nhận ảnh đã được lưu vào Photos. Desktop tải từng ZIP đánh số theo cú bấm của khách. Một ảnh lớn hơn giới hạn ZIP dùng đường tải file trực tiếp. Hiện mỗi ZIP tối đa 50 ảnh/96 MiB, mobile share tối đa 12 ảnh/48 MiB; các vé tải có hạn 10 phút và request tải bị giới hạn theo IP/album. Nguồn là binary Drive hiện tại, không phải thumbnail; ZENO không lưu bản sao bền vững. Quyền ZENO không khóa được link Drive đã đặt công khai.
+
 ## Neon
 
 1. Tạo project/branch Neon cho development và một branch hoặc database **riêng** cho integration test. Không dùng production cho `test:neon`.
@@ -51,6 +57,8 @@ Folder mẫu hiện tại trả 326 ảnh, một trang, không ảnh nào trả 
 Để đo tốc độ gallery Drive thật, đặt `ZENO_PERF_ALBUM_URL` thành link khách đầy đủ trong môi trường riêng rồi chạy `npm run measure:gallery` (có thể đặt `ZENO_PERF_RUNS=5`). Script chạy Chromium 5 lượt cold/warm trên mobile mạng mô phỏng và desktop, in median/p75 thời gian hiện ảnh đầu, hàng đầu, Focus, ảnh kế tiếp, số request và byte ảnh. Không in link hoặc token; không lưu báo cáo ra file. Chạy cùng album, máy và mạng trước/sau thay đổi để so sánh. Lệnh cần album còn hạn và quyền khách hợp lệ; hiện chưa có link khách thử nghiệm trong cấu hình môi trường nên chưa có số đo Drive thật cho toàn gallery.
 
 Không cần tạo album để đo riêng đường truyền ảnh Drive: chạy `npm run measure:drive-images` với cùng API key và folder mẫu. Script mở 5 thumbnail và một ảnh Focus trong Chromium mới cho mỗi lượt; mobile mô phỏng độ trễ 150 ms và băng thông 1,6 Mbps. Nó in thời gian giải mã ảnh đầu/hàng ảnh/Focus, biến thể Drive được chọn, số request ảnh, lỗi và byte tải, không in ID hay URL. Đặt `ZENO_PERF_PRECONNECT=1` để thử kết nối sớm tới Drive trước khi gán URL ảnh. Kết quả này chỉ đo tải ảnh, không gồm API album và render gallery; Drive có thể có lượt chậm hoặc lỗi nên cần xem phân bố nhiều lượt.
+
+Kiểm download với Drive thật: migrate **Neon test branch riêng** qua `db:migrate`, build Nitro, cấu hình `NUXT_DATABASE_TEST_URL`/`NUXT_DATABASE_TEST_DIRECT_URL`, `NUXT_BETTER_AUTH_SECRET`, `NUXT_DOWNLOAD_TICKET_SECRET` (ngẫu nhiên ít nhất 32 ký tự), `NUXT_GOOGLE_API_KEY` và `NUXT_DRIVE_SAMPLE_FOLDER_URL`, rồi chạy `npm run test:drive-download`. Script tạo/xóa album thử trên test branch, so SHA-256 file gốc và ZIP với Drive, kiểm mặc định tắt và thu hồi quyền; báo rõ fixture MIME/resource key còn thiếu. Không trỏ URL test vào branch dev/production. Để đo baseline đọc nguồn Drive trên folder thử, đặt `ZENO_DRIVE_DOWNLOAD_MEASURE=1` rồi chạy `npm run measure:drive-downloads`; mặc định tối đa 96 MiB dữ liệu tải trong một lượt (đổi bằng `ZENO_DOWNLOAD_MEASURE_MAX_BYTES`). Báo cáo này chỉ đo nguồn Drive và cách chia phần, chưa đo server/Vercel, 4G, LCP hay thiết bị thật. Xem [tiến độ](docs/implementation-progress.md) trước khi bật trên môi trường người dùng.
 
 ## Kiểm tra
 

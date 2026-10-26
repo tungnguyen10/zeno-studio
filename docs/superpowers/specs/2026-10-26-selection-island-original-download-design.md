@@ -1,6 +1,6 @@
 # Tải ảnh gốc từ Selection Island
 
-**Trạng thái:** Người dùng đã duyệt spec ngày 26/10/2026; chuyển sang lập kế hoạch triển khai.
+**Trạng thái:** Người dùng đã duyệt spec ngày 26/10/2026. Code, kiểm thử local và Drive JPEG thật trên Neon test đã đạt; gate Preview, fixture còn thiếu, quy mô và thiết bị thật còn chờ theo [tiến độ](../../implementation-progress.md). Chưa phát hành Production.
 
 ## Mục tiêu và phạm vi
 

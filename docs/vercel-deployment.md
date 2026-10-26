@@ -20,12 +20,19 @@ Thiết lập ở Vercel **Preview**, dùng Neon branch riêng đã migrate và 
 | `NUXT_BETTER_AUTH_URL` | Không cần cho URL preview mặc định: server dùng `https://${VERCEL_URL}`. Đặt origin HTTPS cố định khi dùng alias/domain riêng. |
 | `NUXT_DRIVE_VERIFIED` | `true` ở Preview sau live test và HTTP smoke với folder 307 ảnh; Production tiếp tục `false`. |
 | `NUXT_GOOGLE_API_KEY` | API key Google Cloud cho Drive API, lưu Sensitive ở Preview; không dùng OAuth Client ID. |
+| `NUXT_DOWNLOAD_TICKET_SECRET` | Secret ngẫu nhiên riêng cho Preview, tối thiểu 32 ký tự; ký vé tải ảnh gốc hạn 10 phút. Bắt buộc trước khi bật quyền tải. |
 | `NUXT_SMTP_URL`, `NUXT_MAIL_FROM` | Chỉ khi có SMTP thật để kiểm email xác minh/reset. |
 | `NUXT_PUBLIC_SITE_URL` | Origin HTTPS chính thức (không có `/` cuối) cho canonical, `og:*`, `sitemap.xml`, `robots.txt`, `llms.txt` và JSON-LD. Bắt buộc ở Production; nếu bỏ trống sẽ dùng origin của request. |
 
 Preview hiện có `NUXT_DATABASE_URL` từ nhánh Neon dev, `NUXT_BETTER_AUTH_SECRET` riêng, `NUXT_GOOGLE_API_KEY` và `NUXT_DRIVE_VERIFIED=true`; các biến chỉ ở scope Preview và lưu dạng Sensitive/Encrypted. Không đặt `NUXT_DATABASE_DIRECT_URL` trên Vercel: migration chạy riêng từ máy/CI với owner direct URL. `.vercelignore` loại `.env` cùng các artifact local khỏi nguồn upload. Không đưa URL hoặc secret vào Git, docs hoặc chat.
 
 Ngày 2026-10-15, folder mẫu 307 ảnh đã qua `test:drive-live`, HTTP local và HTTP Preview: đăng nhập, POST tạo album, xác nhận 307 ảnh, publish, phân trang gallery và tải ảnh khách có `content-type: image/*`. Kết quả live báo `scaleVerified=false` và `resourceKeySampled=false`; hai phần này cần mẫu bổ sung trước Production. Giữ Production `NUXT_DRIVE_VERIFIED=false`. Nếu Preview phát sinh lỗi quyền hoặc Google API, tắt gate Preview để điều tra.
+
+### Gate riêng cho tải ảnh gốc
+
+Thay đổi ngày 26/10/2026 thêm migration 021–023 cho cài đặt tải, RLS và rate limit. Trước khi thử trên Preview, chạy migration trên **branch test/Preview**, cấp runtime role đúng quyền, đặt `NUXT_DOWNLOAD_TICKET_SECRET` tại Preview và deploy build mới. Chạy `npm run test:drive-download` với Neon test branch và folder Drive thử; kiểm ZIP SHA-256, ảnh đơn, quyền mặc định/thu hồi. Sau đó đo 1/10/100/1.000/3.000 ảnh, file lớn, RAM, thời gian stream, quota/429 và function duration trên Preview; so gallery LCP và thử 4G. Kiểm iOS Safari, Android Chrome, Zalo/Messenger webview và Chrome/Edge/Safari desktop trên thiết bị thật. Chỉ nâng các giới hạn 50 ảnh/96 MiB mỗi ZIP và 12 ảnh/48 MiB mỗi share khi số đo hỗ trợ. Chưa có số đo Preview/function duration hoặc kết quả QA thiết bị cho tính năng này; chưa bật/release nó trên Production.
+
+Gate Neon test branch tạm ngày 26/10 đã đạt: migration 021–023, SHA-256 của 6 ảnh JPEG qua tải đơn/ZIP, quyền mặc định/thu hồi, plan 326 ảnh thành 49 phần và smoke HTTP gallery cũ. Branch thử đã xóa. Folder này chưa có PNG/HEIC, resource key, tên Unicode/trùng hay ảnh lớn trên 96 MiB; các fixture đó cần bổ sung trước nghiệm thu toàn bộ.
 
 ## Đưa repo lên preview
 

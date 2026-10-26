@@ -25,7 +25,9 @@
     "measure:gallery": "node scripts/measure-gallery.mjs",
     "measure:drive-images": "node --env-file-if-exists=.env --import tsx scripts/measure-drive-images.ts",
     "test:drive-http": "node --env-file-if-exists=.env --import tsx tests/live/drive-album-http.ts",
-    "test:drive-preview-http": "node --env-file-if-exists=.env --import tsx tests/live/preview-drive-album-http.ts"
+    "test:drive-preview-http": "node --env-file-if-exists=.env --import tsx tests/live/preview-drive-album-http.ts",
+    "test:drive-download": "node --env-file-if-exists=.env --import tsx tests/live/drive-download.ts",
+    "measure:drive-downloads": "node --env-file-if-exists=.env --import tsx scripts/measure-drive-downloads.ts"
   },
   "dependencies": {
     "@neon/config": "^1.9.1",
