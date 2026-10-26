@@ -2,6 +2,7 @@ import { getAppPool } from '../../../../../db/pool'
 import { requireCustomerDownload } from '../../../../../albums/download-policy'
 import { contentDisposition } from '../../../../../downloads/names'
 import { originalSourceError, resolveOriginal } from '../../../../../downloads/original'
+import { enforceDownloadRate } from '../../../../../downloads/rate-limit'
 import { albumIdParam, requireAlbumAccess } from '../../../../../utils/album-api'
 import { requireVerifiedDriveSource } from '../../../../../utils/drive-gate'
 import { studioApi } from '../../../../../utils/studio-api'
@@ -15,6 +16,7 @@ export default defineEventHandler(async event => {
   const access = await requireAlbumAccess(event)
   return studioApi(async () => {
     await requireCustomerDownload(getAppPool(), access, 'single')
+    await enforceDownloadRate(event, getAppPool(), access)
     const source = requireVerifiedDriveSource()
     const original = await resolveOriginal(getAppPool(), access, photoId, source)
     let response: Response

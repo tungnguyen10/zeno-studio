@@ -13,6 +13,7 @@ vi.mock('../../server/utils/album-api', () => ({
   requireAlbumAccess: () => Promise.resolve({ albumId, scope: 'customer' }),
 }))
 vi.mock('../../server/albums/download-policy', () => ({ requireCustomerDownload: mocks.authorize }))
+vi.mock('../../server/downloads/rate-limit', () => ({ enforceDownloadRate: () => Promise.resolve() }))
 vi.mock('../../server/downloads/original', () => ({ resolveOriginal: mocks.resolve, originalSourceError: () => Object.assign(new Error('Drive unavailable'), { statusCode: 503 }) }))
 vi.mock('../../server/utils/drive-gate', () => ({ requireVerifiedDriveSource: () => ({ readPhoto: mocks.read }) }))
 

@@ -6,6 +6,8 @@ import { updateManagedDownloadSettings } from '../../server/albums/download-sett
 import { joinAlbum, listAlbumPhotos, resolveAlbumAccess } from '../../server/albums/access'
 import { finalizeManagedSelection, setPhotoSelection } from '../../server/albums/selection'
 import { createDownloadPlan } from '../../server/downloads/plan'
+import { authorizeDownloadTicket } from '../../server/downloads/transfer'
+import { consumeAlbumDownloadAttempt } from '../../server/downloads/rate-limit'
 import { withDatabaseContext } from '../../server/db/context'
 import type { GoogleDriveAdapter } from '../../server/photo-sources/google-drive'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
@@ -32,6 +34,14 @@ describe('download plan under customer RLS', () => {
       { enabled: true, allowSingle: false, allowSelected: true, allowAll: true, availableWhen: 'anytime' })
     const customer = (await resolveAlbumAccess(pool, album.customerToken))!
     const access = (await resolveAlbumAccess(pool, (await joinAlbum(pool, customer)).token))!
+    const firstAttempt = await consumeAlbumDownloadAttempt(pool, access, '127.0.0.1', process.env.NUXT_DOWNLOAD_TICKET_SECRET!)
+    expect(firstAttempt.allowed).toBe(true)
+    await db.exec('RESET ROLE')
+    await db.query('UPDATE album_download_rate_windows SET attempts = 600 WHERE album_id = $1', [album.id])
+    await db.exec('SET ROLE app_runtime')
+    const blockedAttempt = await consumeAlbumDownloadAttempt(pool, access, '127.0.0.1', process.env.NUXT_DOWNLOAD_TICKET_SECRET!)
+    expect(blockedAttempt.allowed).toBe(false)
+    expect(blockedAttempt.retryAfterSeconds).toBeGreaterThan(0)
     const photos = (await listAlbumPhotos(pool, access)).items
     const metadata = vi.fn()
     const readOriginal = vi.fn()
@@ -45,6 +55,17 @@ describe('download plan under customer RLS', () => {
     expect(all.parts[0]?.photoIds).toEqual(photos.map(photo => photo.id))
     expect(readOriginal).not.toHaveBeenCalled()
     expect(metadata).not.toHaveBeenCalled()
+
+    const ticket = basket.parts[0]!.ticket
+    metadata.mockResolvedValue({ filename: 'Current.jpg', mimeType: 'image/jpeg', sizeBytes: 5 })
+    const verified = await authorizeDownloadTicket(pool, access, originalSource, ticket, 'zip')
+    expect(verified.files.map(file => file.photoId)).toEqual([photos[2]!.id, photos[1]!.id])
+    await updateManagedDownloadSettings(pool, manager, album.id,
+      { enabled: false, allowSingle: false, allowSelected: true, allowAll: true, availableWhen: 'anytime' })
+    await expect(authorizeDownloadTicket(pool, access, originalSource, ticket, 'zip')).rejects.toMatchObject({ statusCode: 403 })
+    expect(readOriginal).not.toHaveBeenCalled()
+    await updateManagedDownloadSettings(pool, manager, album.id,
+      { enabled: true, allowSingle: false, allowSelected: true, allowAll: true, availableWhen: 'anytime' })
 
     await finalizeManagedSelection(pool, manager, album.id)
     const finalized = await createDownloadPlan(pool, access, originalSource, { kind: 'selected' })
