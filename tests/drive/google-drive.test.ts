@@ -11,6 +11,26 @@ describe('Google Drive folder input', () => {
 })
 
 describe('Google Drive adapter', () => {
+  it('reads current original metadata with the file resource key and rejects restricted files', async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      id: 'image-123', name: 'Ảnh cưới.jpg', mimeType: 'image/jpeg', size: '1234',
+      md5Checksum: 'abcd', capabilities: { canDownload: true },
+    }), { headers: { 'content-type': 'application/json' } }))
+    const adapter = new GoogleDriveAdapter('api-key', fetcher)
+    expect(await adapter.getOriginalMetadata('image-123', 'file-key')).toEqual({
+      filename: 'Ảnh cưới.jpg', mimeType: 'image/jpeg', sizeBytes: 1234,
+      md5Checksum: 'abcd', canDownload: true,
+    })
+    const [url, init] = fetcher.mock.calls[0]!
+    expect(new URL(url).searchParams.get('fields')).toBe('id,name,mimeType,size,md5Checksum,capabilities(canDownload)')
+    expect(new URL(url).searchParams.has('alt')).toBe(false)
+    expect(init?.headers).toMatchObject({ 'X-Goog-Drive-Resource-Keys': 'image-123/file-key' })
+    const restricted = new GoogleDriveAdapter('api-key', vi.fn(async () => new Response(JSON.stringify({
+      name: 'private.jpg', mimeType: 'image/jpeg', capabilities: { canDownload: false },
+    }), { headers: { 'content-type': 'application/json' } })))
+    await expect(restricted.getOriginalMetadata('image-123')).rejects.toMatchObject({ status: 403 })
+  })
+
   it('lists only images and preserves the next page token', async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       nextPageToken: 'next',

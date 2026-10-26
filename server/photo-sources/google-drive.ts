@@ -91,6 +91,29 @@ export class GoogleDriveAdapter implements PhotoSourceAdapter {
     return { items, ...(body.nextPageToken ? { nextPageToken: body.nextPageToken } : {}) }
   }
 
+  async getOriginalMetadata(fileId: string, resourceKey?: string): Promise<{
+    filename: string; mimeType: string; sizeBytes: number | null; md5Checksum?: string; canDownload?: boolean
+  }> {
+    if (!driveId.test(fileId)) throw new DriveSourceError(502, 'Invalid Google Drive file ID')
+    const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`)
+    url.searchParams.set('fields', 'id,name,mimeType,size,md5Checksum,capabilities(canDownload)')
+    url.searchParams.set('supportsAllDrives', 'true')
+    const headers: Record<string, string> = { Accept: 'application/json', 'x-goog-api-key': this.apiKey }
+    if (resourceKey) headers['X-Goog-Drive-Resource-Keys'] = `${fileId}/${resourceKey}`
+    const response = await this.request(url.toString(), headers)
+    if (!response.ok) throw new DriveSourceError(response.status, `Google Drive metadata request failed (${response.status})`, await errorReason(response))
+    const file = await response.json() as DriveFile
+    if (file.capabilities?.canDownload === false) throw new DriveSourceError(403, 'Google Drive file is not downloadable')
+    if (!file.name || !file.mimeType?.startsWith('image/')) throw new DriveSourceError(422, 'Google Drive file is not an image')
+    const size = file.size === undefined ? null : Number(file.size)
+    return {
+      filename: file.name, mimeType: file.mimeType,
+      sizeBytes: size !== null && Number.isSafeInteger(size) && size >= 0 ? size : null,
+      ...(file.md5Checksum ? { md5Checksum: file.md5Checksum } : {}),
+      ...(typeof file.capabilities?.canDownload === 'boolean' ? { canDownload: file.capabilities.canDownload } : {}),
+    }
+  }
+
   async readPhoto(fileId: string, resourceKey?: string): Promise<Response> {
     if (!driveId.test(fileId)) throw new Error('Invalid Google Drive file ID')
     const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`)
