@@ -182,7 +182,7 @@ export function trackAnalyticsEvent(event: AnalyticsEvent): void { sender?.(even
 
 **Interfaces:**
 - Produces: `useAnalyticsConsent()` returning `{ choice, ready, settingsOpen, initialize, decide, openSettings }`, where `choice` is `unknown | accepted | rejected`, `decide(value)` persists the choice when possible, and `openSettings()` exposes the banner without silently changing an accepted decision.
-- Produces: default-disabled public runtime strings `ga4Enabled` and `ga4MeasurementId` in `nuxt.config.ts`; Task 3 adds environment values and the plugin.
+- Produces: default-disabled public runtime config fields `ga4Enabled` and `ga4MeasurementId` in `nuxt.config.ts`; Task 3 adds environment values and the plugin. Exports `isAnalyticsEnabled(flag: unknown, measurementId: unknown): boolean` from `app/lib/analytics-consent.ts` for UI and plugin. Installed Nuxt may parse the enabled environment value to boolean `true`, so accept exactly boolean `true` or string `'true'` together with a valid ID.
 
 - [ ] **Step 1: Write failing persistence tests.** Include accepted/rejected round trips, unrecognized stored values falling back to unknown, and storage exceptions leaving the in-memory choice usable.
 
@@ -217,6 +217,9 @@ export function readConsent(storage: ConsentStorage | null): AnalyticsConsentCho
 export function writeConsent(storage: ConsentStorage | null, choice: Exclude<AnalyticsConsentChoice, 'unknown'>): boolean {
   try { storage?.setItem(CONSENT_KEY, choice); return !!storage }
   catch { return false }
+}
+export function isAnalyticsEnabled(flag: unknown, measurementId: unknown): boolean {
+  return (flag === true || flag === 'true') && typeof measurementId === 'string' && /^G-[A-Z0-9]+$/.test(measurementId)
 }
 ```
 
@@ -258,7 +261,7 @@ export function useAnalyticsConsent() {
 <button type="button" class="focus-ring min-h-11 rounded px-2" @click="consent.openSettings()">Cài đặt phân tích</button>
 ```
 
-Use this behavior in `AnalyticsConsent.vue`: `onMounted(consent.initialize)`, `v-if="enabled && consent.ready.value && (consent.choice.value === 'unknown' || consent.settingsOpen.value)"`, buttons calling `consent.decide('accepted')` and `consent.decide('rejected')`, and a close button only when a previous choice exists. Nuxt templates unwrap refs on the component instance; if using the `consent` object directly, check the compiled template/typecheck and destructure refs if needed. `enabled` uses the same strict flag/ID check as Task 3. Show the global settings button only when `!['/', '/create', '/tools/file-filter', '/studio'].includes(route.path)` and a choice already exists; those four routes use the footer button. The banner is global even when the page has no footer.
+Use this behavior in `AnalyticsConsent.vue`: `onMounted(consent.initialize)`, `v-if="enabled && consent.ready.value && (consent.choice.value === 'unknown' || consent.settingsOpen.value)"`, buttons calling `consent.decide('accepted')` and `consent.decide('rejected')`, and a close button only when a previous choice exists. Nuxt templates unwrap refs on the component instance; if using the `consent` object directly, check the compiled template/typecheck and destructure refs if needed. `enabled` uses the exported `isAnalyticsEnabled` helper and so does the footer. Show the global settings button only when `!['/', '/create', '/tools/file-filter', '/studio'].includes(route.path)` and a choice already exists; those four routes use the footer button. The banner is global even when the page has no footer.
 
 - [ ] **Step 5: Verify green and commit.** Run `npx vitest run tests/domain/analytics-consent.test.ts`, `npm run typecheck`, and inspect the disabled-by-default app at 320 px and desktop; expect no banner until Task 3 enables the flag. Commit the six app/config files and test with `git commit -m "feat: add analytics consent controls"`.
 
@@ -273,7 +276,7 @@ Use this behavior in `AnalyticsConsent.vue`: `onMounted(consent.initialize)`, `v
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: Task 1's `safePage`, `safeReferrer`, `buildAnalyticsEvent`, and `registerAnalyticsSender`; Task 2's `useAnalyticsConsent` state.
+- Consumes: Task 1's `safePage`, `safeReferrer`, `buildAnalyticsEvent`, and `registerAnalyticsSender`; Task 2's `useAnalyticsConsent` state and `isAnalyticsEnabled` guard.
 - Consumes: Task 2's default-disabled public runtime strings `ga4Enabled` and `ga4MeasurementId`. `NUXT_PUBLIC_GA4_ENABLED=true` and `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S` must be scoped to Vercel Production; empty/default means disabled. The test config overrides them only in its isolated local server and intercepts the remote script.
 
 - [ ] **Step 1: Set up the isolated test command and write a failing browser test.** Add `"test:e2e:analytics": "playwright test --config playwright.analytics.config.ts --project=chromium"` to `package.json`, create the `playwright.analytics.config.ts` shown in Step 3, then write `tests/e2e/analytics.spec.ts`. Stub `gtag/js` before navigation and inspect `window.dataLayer`. The test must expect zero Google requests before consent, one script request after acceptance, one initial `page_view`, one more after a NuxtLink navigation to `/create`, and no raw token in any queued command. Add a rejection test and a revocation/reload test. Use this helper:
@@ -330,13 +333,14 @@ export default defineConfig({
 import { watch } from 'vue'
 import { buildAnalyticsEvent, safePage, safeReferrer } from '~/lib/analytics-model'
 import { registerAnalyticsSender } from '~/lib/analytics-events'
+import { isAnalyticsEnabled } from '~/lib/analytics-consent'
 import { useAnalyticsConsent } from '~/composables/useAnalyticsConsent'
 
 type AnalyticsWindow = Window & { dataLayer?: unknown[][]; gtag?: (...args: unknown[]) => void }
 
 export default defineNuxtPlugin(nuxtApp => {
   const config = useRuntimeConfig().public
-  if (config.ga4Enabled !== 'true' || !/^G-[A-Z0-9]+$/.test(config.ga4MeasurementId)) return
+  if (!isAnalyticsEnabled(config.ga4Enabled, config.ga4MeasurementId)) return
 
   const consent = useAnalyticsConsent()
   const router = useRouter()
