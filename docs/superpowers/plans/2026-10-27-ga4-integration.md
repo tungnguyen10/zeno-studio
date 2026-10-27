@@ -177,11 +177,12 @@ export function trackAnalyticsEvent(event: AnalyticsEvent): void { sender?.(even
 - Create: `app/components/AnalyticsConsent.vue`
 - Modify: `app/app.vue`
 - Modify: `app/components/SiteFooter.vue`
+- Modify: `nuxt.config.ts`
 - Test: `tests/domain/analytics-consent.test.ts`
 
 **Interfaces:**
 - Produces: `useAnalyticsConsent()` returning `{ choice, ready, settingsOpen, initialize, decide, openSettings }`, where `choice` is `unknown | accepted | rejected`, `decide(value)` persists the choice when possible, and `openSettings()` exposes the banner without silently changing an accepted decision.
-- Consumes: Production flag from `useRuntimeConfig().public.ga4Enabled` (added in Task 3). Until Task 3, a missing flag hides the UI.
+- Produces: default-disabled public runtime strings `ga4Enabled` and `ga4MeasurementId` in `nuxt.config.ts`; Task 3 adds environment values and the plugin.
 
 - [ ] **Step 1: Write failing persistence tests.** Include accepted/rejected round trips, unrecognized stored values falling back to unknown, and storage exceptions leaving the in-memory choice usable.
 
@@ -251,7 +252,7 @@ export function useAnalyticsConsent() {
 }
 ```
 
-- [ ] **Step 4: Add the UI and app placement.** Render `<AnalyticsConsent />` in `app/app.vue` after `<NuxtPage />`. When enabled and `ready`, show the banner for `unknown` or `settingsOpen`; use native buttons for `Đồng ý` and `Từ chối`, a privacy link, `role="region"`, an accessible label, and visible focus styles. Add a conditionally rendered `Cài đặt phân tích` button to `SiteFooter.vue` only when the strict Production flag/ID check passes. Because album, guest-admin, and studio-detail routes do not render `SiteFooter`, the global component also shows a small settings button on routes without that footer. Do not cover the gallery's Selection Island or other primary controls at 320 px; use a nonmodal, compact layout and safe-area spacing.
+- [ ] **Step 4: Add runtime defaults, UI, and app placement.** Add `ga4Enabled: ''` and `ga4MeasurementId: ''` under `runtimeConfig.public` in `nuxt.config.ts`. Render `<AnalyticsConsent />` in `app/app.vue` after `<NuxtPage />`. When enabled and `ready`, show the banner for `unknown` or `settingsOpen`; use native buttons for `Đồng ý` and `Từ chối`, a privacy link, `role="region"`, an accessible label, and visible focus styles. Add a conditionally rendered `Cài đặt phân tích` button to `SiteFooter.vue` only when the strict Production flag/ID check passes. Because album, guest-admin, and studio-detail routes do not render `SiteFooter`, the global component also shows a small settings button on routes without that footer. Do not cover the gallery's Selection Island or other primary controls at 320 px; use a nonmodal, compact layout and safe-area spacing.
 
 ```vue
 <button type="button" class="focus-ring min-h-11 rounded px-2" @click="consent.openSettings()">Cài đặt phân tích</button>
@@ -259,13 +260,12 @@ export function useAnalyticsConsent() {
 
 Use this behavior in `AnalyticsConsent.vue`: `onMounted(consent.initialize)`, `v-if="enabled && consent.ready.value && (consent.choice.value === 'unknown' || consent.settingsOpen.value)"`, buttons calling `consent.decide('accepted')` and `consent.decide('rejected')`, and a close button only when a previous choice exists. Nuxt templates unwrap refs on the component instance; if using the `consent` object directly, check the compiled template/typecheck and destructure refs if needed. `enabled` uses the same strict flag/ID check as Task 3. Show the global settings button only when `!['/', '/create', '/tools/file-filter', '/studio'].includes(route.path)` and a choice already exists; those four routes use the footer button. The banner is global even when the page has no footer.
 
-- [ ] **Step 5: Verify green and commit.** Run `npx vitest run tests/domain/analytics-consent.test.ts`, `npm run typecheck`, and inspect the disabled-by-default app at 320 px and desktop; expect no banner until Task 3 enables the flag. Commit the five app files and test with `git commit -m "feat: add analytics consent controls"`.
+- [ ] **Step 5: Verify green and commit.** Run `npx vitest run tests/domain/analytics-consent.test.ts`, `npm run typecheck`, and inspect the disabled-by-default app at 320 px and desktop; expect no banner until Task 3 enables the flag. Commit the six app/config files and test with `git commit -m "feat: add analytics consent controls"`.
 
 ### Task 3: Consent-gated tag and manual page views
 
 **Files:**
 - Create: `app/plugins/analytics.client.ts`
-- Modify: `nuxt.config.ts`
 - Modify: `.env.example`
 - Modify: `docs/vercel-deployment.md`
 - Create: `playwright.analytics.config.ts`
@@ -274,9 +274,9 @@ Use this behavior in `AnalyticsConsent.vue`: `onMounted(consent.initialize)`, `v
 
 **Interfaces:**
 - Consumes: Task 1's `safePage`, `safeReferrer`, `buildAnalyticsEvent`, and `registerAnalyticsSender`; Task 2's `useAnalyticsConsent` state.
-- Produces: public runtime strings `ga4Enabled` and `ga4MeasurementId`. `NUXT_PUBLIC_GA4_ENABLED=true` and `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S` must be scoped to Vercel Production; empty/default means disabled. The test config overrides them only in its isolated local server and intercepts the remote script.
+- Consumes: Task 2's default-disabled public runtime strings `ga4Enabled` and `ga4MeasurementId`. `NUXT_PUBLIC_GA4_ENABLED=true` and `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S` must be scoped to Vercel Production; empty/default means disabled. The test config overrides them only in its isolated local server and intercepts the remote script.
 
-- [ ] **Step 1: Write a failing browser test for consent and safe page views.** In `tests/e2e/analytics.spec.ts`, stub `gtag/js` before navigation and inspect `window.dataLayer`. The test must expect zero Google requests before consent, one script request after acceptance, one initial `page_view`, one more after a NuxtLink navigation to `/create`, and no raw token in any queued command. Add a rejection test and a revocation/reload test. Use this helper:
+- [ ] **Step 1: Set up the isolated test command and write a failing browser test.** Add `"test:e2e:analytics": "playwright test --config playwright.analytics.config.ts --project=chromium"` to `package.json`, create the `playwright.analytics.config.ts` shown in Step 3, then write `tests/e2e/analytics.spec.ts`. Stub `gtag/js` before navigation and inspect `window.dataLayer`. The test must expect zero Google requests before consent, one script request after acceptance, one initial `page_view`, one more after a NuxtLink navigation to `/create`, and no raw token in any queued command. Add a rejection test and a revocation/reload test. Use this helper:
 
 ```ts
 import { expect, test, type Page } from '@playwright/test'
@@ -306,7 +306,7 @@ Add a separate test that opens `/create?token=secret` with persisted accepted co
 
 - [ ] **Step 2: Verify red.** Run `npm run test:e2e:analytics`; expect failure because the test config, script, and controls are not yet complete.
 
-- [ ] **Step 3: Add runtime config and isolated test command.** Under `runtimeConfig.public` in `nuxt.config.ts`, add `ga4Enabled: ''` and `ga4MeasurementId: ''`. Add the two `NUXT_PUBLIC_GA4_*` keys to `.env.example` as empty/off values and document that Vercel Production alone receives `true` and the given ID. Add `"test:e2e:analytics": "playwright test --config playwright.analytics.config.ts --project=chromium"` to `package.json` (no lockfile change is needed for a script only). Make `playwright.analytics.config.ts` use the existing port/configuration and only `analytics.spec.ts`, with `webServer.env` setting the two variables and `reuseExistingServer: false` so an unrelated dev server cannot invalidate the test.
+- [ ] **Step 3: Add environment guidance.** Add the two `NUXT_PUBLIC_GA4_*` keys to `.env.example` as empty/off values and document that Vercel Production alone receives `true` and the given ID. The test config created in Step 1 uses the existing port/configuration and only `analytics.spec.ts`, with `webServer.env` setting the two variables and `reuseExistingServer: false` so an unrelated dev server cannot invalidate the test. A script-only `package.json` change does not require a lockfile change.
 
 ```ts
 import { defineConfig, devices } from '@playwright/test'
@@ -404,7 +404,7 @@ export default defineNuxtPlugin(nuxtApp => {
 
 The plugin is client-only by filename. Keep `gtag('config', ..., { send_page_view: false })` before the script element is appended so the queued initialization uses safe metadata. Test the tag-blocked path; the app must still work when the script request fails.
 
-- [ ] **Step 5: Verify behavior and commit.** Run `npm run test:e2e:analytics`, `npm run typecheck`, `npm run build`, and `npm run test:e2e -- --project=chromium tests/e2e/seo.spec.ts`. Expect no tag in default SSR HTML, no tag before consent in the enabled test server, sanitized views after consent, and no duplicate views on History changes. Commit the seven files with `git commit -m "feat: load GA4 after consent and track safe page views"`.
+- [ ] **Step 5: Verify behavior and commit.** Run `npm run test:e2e:analytics`, `npm run typecheck`, `npm run build`, and `npm run test:e2e -- --project=chromium tests/e2e/seo.spec.ts`. Expect no tag in default SSR HTML, no tag before consent in the enabled test server, sanitized views after consent, and no duplicate views on History changes. Commit the six files with `git commit -m "feat: load GA4 after consent and track safe page views"`.
 
 ### Task 4: Album creation, publication, gallery, and selection events
 
