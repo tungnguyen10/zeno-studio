@@ -12,6 +12,8 @@ describe('safe GA4 metadata', () => {
     expect(safePage('/unrecognized/a-private-id', origin).location).toBe(`${origin}/other`)
     expect(safeReferrer(`${origin}/album/a-private-id?token=secret`, origin)).toBe(`${origin}/album/:albumId`)
     expect(safeReferrer('https://referrer.example/path?email=secret', origin)).toBe('https://referrer.example/')
+    expect(safePage('/admin/analytics?token=secret', origin).location).toBe(`${origin}/admin/analytics`)
+    expect(safePage('/studio/analytics?studio=private', origin).location).toBe(`${origin}/studio/analytics`)
   })
 
   it('allowlists event properties and discards injected fields', () => {

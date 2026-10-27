@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useLocalPhotoFilter, type FilterManifest } from '~~/app/composables/useLocalPhotoFilter'
+import { useLocalPhotoFilter, type FileMatchCounts, type FilterManifest } from '~~/app/composables/useLocalPhotoFilter'
 
-const props = defineProps<{ manifest: FilterManifest }>()
-const job = useLocalPhotoFilter(props.manifest)
+const props = defineProps<{ manifest: FilterManifest; reportMatch?: (counts: FileMatchCounts) => Promise<void> }>()
+const job = useLocalPhotoFilter(props.manifest, props.reportMatch)
 const previewPage = ref(0)
 const statusFilter = ref<'all' | 'matched' | 'missing' | 'ambiguous'>('all')
 const entries = computed(() => [
@@ -116,6 +116,7 @@ function downloadFilenames() {
     </div>
 
     <p v-if="job.message.value" class="mt-5 rounded-xl bg-tint p-4 text-sm" role="status">{{ job.message.value }}</p>
+    <p v-if="job.reportError.value" class="mt-3 text-sm text-danger" role="alert">{{ job.reportError.value }}</p>
     <UiButton v-if="job.source.value && job.phase.value === 'setup' && !job.pathError.value" class="mt-5" @click="job.scan">Quét lại và xem preview</UiButton>
 
     <UiStepCard v-if="job.preview.value && (job.phase.value === 'preview' || job.phase.value === 'copying' || job.phase.value === 'result')" :step="3" title="Kiểm tra trước khi copy" class="mt-4 sm:mt-6">

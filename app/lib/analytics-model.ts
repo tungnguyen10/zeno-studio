@@ -13,6 +13,8 @@ const pages: Array<{ pattern: RegExp; path: string; title: string }> = [
   { pattern: /^\/create$/, path: '/create', title: 'Tạo album' },
   { pattern: /^\/tools\/file-filter$/, path: '/tools/file-filter', title: 'Lọc file' },
   { pattern: /^\/studio$/, path: '/studio', title: 'Studio' },
+  { pattern: /^\/studio\/analytics$/, path: '/studio/analytics', title: 'Thống kê studio' },
+  { pattern: /^\/admin\/analytics$/, path: '/admin/analytics', title: 'Thống kê nền tảng' },
   { pattern: /^\/studio\/members$/, path: '/studio/members', title: 'Thành viên' },
   { pattern: /^\/studio\/invite$/, path: '/studio/invite', title: 'Lời mời' },
   { pattern: /^\/studio\/reset-password$/, path: '/studio/reset-password', title: 'Đặt lại mật khẩu' },

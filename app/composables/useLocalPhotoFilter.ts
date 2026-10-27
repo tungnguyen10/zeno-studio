@@ -20,7 +20,9 @@ type PickerWindow = Window & { showDirectoryPicker?: (options: { mode: 'read' | 
 type DestinationMode = 'auto' | 'relative' | 'picker'
 type Selected = { photoId: string; requested: string; file: IndexedFile }
 
-export function useLocalPhotoFilter(manifest: FilterManifest) {
+export type FileMatchCounts = { matchedCount: number; missingCount: number; ambiguousCount: number }
+
+export function useLocalPhotoFilter(manifest: FilterManifest, reportMatch?: (counts: FileMatchCounts) => Promise<void>) {
   const supported = ref(false)
   const source = shallowRef<FileSystemDirectoryHandle | null>(null)
   const externalDestination = shallowRef<FileSystemDirectoryHandle | null>(null)
@@ -41,6 +43,7 @@ export function useLocalPhotoFilter(manifest: FilterManifest) {
   const scanCount = ref(0)
   const phase = ref<'setup' | 'scanning' | 'preview' | 'copying' | 'result'>('setup')
   const message = ref('')
+  const reportError = ref('')
   const missingConfirmed = ref(false)
   const outcomes = shallowRef<CopyOutcome[]>([])
   const progressName = ref('')
@@ -190,6 +193,12 @@ export function useLocalPhotoFilter(manifest: FilterManifest) {
         missing_count: preview.value.missing.length,
         ambiguous_count: preview.value.ambiguous.length,
       })
+      reportError.value = ''
+      if (reportMatch) void reportMatch({
+        matchedCount: preview.value.matched.length,
+        missingCount: preview.value.missing.length,
+        ambiguousCount: preview.value.ambiguous.length,
+      }).catch(() => { reportError.value = 'Đối chiếu đã xong nhưng chưa ghi được số liệu thống kê.' })
       message.value = `Đã quét ${scanCount.value} mục.`
     } catch (error) {
       if (current.signal.aborted) return
@@ -286,6 +295,6 @@ export function useLocalPhotoFilter(manifest: FilterManifest) {
 
   return { supported, source, sourceReadOnly, externalDestination, destinationMode, relativePath, destinationLabel, pathError,
     fileType, matchBy, customExtensions, includeSidecar, preserveFolders, preview, resolutions, outputNames, conflicts, blockingConflicts, existingConflicts, selected, planned, unresolved,
-    matchedPhotoCount, scanWarnings, scanCount, phase, message, missingConfirmed, outcomes, copyCounts, progressName, writtenReports,
+    matchedPhotoCount, scanWarnings, scanCount, phase, message, reportError, missingConfirmed, outcomes, copyCounts, progressName, writtenReports,
     chooseSource, chooseExternalDestination, scan, refreshConflicts, runCopy, stop, downloadReport }
 }

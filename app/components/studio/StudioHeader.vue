@@ -9,6 +9,8 @@ const router = useRouter()
 const withStudio = computed(() => store.studio ? { studio: store.studio.id } : {})
 const onAlbums = computed(() => route.path === '/studio')
 const onMembers = computed(() => route.path.startsWith('/studio/members'))
+const onAnalytics = computed(() => route.path === '/studio/analytics')
+const platformAdmin = ref(false)
 const studioOptions = computed(() => store.studios.map(item => ({ value: item.id, label: item.name })))
 
 function switchStudio(id: string) {
@@ -45,6 +47,16 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onDocumentKey)
 })
 watch(() => route.fullPath, () => closeMenu())
+watch(() => store.user?.email, async (email) => {
+  platformAdmin.value = false
+  if (!email) return
+  try {
+    const access = await $fetch<{ isAdmin: boolean }>('/api/admin/access')
+    if (store.user?.email === email) platformAdmin.value = access.isAdmin
+  } catch {
+    platformAdmin.value = false
+  }
+}, { immediate: true })
 
 async function signOut() {
   signingOut.value = true
@@ -91,6 +103,9 @@ const tabActive = 'bg-brand text-white shadow-sm'
           <li v-if="store.canManage">
             <NuxtLink :to="{ path: '/studio/members', query: withStudio }" :class="[tabClass, 'w-full', onMembers ? tabActive : tabIdle]" :aria-current="onMembers ? 'page' : undefined">Thành viên</NuxtLink>
           </li>
+          <li v-if="store.studio?.role === 'owner'">
+            <NuxtLink :to="{ path: '/studio/analytics', query: withStudio }" :class="[tabClass, 'w-full', onAnalytics ? tabActive : tabIdle]" :aria-current="onAnalytics ? 'page' : undefined">Thống kê</NuxtLink>
+          </li>
           <li>
             <NuxtLink to="/tools/file-filter" :class="[tabClass, 'w-full', tabIdle]">
               <span>Lọc file<span class="hidden sm:inline"> trên máy</span></span>
@@ -128,6 +143,7 @@ const tabActive = 'bg-brand text-white shadow-sm'
             <p class="break-all text-sm font-semibold">{{ store.user?.email ?? '—' }}</p>
             <p v-if="store.studio" class="mt-1 truncate text-xs text-muted">{{ store.studio.name }} · {{ STUDIO_ROLE_LABELS[store.studio.role] }}</p>
           </div>
+          <NuxtLink v-if="platformAdmin" to="/admin/analytics" :class="['mt-1 flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-ink hover:bg-tint', focusRing]" @click="closeMenu()">Thống kê toàn nền tảng</NuxtLink>
           <button
             type="button"
             :disabled="signingOut"

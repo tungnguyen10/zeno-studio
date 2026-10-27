@@ -2,8 +2,9 @@ export interface ExpiryResult {
   expired_count: number
   purged_count: number
 }
+export interface MetricPurgeResult { metrics_deleted: number; rate_deleted: number }
 
-export type ExpiryQuery = (sql: string) => Promise<{ rows: ExpiryResult[] }>
+export type ExpiryQuery = (sql: string) => Promise<{ rows: Array<ExpiryResult | MetricPurgeResult> }>
 
 export async function handleExpiry(request: Request, query: ExpiryQuery): Promise<Response> {
   if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
@@ -19,5 +20,9 @@ export async function handleExpiry(request: Request, query: ExpiryQuery): Promis
   }
 
   const result = await query('SELECT * FROM app_private.expire_and_purge()')
-  return Response.json(result.rows[0] ?? { expired_count: 0, purged_count: 0 })
+  const metrics = await query('SELECT * FROM app_private.purge_studio_metrics()')
+  return Response.json({
+    ...(result.rows[0] ?? { expired_count: 0, purged_count: 0 }),
+    ...(metrics.rows[0] ?? { metrics_deleted: 0, rate_deleted: 0 }),
+  })
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { recordStudioMetric } from '../analytics/studio-writer'
 import { withDatabaseContext, type ConnectionPool, type QueryClient } from '../db/context'
 import { StudioOperationError } from '../studios/error'
 import { canPerform } from '../../shared/domain/workflow'
@@ -151,7 +152,7 @@ export async function finalizeStudioSelection(pool: ConnectionPool, studioId: st
 export async function finalizeManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string, adjustments: FinalizeAdjustments = {}): Promise<{ versionNumber: number; count: number }> {
   const include = adjustmentIds(adjustments.include)
   const exclude = adjustmentIds(adjustments.exclude)
-  return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async client => {
+  return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async (client, session) => {
     const album = await workingAlbum(client, albumId, true)
     if (album.status !== 'PUBLISHED') throw new StudioOperationError('Album không ở trạng thái có thể chốt', 409)
     const customer = await client.query<{ photo_id: string }>(
@@ -181,6 +182,7 @@ export async function finalizeManagedSelection(pool: ConnectionPool, manager: Al
       [albumId, versionId, selected, album.round_id])
     await client.query("UPDATE selection_rounds SET status = 'CLOSED' WHERE id = $1", [album.round_id])
     await client.query("UPDATE albums SET status = 'FINALIZED', updated_at = now() WHERE id = $1", [albumId])
+    await recordStudioMetric(client, session.studioId, albumId, 'selection_finalized')
     return { versionNumber, count: selected.length }
   })
 }

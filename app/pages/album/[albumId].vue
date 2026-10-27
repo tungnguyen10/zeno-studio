@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { trackAnalyticsEvent } from '~/lib/analytics-events'
+import { reportGalleryOpen } from '~/lib/studio-analytics'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { DownloadCapabilities } from '~~/shared/domain/download-policy'
 import { driveFitSrcset, driveFocusSrc, driveFocusSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl, focusWidthCap } from '~/lib/drive-image'
@@ -17,6 +18,10 @@ type Photo = { id: string; sourceFileId: string; filename: string; width: number
 type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
 type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
 const route = useRoute()
+const analyticsConsent = useAnalyticsConsent()
+const analyticsConfig = useRuntimeConfig().public
+const galleryReady = ref(false)
+let reportedOpen = false
 const albumId = String(route.params.albumId)
 const root = `/api/album/${albumId}`
 const {
@@ -157,7 +162,10 @@ async function enter() {
     await loadPhotos()
     loading.value = false
     await selectionPromise
-    if (!paged.error.value && !error.value) trackAnalyticsEvent({ name: 'album_opened' })
+    if (!paged.error.value && !error.value) {
+      galleryReady.value = true
+      trackAnalyticsEvent({ name: 'album_opened' })
+    }
     if (import.meta.client) {
       pollTimer = setInterval(() => {
         if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && (!focusPhoto.value || !selectionLoaded.value)) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
@@ -466,6 +474,12 @@ function handleFocusImageError() {
 onMounted(() => {
   window.addEventListener('keydown', handleFocusKey)
   void enter()
+})
+watch([galleryReady, analyticsConsent.choice], () => {
+  if (!galleryReady.value || analyticsConsent.choice.value !== 'accepted' || reportedOpen) return
+  reportedOpen = true
+  void reportGalleryOpen(albumId, analyticsConfig.ga4Enabled, analyticsConfig.ga4MeasurementId, analyticsConfig.studioGalleryAnalyticsEnabled)
+    .catch(() => { status.value = 'Không ghi được lượt mở album vào thống kê studio.' })
 })
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)

@@ -9,9 +9,17 @@ export function useAnalyticsConsent() {
     try { return window.localStorage } catch { return null }
   }
 
+  function syncServerConsent(next: AnalyticsConsentChoice): void {
+    if (!import.meta.client) return
+    document.cookie = next === 'accepted'
+      ? `zeno_analytics_consent=accepted; Path=/api/album; Max-Age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`
+      : 'zeno_analytics_consent=; Path=/api/album; Max-Age=0; SameSite=Lax'
+  }
+
   function initialize(): void {
     if (!import.meta.client || ready.value) return
     choice.value = readConsent(storage())
+    syncServerConsent(choice.value)
     ready.value = true
   }
 
@@ -19,6 +27,7 @@ export function useAnalyticsConsent() {
     choice.value = next
     settingsOpen.value = false
     writeConsent(storage(), next)
+    syncServerConsent(next)
   }
 
   function openSettings(): void { settingsOpen.value = true }

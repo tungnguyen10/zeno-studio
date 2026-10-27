@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { recordStudioMetric } from '../analytics/studio-writer'
 import type { ConnectionPool } from '../db/context'
 import { withDatabaseContext } from '../db/context'
 import type { PhotoSourceAdapter } from '../photo-sources/photo-source'
@@ -27,6 +28,7 @@ export async function createGuestAlbum(_pool: ConnectionPool, _source: PhotoSour
   await withDatabaseContext(_pool, { studioId, albumId, scope: 'guest_admin' }, async client => {
     await client.query('INSERT INTO studios (id, name, guest_only) VALUES ($1, $2, true)', [studioId, _input.title.trim()])
     await insertAlbumRecords(client, studioId, albumId, folder, photos, _input, true)
+    await recordStudioMetric(client, studioId, albumId, 'album_published')
     await client.query('INSERT INTO album_tokens (id, album_id, scope, token_hash) VALUES ($1, $2, $3, $4), ($5, $2, $6, $7)',
       [randomUUID(), albumId, 'guest_admin', admin.tokenHash, randomUUID(), 'customer', customer.tokenHash])
   })

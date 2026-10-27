@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { recordStudioMetric } from '../analytics/studio-writer'
 import { withDatabaseContext, type ConnectionPool, type QueryClient } from '../db/context'
 import { DriveSourceError, InvalidDriveFolderLinkError, parseGoogleDriveFolderLink } from '../photo-sources/google-drive'
 import type { PhotoSourceAdapter, SourcePhoto } from '../photo-sources/photo-source'
@@ -147,6 +148,7 @@ export async function insertAlbumRecords(
   }
   await client.query('INSERT INTO selection_rounds (id, album_id, round_number) VALUES ($1, $2, 1)', [roundId, albumId])
   await client.query('INSERT INTO selection_lists (id, album_id, round_id, kind) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, roundId, 'shared'])
+  await recordStudioMetric(client, studioId, albumId, 'album_created')
   return expiresAt
 }
 
@@ -241,6 +243,7 @@ export async function publishAlbum(pool: ConnectionPool, studioId: string, userI
     const token = issueAccessToken()
     await client.query("UPDATE albums SET status = 'PUBLISHED', published_at = now(), expires_at = now() + ($1::integer * interval '1 day'), updated_at = now() WHERE id = $2", [album.rows[0].duration_days, albumId])
     await client.query('INSERT INTO album_tokens (id, album_id, scope, token_hash) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, 'customer', token.tokenHash])
+    await recordStudioMetric(client, studioId, albumId, 'album_published')
     return { customerToken: token.token }
   })
 }

@@ -26,10 +26,12 @@ describe('Neon expiry function', () => {
   })
 
   it('runs the idempotent database function for a schedule invocation', async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [{ expired_count: 2, purged_count: 1 }] })
+    const query = vi.fn().mockResolvedValueOnce({ rows: [{ expired_count: 2, purged_count: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ metrics_deleted: 3, rate_deleted: 4 }] })
     const response = await handleExpiry(scheduledRequest({ header: 'invocation-id' }), query)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ expired_count: 2, purged_count: 1 })
+    expect(await response.json()).toEqual({ expired_count: 2, purged_count: 1, metrics_deleted: 3, rate_deleted: 4 })
     expect(query).toHaveBeenCalledWith('SELECT * FROM app_private.expire_and_purge()')
+    expect(query).toHaveBeenCalledWith('SELECT * FROM app_private.purge_studio_metrics()')
   })
 })

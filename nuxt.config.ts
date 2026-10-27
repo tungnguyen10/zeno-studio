@@ -16,6 +16,8 @@ export default defineNuxtConfig({
     '/studio/reset-password': { headers: { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow' } },
     '/studio/albums/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/studio/members': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/studio/analytics': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/admin/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/api/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
   },
   app: {
@@ -48,6 +50,7 @@ export default defineNuxtConfig({
       siteUrl: '',
       ga4Enabled: '',
       ga4MeasurementId: '',
+      studioGalleryAnalyticsEnabled: '',
     },
   },
 })

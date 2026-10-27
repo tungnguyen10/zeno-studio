@@ -229,6 +229,36 @@ async function mockCustomerGallery(page: Page, options: { failPhotos?: boolean; 
   })
 }
 
+test('records one studio gallery open only after consent and successful load', async ({ page }) => {
+  await interceptGoogle(page)
+  await mockCustomerGallery(page)
+  const requests: unknown[] = []
+  await page.route(`**/api/album/${workflowAlbumId}/analytics/open`, route => {
+    requests.push({ body: route.request().postData(), cookie: route.request().headers().cookie ?? '' })
+    return route.fulfill({ status: 204, body: '' })
+  })
+  await page.goto(`/album/${workflowAlbumId}?token=${workflowToken}`)
+  await expect(page.getByRole('button', { name: 'Chọn Private filename.jpg', exact: true })).toBeEnabled()
+  expect(requests).toEqual([])
+  await page.getByRole('button', { name: 'Đồng ý', exact: true }).click()
+  await expect.poll(() => requests.length).toBe(1)
+  expect(requests).toEqual([{ body: null, cookie: expect.stringContaining('zeno_analytics_consent=accepted') }])
+  await page.evaluate(() => history.replaceState(history.state, '', '?token=another-secret#fragment'))
+  await page.waitForTimeout(4200)
+  expect(requests).toHaveLength(1)
+})
+
+test('does not record studio gallery open after rejection or failed photos', async ({ page }) => {
+  await interceptGoogle(page)
+  await persistConsent(page, 'rejected')
+  await mockCustomerGallery(page, { failPhotos: true })
+  let requests = 0
+  await page.route(`**/api/album/${workflowAlbumId}/analytics/open`, route => { requests++; return route.fulfill({ status: 204, body: '' }) })
+  await page.goto(`/album/${workflowAlbumId}?token=${workflowToken}`)
+  await expect(page.getByRole('status', { name: 'Đang mở album' })).toHaveCount(0)
+  expect(requests).toBe(0)
+})
+
 for (const failure of ['access', 'photos'] as const) {
   test(`does not report an album opened when ${failure} fails`, async ({ page }) => {
     await interceptGoogle(page)

@@ -8,7 +8,7 @@ afterAll(async () => { await db.close() })
 
 describe('database migrations', () => {
   it('creates the V1 tables with RLS on album data', async () => {
-    for (const filename of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '014_review_delivery.sql', '015_review_policy_lockdown.sql', '016_photo_thumbnails.sql', '017_guest_albums.sql', '018_sort_photos_by_filename.sql', '019_shared_customer_participant.sql', '020_album_archive.sql', '021_album_download.sql', '022_album_download_public_settings.sql', '023_album_download_rate_limit.sql', '024_platform_admins.sql']) {
+    for (const filename of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '014_review_delivery.sql', '015_review_policy_lockdown.sql', '016_photo_thumbnails.sql', '017_guest_albums.sql', '018_sort_photos_by_filename.sql', '019_shared_customer_participant.sql', '020_album_archive.sql', '021_album_download.sql', '022_album_download_public_settings.sql', '023_album_download_rate_limit.sql', '024_platform_admins.sql', '025_studio_analytics.sql']) {
       const sql = await readFile(new URL(`../../db/migrations/${filename}`, import.meta.url), 'utf8')
       await db.exec(sql)
     }
@@ -17,7 +17,7 @@ describe('database migrations', () => {
     `)
     const byName = new Map(tables.rows.map(row => [row.tablename, row.rowsecurity]))
     for (const table of ['user', 'session', 'account', 'verification']) expect(byName.has(table), `Better Auth ${table}`).toBe(true)
-    for (const table of ['studios', 'studio_members', 'studio_invitations', 'albums', 'photos', 'participants', 'selection_versions', 'selection_version_items', 'photo_notes', 'production_tasks', 'deliveries', 'analytics_events', 'platform_admins']) {
+    for (const table of ['studios', 'studio_members', 'studio_invitations', 'albums', 'photos', 'participants', 'selection_versions', 'selection_version_items', 'photo_notes', 'production_tasks', 'deliveries', 'analytics_events', 'platform_admins', 'studio_daily_metrics', 'album_analytics_open_rate']) {
       expect(byName.has(table), table).toBe(true)
       expect(byName.get(table), `${table} RLS`).toBe(true)
     }

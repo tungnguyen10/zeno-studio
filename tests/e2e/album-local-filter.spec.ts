@@ -92,3 +92,18 @@ test('requires another destination when RAW is read only', async ({ page }) => {
   await page.getByRole('button', { name: 'Chọn thư mục đích khác' }).click()
   await expect(page.getByRole('button', { name: 'Xác nhận copy 1 file' })).toBeEnabled()
 })
+
+test('sends only numeric match totals and keeps preview when reporting fails', async ({ page }) => {
+  const bodies: unknown[] = []
+  await page.route(`**/api/studio/${studioId}/albums/${albumId}/file-match`, route => {
+    bodies.push(route.request().postDataJSON())
+    return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ statusMessage: 'Unavailable' }) })
+  })
+  await page.goto(`/studio/albums/${albumId}/filter?studio=${studioId}&version=${versionId}`)
+  await page.getByRole('button', { name: 'Chọn RAW', exact: true }).click()
+  await expect(page.getByText('1 ảnh khớp')).toBeVisible()
+  await expect.poll(() => bodies.length).toBe(1)
+  expect(bodies).toEqual([{ matchedCount: 1, missingCount: 0, ambiguousCount: 0 }])
+  await expect(page.getByRole('alert')).toContainText('chưa ghi được số liệu thống kê')
+  await expect(page.getByRole('button', { name: 'Xác nhận copy 1 file' })).toBeEnabled()
+})

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { FilterManifest } from '~~/app/composables/useLocalPhotoFilter'
+import type { FileMatchCounts, FilterManifest } from '~~/app/composables/useLocalPhotoFilter'
 
 const route = useRoute()
 const albumId = String(route.params.albumId)
 const studioId = typeof route.query.studio === 'string' ? route.query.studio : ''
 const versionId = typeof route.query.version === 'string' ? route.query.version : ''
 const apiRoot = `/api/studio/${studioId}/albums/${albumId}`
+const reportMatch = (counts: FileMatchCounts) => $fetch(`${apiRoot}/file-match`, { method: 'POST', body: counts }).then(() => {})
 const { data: manifest, error, status } = useFetch<FilterManifest>(`${apiRoot}/selections/${versionId}/filter-manifest`, { server: false })
 useSeoMeta({ title: 'Lọc ảnh gốc — Zeno Studio' })
 </script>
@@ -18,7 +19,7 @@ useSeoMeta({ title: 'Lọc ảnh gốc — Zeno Studio' })
       <ClientOnly>
         <p v-if="status === 'pending'" class="mt-6 text-muted" role="status">Đang tải bộ ảnh đã chốt…</p>
         <UiNotice v-else-if="error" tone="error" class="mt-6">Không tải được bộ ảnh đã chốt: {{ error.statusMessage || error.message }}</UiNotice>
-        <AlbumLocalFilter v-else-if="manifest" :manifest="manifest" />
+        <AlbumLocalFilter v-else-if="manifest" :manifest="manifest" :report-match="reportMatch" />
         <template #fallback><p class="mt-6 text-muted" role="status">Đang tải bộ ảnh đã chốt…</p></template>
       </ClientOnly>
     </main>
