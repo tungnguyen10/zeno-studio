@@ -74,12 +74,12 @@ CI chạy các bước trên; `test:neon`, `test:auth-neon`, `test:studio-http` 
 
 ## Triển khai
 
-Project Vercel hiện có là `zenocorp/zeno-studio` (`prj_eq7G3KN4ClM2zsTG9uDHMqQTvy7T`). Repo xuất Nitro Build Output API với preset `vercel`; build và function runtime dùng Node.js 24. Chạy `NITRO_PRESET=vercel npm run build` để kiểm tra artifact trong `.vercel/output` (được bỏ qua bởi Git). [Checklist triển khai Vercel](docs/vercel-deployment.md) ghi cấu hình, biến môi trường và kết quả kiểm thử [preview từ repo](https://zeno-studio-asqw0e9id-zenocorp.vercel.app). Production deployment hiện trên dashboard vẫn là bản tạo từ v0.
+Project Vercel là `zenocorp/zeno-studio` (`prj_eq7G3KN4ClM2zsTG9uDHMqQTvy7T`). Repo xuất Nitro Build Output API với preset `vercel`; build và function runtime dùng Node.js 24. Chạy `NITRO_PRESET=vercel npm run build` để kiểm tra artifact trong `.vercel/output` (được bỏ qua bởi Git). Commit `174ecd8` đã deploy lên [Production](https://studio.zenocorp.vn) ngày 2026-10-27; xem [checklist triển khai Vercel](docs/vercel-deployment.md) để biết các tính năng còn khóa và QA còn thiếu.
 
 Job hết hạn chạy bằng Neon Function `expirealbums` và Neon schedule trigger `album-expiry` lúc **02:00 UTC** (09:00 Việt Nam) hằng ngày, cấu hình trong `neon.ts`; không có Vercel Cron. Chạy `npm run neon:build` trước `neon config plan` hoặc `neon config apply`. Job khóa album hết hạn và xóa metadata sau 30 ngày. Function và trigger đã deploy trên nhánh `codex-v1-dev`; đã quan sát trigger thật chạy và dọn fixture theo đúng hai mốc hết hạn. Lịch hằng ngày đã khôi phục; production chưa deploy. Better Auth, Neon pooled và luồng Drive 307 ảnh đã qua smoke test trên Vercel Preview; album lớn và resource key chưa kiểm. Quy trình backup/rollback chưa hoàn thành.
 
 ## Google Analytics 4
 
-Tích hợp GA4 đã có trên branch: mặc định tắt ở Local/Preview; chỉ tải tag sau khi người dùng chọn **Đồng ý**. Từ chối được lưu và không gửi analytics; **Cài đặt phân tích** cho phép đổi lựa chọn, thu hồi sẽ reload để dừng tag. Page view và mười sự kiện workflow chỉ dùng đường dẫn/thuộc tính được allowlist, không gửi token, ID album, tên file, ghi chú hay email.
+Tích hợp GA4 đã có trên `main` và trong bản Production: cờ vẫn tắt cho tới khi hoàn tất các gate bên ngoài; khi bật, tag chỉ tải sau khi người dùng chọn **Đồng ý**. Từ chối được lưu và không gửi analytics; **Cài đặt phân tích** cho phép đổi lựa chọn, thu hồi sẽ reload để dừng tag. Page view và mười sự kiện workflow chỉ dùng đường dẫn/thuộc tính được allowlist, không gửi token, ID album, tên file, ghi chú hay email.
 
 **Production vẫn tắt** đến khi chính sách bảo mật bên ngoài và GA4 stream settings được xác nhận. Xem [checklist phát hành và QA GA4](docs/vercel-deployment.md#google-analytics-4--chỉ-production). Tích hợp này độc lập với analytics nội bộ T48–T49 còn chưa làm.
