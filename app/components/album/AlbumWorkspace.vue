@@ -104,6 +104,7 @@ async function finalize() {
   error.value = ''
   try {
     const result = await $fetch<{ versionNumber: number }>(`${props.apiRoot}/finalize`, { method: 'POST', body: { include: [...included.value], exclude: [...excluded.value] } })
+    trackAnalyticsEvent({ name: 'selection_finalized', surface: props.apiRoot.startsWith('/api/guest/') ? 'guest_admin' : 'studio' })
     await load()
     message.value = `Đã chốt phiên bản ${result.versionNumber}.`
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể chốt ảnh' }
@@ -115,7 +116,12 @@ async function reopen() {
   busy.value = true
   message.value = ''
   error.value = ''
-  try { await $fetch(`${props.apiRoot}/reopen`, { method: 'POST' }); await load(); message.value = `Đã mở vòng chọn mới và giữ ${workspace.value?.previousCount ?? 0} ảnh từ bộ chốt trước.` }
+  try {
+    await $fetch(`${props.apiRoot}/reopen`, { method: 'POST' })
+    trackAnalyticsEvent({ name: 'selection_reopened', surface: props.apiRoot.startsWith('/api/guest/') ? 'guest_admin' : 'studio' })
+    await load()
+    message.value = `Đã mở vòng chọn mới và giữ ${workspace.value?.previousCount ?? 0} ảnh từ bộ chốt trước.`
+  }
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể mở lại album' }
   finally { busy.value = false }
 }

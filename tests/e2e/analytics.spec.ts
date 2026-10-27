@@ -262,3 +262,117 @@ test('management layout choices report the studio surface including guest admin'
   await page.getByRole('button', { name: 'Danh sách', exact: true }).click()
   expect(await events(page, 'gallery_view_changed')).toHaveLength(1)
 })
+
+for (const surface of ['studio', 'guest_admin'] as const) {
+  for (const action of ['finalize', 'reopen'] as const) {
+    for (const outcome of ['success', 'write_failure', 'reload_failure'] as const) {
+      test(`management completion event: ${surface} ${action} ${outcome}`, async ({ page, baseURL }) => {
+        await interceptGoogle(page)
+        await persistConsent(page, 'accepted')
+        await page.setViewportSize({ width: 1440, height: 900 })
+        const studioId = '11111111-1111-4111-8111-111111111111'
+        const root = surface === 'studio' ? `/api/studio/${studioId}/albums/${workflowAlbumId}` : `/api/guest/albums/${workflowAlbumId}`
+        let status = action === 'finalize' ? 'PUBLISHED' : 'FINALIZED'
+        let failReload = false
+        let writes = 0
+        await page.route(`**${root}`, route => failReload
+          ? route.fulfill({ status: 500, json: { statusMessage: 'Reload failed' } })
+          : route.fulfill({ json: { id: workflowAlbumId, title: 'Private title', status, expiresAt: '2099-01-01T00:00:00Z', canFinalize: true, hasResults: status === 'FINALIZED', previousCount: 1, settings: { limitKind: 'unlimited', limitMin: null, limitMax: null }, photoCount: 1, selectedCount: 1 } }))
+        await page.route(`**${root}/photos?*`, route => route.fulfill({ json: { items: [], nextCursor: null, total: 1, selectedCount: 1 } }))
+        await page.route(`**${root}/${action}`, route => {
+          writes++
+          if (outcome === 'write_failure') return route.fulfill({ status: 500, json: { statusMessage: 'Write failed' } })
+          status = action === 'finalize' ? 'FINALIZED' : 'PUBLISHED'
+          failReload = outcome === 'reload_failure'
+          return route.fulfill({ json: { versionNumber: 1, cycle: 2 } })
+        })
+        const prefix = surface === 'studio' ? 'studio' : 'guest'
+        await page.goto(`/${prefix}/albums/${workflowAlbumId}?studio=${studioId}&token=${workflowToken}`)
+        await expect.poll(async () => (await views(page)).length).toBe(1)
+        await page.getByRole('button', { name: action === 'finalize' ? 'Chốt 1 ảnh' : 'Mở vòng chọn mới', exact: true }).click()
+        const eventName = action === 'finalize' ? 'selection_finalized' : 'selection_reopened'
+        if (outcome === 'success') await expect(page.getByText(action === 'finalize' ? 'Đã chốt phiên bản 1.' : 'Đã mở vòng chọn mới và giữ 1 ảnh từ bộ chốt trước.', { exact: true })).toBeVisible()
+        else await expect(page.getByRole('alert')).toBeVisible()
+        expect(writes).toBe(1)
+        expect(await events(page, eventName)).toEqual(outcome === 'write_failure' ? [] : [['event', eventName, {
+          surface, page_location: `${baseURL}/${prefix}/albums/:albumId`, page_title: surface === 'studio' ? 'Album studio' : 'Quản trị album',
+        }]])
+        expect(await events(page, action === 'finalize' ? 'selection_reopened' : 'selection_finalized')).toEqual([])
+        expect(JSON.stringify(await commands(page))).not.toMatch(/Private|private-|token=|22222222|11111111/)
+      })
+    }
+  }
+}
+
+async function mockMatchDirectory(page: Page, mode: 'success' | 'aborted' | 'failed') {
+  await page.addInitScript(mode => {
+    const file = (name: string) => ({ kind: 'file', name, getFile: async () => new File(['raw bytes'], name) })
+    const folder = (name: string) => ({ kind: 'directory', name, async *entries() { yield ['Private-B.CR3', file('Private-B.CR3')] } })
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    Object.assign(window, { __releaseScan: release })
+    const source = {
+      kind: 'directory', name: 'Private source',
+      async *entries() {
+        if (mode === 'aborted') { await gate; throw new DOMException('Stopped', 'AbortError') }
+        yield ['Private-A.CR3', file('Private-A.CR3')]
+        yield ['set-1', folder('set-1')]
+        yield ['set-2', folder('set-2')]
+      },
+      async getDirectoryHandle() {
+        if (mode === 'failed') throw new DOMException('Destination denied', 'NotAllowedError')
+        throw new DOMException('Missing', 'NotFoundError')
+      },
+    }
+    Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => source })
+  }, mode)
+}
+
+for (const entry of ['standalone', 'album'] as const) {
+  test(`file-match completion counts exclude filenames: ${entry}`, async ({ page }) => {
+    await interceptGoogle(page)
+    await persistConsent(page, 'accepted')
+    await mockMatchDirectory(page, 'success')
+    if (entry === 'album') await mockFilterManifest(page)
+    await page.goto(entry === 'standalone' ? '/tools/file-filter' : `/guest/albums/${workflowAlbumId}/filter?version=${workflowPhotoId}`)
+    await expect.poll(async () => (await views(page)).length).toBe(1)
+    if (entry === 'standalone') {
+      await page.getByLabel('Tên file cần tìm').fill('Private-A.JPG\nPrivate-B.JPG\nPrivate-C.JPG')
+      await page.getByRole('button', { name: 'Chọn thư mục nguồn' }).click()
+      await expect(page.getByText('Đã tìm thấy 3 file')).toBeVisible()
+      expect(await events(page, 'file_match_completed')).toEqual([])
+      await page.getByRole('button', { name: 'Xem kết quả so khớp' }).click()
+    } else await page.getByRole('button', { name: 'Chọn RAW', exact: true }).click()
+    await expect.poll(async () => await events(page, 'file_match_completed')).toEqual([['event', 'file_match_completed', expect.objectContaining({ matched_count: 1, missing_count: 1, ambiguous_count: 1, page_location: expect.any(String) })]])
+    if (entry === 'standalone') {
+      await page.getByRole('button', { name: 'Xem kết quả so khớp' }).click()
+      expect(await events(page, 'file_match_completed')).toHaveLength(2)
+    }
+    expect(JSON.stringify(await commands(page))).not.toMatch(/Private|private-|22222222|33333333|\.JPG|\.CR3|set-1/)
+  })
+}
+
+async function mockFilterManifest(page: Page) {
+  await page.route(`**/api/guest/albums/${workflowAlbumId}/selections/${workflowPhotoId}/filter-manifest`, route => route.fulfill({ json: {
+    albumId: workflowAlbumId, selectionVersionId: workflowPhotoId, versionNumber: 2, finalizedAt: '2026-10-17T00:00:00Z',
+    items: ['A', 'B', 'C'].map(name => ({ photoId: name, originalFilename: `Private-${name}.JPG`, notes: [] })),
+  } }))
+}
+
+for (const mode of ['aborted', 'failed'] as const) {
+  test(`album scan ${mode} reports no match completion`, async ({ page }) => {
+    await interceptGoogle(page)
+    await persistConsent(page, 'accepted')
+    await mockMatchDirectory(page, mode)
+    await mockFilterManifest(page)
+    await page.goto(`/guest/albums/${workflowAlbumId}/filter?version=${workflowPhotoId}`)
+    await page.getByRole('button', { name: 'Chọn RAW', exact: true }).click()
+    if (mode === 'aborted') {
+      await page.getByRole('button', { name: 'Dừng quét', exact: true }).click()
+      await page.evaluate(() => (window as unknown as { __releaseScan(): void }).__releaseScan())
+    } else await expect(page.getByText('Destination denied')).toBeVisible()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    expect(await events(page, 'file_match_completed')).toEqual([])
+    expect(JSON.stringify(await commands(page))).not.toMatch(/Private|private-|\.CR3|\.JPG/)
+  })
+}

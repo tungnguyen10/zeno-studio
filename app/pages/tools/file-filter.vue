@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { matchLocalFiles, type MatchResult } from '~~/shared/domain/file-matching'
 import type { CopyResult } from '~~/shared/domain/file-copy'
@@ -159,6 +160,7 @@ function runPreview() {
   report.value = null
   missingCopied.value = false
   const { matched, missing, ambiguous } = preview.value
+  trackAnalyticsEvent({ name: 'file_match_completed', matched_count: matched.length, missing_count: missing.length, ambiguous_count: ambiguous.length })
   if (ambiguous.length) notify(`Có ${ambiguous.length} tên trùng — chọn file đúng ở bước 3 trước khi copy.`, 'warn')
   else if (missing.length) notify(`Khớp ${matched.length} file, ${missing.length} tên không tìm thấy.`, 'warn')
   else notify(`Khớp đủ ${matched.length} file. Sẵn sàng copy.`, 'success')

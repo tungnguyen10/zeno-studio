@@ -1,3 +1,4 @@
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { matchLocalPhotos, type MatchOptions, type PhotoMatchResult } from '~~/shared/domain/file-matching'
 import { destinationCollisionKey, parseDestinationPath } from '~~/shared/domain/destination-path'
@@ -183,6 +184,12 @@ export function useLocalPhotoFilter(manifest: FilterManifest) {
       existingPaths.value = await inspectExisting()
       if (current.signal.aborted) return
       phase.value = 'preview'
+      trackAnalyticsEvent({
+        name: 'file_match_completed',
+        matched_count: preview.value.matched.length,
+        missing_count: preview.value.missing.length,
+        ambiguous_count: preview.value.ambiguous.length,
+      })
       message.value = `Đã quét ${scanCount.value} mục.`
     } catch (error) {
       if (current.signal.aborted) return
