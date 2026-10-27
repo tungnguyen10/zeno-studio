@@ -1,7 +1,7 @@
 # GA4 integration design
 
 Date: 2026-10-27
-Status: approved in conversation; awaiting written-spec review
+Status: approved for implementation planning
 
 ## Goal and scope
 
