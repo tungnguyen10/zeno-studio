@@ -1,13 +1,13 @@
 # Vercel deployment — zeno-studio
 
-Project: `zenocorp/zeno-studio` (`prj_eq7G3KN4ClM2zsTG9uDHMqQTvy7T`). Project dùng Nuxt và Node.js 24.x; Vercel CLI đã liên kết local repo đúng project ID. Production [studio.zenocorp.vn](https://studio.zenocorp.vn) đang chạy deployment `dpl_F7SvcDJKoXS6a88XfwJapy35z4dc` từ commit `174ecd8` (2026-10-27). Project chưa nối Git.
+Project: `zenocorp/zeno-studio` (`prj_eq7G3KN4ClM2zsTG9uDHMqQTvy7T`). Project dùng Nuxt và Node.js 24.x; Vercel CLI đã liên kết local repo đúng project ID. Production [studio.zenocorp.vn](https://studio.zenocorp.vn) đang chạy deployment `dpl_J1RzsoKExAMJBznEsdtDZkUXgxYF` (2026-10-27); mã app GA4 từ commit `174ecd8`. Project chưa nối Git.
 
 ## Release Production ngày 2026-10-27
 
 - Preview `dpl_6s2or3HB3d3gKQ2nfry93GGREMuv` Ready; `/`, `/create`, `/api/auth/get-session` trả 200.
 - Neon branch `production` trước release chưa có schema ứng dụng; nay được tạo schema bằng 24 migration sau khi cùng bộ migration đạt trên branch tạm `release-20261027-test`. Không chuyển user/album từ `codex-v1-dev` sang nhánh mới. Branch `backup-before-release-20261027` giữ điểm khôi phục trước migration; branch test tự hết hạn ngày 2026-10-28. Vercel Production dùng `NUXT_DATABASE_URL` pooled với role riêng `LOGIN NOBYPASSRLS NOCREATEROLE`; `NUXT_DATABASE_DIRECT_URL` đã bỏ khỏi scope Production.
-- Production deployment `dpl_F7SvcDJKoXS6a88XfwJapy35z4dc` Ready và alias `studio.zenocorp.vn` đã gắn. `/`, `/create`, `/studio`, `/api/auth/get-session` trả 200; Chromium trên trang chủ không thấy banner analytics hoặc request Google khi cờ tắt. Đây là smoke đọc, chưa kiểm luồng đăng ký/tạo album trên Production.
-- `NUXT_DRIVE_VERIFIED=false`, nên luồng Drive còn khóa theo gate hiện tại. `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S` và `NUXT_PUBLIC_GA4_ENABLED=false` trong scope Vercel Production. Trang chính sách bảo mật ngoài repo hiện là trang “sắp ra mắt”; chủ dự án sẽ cập nhật. GA4 web stream đã cấu hình ở bước 2–3 bên dưới; chưa bật thu thập hoặc kiểm DebugView.
+- Production deployment `dpl_J1RzsoKExAMJBznEsdtDZkUXgxYF` Ready và alias `studio.zenocorp.vn` đã gắn. Release đầu kiểm `/`, `/create`, `/studio`, `/api/auth/get-session` trả 200; bản GA4 bật kiểm lại `/` trả 200, banner hiện trước đồng ý, không request Google trước đồng ý, sau đồng ý tải tag và gửi một `page_view` tới đúng ID, Google trả HTTP 204. Chưa kiểm luồng đăng ký/tạo album trên Production.
+- `NUXT_DRIVE_VERIFIED=false`, nên luồng Drive còn khóa theo gate hiện tại. `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S` và `NUXT_PUBLIC_GA4_ENABLED=true` trong scope Vercel Production. Trang chính sách bảo mật ngoài repo vẫn là nội dung giữ chỗ; chủ dự án sẽ cập nhật. GA4 web stream đã cấu hình ở bước 2–3 bên dưới; DebugView chưa kiểm.
 - Các biến `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_BRANCH` do tích hợp Neon cũ vẫn trỏ tới `codex-v1-dev`; mã app chỉ dùng `NUXT_DATABASE_URL`. Rà cấu hình tích hợp này trước khi dùng những biến đó cho job/tool khác.
 
 ## Cấu hình build
@@ -53,21 +53,21 @@ Kiểm tra tại máy ngày 2026-10-15: `test:drive-live` đạt với 307 ảnh
 
 ## Google Analytics 4 — chỉ Production
 
-Tích hợp đã deploy lên Production nhưng **cờ thu thập vẫn tắt** cho tới khi xác nhận trang chính sách bên ngoài và cấu hình GA4. Tag chỉ được tải sau khi người dùng đồng ý; từ chối không tải tag, thu hồi đồng ý sẽ reload để dừng tag đã tải. Local giữ cờ `false` (ID có thể có trong `.env` cá nhân), Preview để trống; Vercel Production đã có ID và cờ `false`:
+Tích hợp đang bật trên Production theo yêu cầu chủ dự án. Tag chỉ được tải sau khi người dùng đồng ý; từ chối không tải tag, thu hồi đồng ý sẽ reload để dừng tag đã tải. Local giữ cờ `false` (ID có thể có trong `.env` cá nhân), Preview để trống; Vercel Production có ID và cờ `true`:
 
-| Biến | Giá trị hiện tại / sau khi gate đạt |
+| Biến | Giá trị hiện tại |
 | --- | --- |
-| `NUXT_PUBLIC_GA4_ENABLED` | Hiện `false`; đổi thành `true` sau khi gate đạt. |
+| `NUXT_PUBLIC_GA4_ENABLED` | `true` ở Production; local mặc định `false`, Preview để trống. |
 | `NUXT_PUBLIC_GA4_MEASUREMENT_ID` | `G-2GD5P03B7S` |
 
-Thứ tự QA/phát hành:
+Trạng thái QA/phát hành:
 
-1. Công bố và kiểm trực tiếp [chính sách bảo mật](https://www.zenocorp.vn/privacy): mô tả Google Analytics, mục đích đo lường, lựa chọn đồng ý/từ chối và cách mở **Cài đặt phân tích** để thu hồi. Đây là trang ngoài repo; chưa xác nhận nội dung đã cập nhật.
+1. **Còn mở:** Công bố và kiểm trực tiếp [chính sách bảo mật](https://www.zenocorp.vn/privacy): mô tả Google Analytics, mục đích đo lường, lựa chọn đồng ý/từ chối và cách mở **Cài đặt phân tích** để thu hồi. Trang ngoài repo vẫn có nội dung giữ chỗ; chủ dự án đã nhận phần cập nhật này.
 2. **Đạt ngày 27/10:** Trong đúng web stream `G-2GD5P03B7S`, đã tắt Enhanced Measurement. Trong Google tag, đã tắt riêng page view khi đổi browser history, scroll, outbound click, form interaction, video và file download; mở lại để xác nhận cả 6 giá trị `off`. App dùng `send_page_view: false` và chỉ gửi page view thủ công sau đồng ý.
 3. **Đạt ngày 27/10:** Data redaction email đang bật; URL query redaction đã lưu và xác nhận 11 khóa `token`, `studio`, `version`, `email`, `code`, `state`, `redirect`, `callbackurl`, `returnto`, `next`, `redirectto` (không phân biệt hoa thường). Đây là lớp bảo vệ phụ, không thay thế allowlist URL/event trong app; rà lại khi có tham số mới.
-4. Chỉ sau khi bước 1–3 đã được xác nhận, đổi `NUXT_PUBLIC_GA4_ENABLED=true` trong scope Production và redeploy. Local giữ cờ tắt, Preview tiếp tục để trống. Deployment hiện tại chưa thu thập GA4.
-5. Dùng một lượt thử có đồng ý, kiểm Browser Network và GA4 DebugView (bật debug cho phiên QA tại trình duyệt, không thêm định danh vào app): đúng một `page_view` mỗi màn hình, không thêm view khi chỉ đổi query/hash; `page_location` và `page_referrer` đã template ID, bỏ query/fragment, referrer ngoài chỉ còn origin. Không có token, ghi chú, filename, email hay tên riêng trong payload. Kiểm từ chối không tải tag, chấp nhận mới tải, thu hồi reload và không gửi tiếp. Thử cả 320 px và 1280 px, đồng thời kiểm navigation vẫn chạy khi tag bị chặn.
+4. **Đạt ngày 27/10:** Đã đổi `NUXT_PUBLIC_GA4_ENABLED=true` trong scope Production và redeploy `dpl_J1RzsoKExAMJBznEsdtDZkUXgxYF`. Local giữ cờ tắt, Preview tiếp tục để trống. Chủ dự án yêu cầu bật trong khi bước 1 còn mở.
+5. **Một phần:** Chromium Network trên Production xác nhận `/` không gửi Google trước đồng ý; sau đồng ý tải `gtag.js` đúng ID, gửi một `page_view` với `page_location=https://studio.zenocorp.vn/` và Google trả HTTP 204. Cần kiểm tiếp GA4 DebugView (bật debug cho phiên QA tại trình duyệt, không thêm định danh vào app), mỗi màn hình chỉ một view, không thêm view khi chỉ đổi query/hash; `page_location` và `page_referrer` đã template ID, bỏ query/fragment, referrer ngoài chỉ còn origin. Không có token, ghi chú, filename, email hay tên riêng trong payload. Kiểm từ chối không tải tag, thu hồi reload và không gửi tiếp. Thử cả 320 px và 1280 px, đồng thời kiểm navigation vẫn chạy khi tag bị chặn.
 
-Bộ local chỉ dùng script Google giả và API/filesystem mock, không chứng minh cấu hình tài khoản GA4 hoặc dữ liệu nhận thật. Network/DebugView sau triển khai và xác nhận chính sách là gate thủ công còn mở. GA4 này không triển khai analytics nội bộ T48–T49 (`analytics_events`, daily aggregation, North Star).
+Bộ local dùng script Google giả và API/filesystem mock. Smoke Production đã xác nhận request được Google trả HTTP 204; DebugView, QA các đường dẫn và công bố chính sách vẫn còn mở. GA4 này không triển khai analytics nội bộ T48–T49 (`analytics_events`, daily aggregation, North Star).
 
 `npm run test:e2e:analytics` chạy server local riêng với hai biến bật chỉ trong tiến trình test và chặn request Google bằng script giả; bộ test không gửi dữ liệu tới GA thật. Cấu hình mặc định vẫn tắt analytics và SSR không chèn tag Google.
