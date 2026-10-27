@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { CONSENT_KEY } from '../../app/lib/analytics-consent'
 
 async function commands(page: Page): Promise<unknown[][]> {
-  return page.evaluate(() => (window as Window & { dataLayer?: unknown[][] }).dataLayer ?? [])
+  return page.evaluate(() => ((window as Window & { dataLayer?: ArrayLike<unknown>[] }).dataLayer ?? [])
+    .map(command => Array.from(command)))
 }
 
 async function views(page: Page): Promise<unknown[][]> {
@@ -31,6 +32,10 @@ test('loads only after consent and reports safe manual views', async ({ page, ba
   await page.getByRole('button', { name: 'Đồng ý', exact: true }).click()
   await expect.poll(() => requests.length).toBe(1)
   await expect.poll(async () => (await views(page)).length).toBe(1)
+  const commandTypes = await page.evaluate(() =>
+    ((window as Window & { dataLayer?: ArrayLike<unknown>[] }).dataLayer ?? [])
+      .map(command => Object.prototype.toString.call(command)))
+  expect(commandTypes).toEqual(Array(commandTypes.length).fill('[object Arguments]'))
   const queued = await commands(page)
   expect(queued.slice(0, 2)).toEqual([
     ['consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' }],

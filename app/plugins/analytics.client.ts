@@ -5,7 +5,7 @@ import { isAnalyticsEnabled } from '~/lib/analytics-consent'
 import { useAnalyticsConsent } from '~/composables/useAnalyticsConsent'
 
 type AnalyticsWindow = Window & {
-  dataLayer?: unknown[][]
+  dataLayer?: IArguments[]
   gtag?: (...args: unknown[]) => void
 }
 
@@ -43,7 +43,7 @@ export default defineNuxtPlugin(nuxtApp => {
     if (active) return
     active = true
     gaWindow.dataLayer ??= []
-    gaWindow.gtag ??= (...args: unknown[]) => { gaWindow.dataLayer!.push(args) }
+    gaWindow.gtag ??= function () { gaWindow.dataLayer!.push(arguments) }
     gaWindow.gtag('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' })
     gaWindow.gtag('consent', 'update', { analytics_storage: 'granted' })
     gaWindow.gtag('js', new Date())
