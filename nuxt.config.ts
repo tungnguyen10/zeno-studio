@@ -40,6 +40,9 @@ export default defineNuxtConfig({
     driveVerified: '',
     googleClientId: '',
     googleClientSecret: '',
+    ga4PropertyId: '',
+    ga4PropertyTimezone: '',
+    ga4ServiceAccountJson: '',
     public: {
       // Absolute origin for canonical, sitemap and structured data; falls back to the request origin.
       siteUrl: '',
