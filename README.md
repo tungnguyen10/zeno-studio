@@ -82,4 +82,4 @@ Job hết hạn chạy bằng Neon Function `expirealbums` và Neon schedule tri
 
 Tích hợp GA4 đã có trên `main` và trong bản Production: cờ vẫn tắt cho tới khi hoàn tất các gate bên ngoài; khi bật, tag chỉ tải sau khi người dùng chọn **Đồng ý**. Từ chối được lưu và không gửi analytics; **Cài đặt phân tích** cho phép đổi lựa chọn, thu hồi sẽ reload để dừng tag. Page view và mười sự kiện workflow chỉ dùng đường dẫn/thuộc tính được allowlist, không gửi token, ID album, tên file, ghi chú hay email.
 
-**Production vẫn tắt** đến khi chính sách bảo mật bên ngoài và GA4 stream settings được xác nhận. Xem [checklist phát hành và QA GA4](docs/vercel-deployment.md#google-analytics-4--chỉ-production). Tích hợp này độc lập với analytics nội bộ T48–T49 còn chưa làm.
+**Production vẫn tắt** đến khi chính sách bảo mật bên ngoài được công bố. GA4 web stream đã tắt thu thập tự động và bật redaction; Network/DebugView cần kiểm sau khi bật. Xem [checklist phát hành và QA GA4](docs/vercel-deployment.md#google-analytics-4--chỉ-production). Tích hợp này độc lập với analytics nội bộ T48–T49 còn chưa làm.
