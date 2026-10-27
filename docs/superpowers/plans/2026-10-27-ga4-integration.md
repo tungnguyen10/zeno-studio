@@ -285,7 +285,7 @@ Use this behavior in `AnalyticsConsent.vue`: `onMounted(consent.initialize)`, `v
 import { expect, test, type Page } from '@playwright/test'
 
 async function commands(page: Page): Promise<unknown[][]> {
-  return page.evaluate(() => ((window as Window & { dataLayer?: unknown[][] }).dataLayer ?? []))
+  return page.evaluate(() => ((window as Window & { dataLayer?: IArguments[] }).dataLayer ?? []).map(entry => Array.from(entry)))
 }
 
 test('loads only after consent and reports safe manual views', async ({ page }) => {
@@ -305,9 +305,9 @@ test('loads only after consent and reports safe manual views', async ({ page }) 
 })
 ```
 
-Add a separate test that opens `/create?token=secret` with persisted accepted consent and expects exactly one safe page view in that new document. For query-only changes in one document, assert no new view after `history.replaceState` or a Nuxt navigation that changes only the query.
+Add a separate test that opens `/create?token=secret` with persisted accepted consent and expects exactly one safe page view in that new document. For query-only changes in one document, assert no new view after `history.replaceState` or a Nuxt navigation that changes only the query. Assert every queued gtag command satisfies `Object.prototype.toString.call(entry) === '[object Arguments]'`; normalizing with `Array.from` is only for inspecting it in tests.
 
-- [ ] **Step 2: Verify red.** Run `npm run test:e2e:analytics`; expect failure because the test config, script, and controls are not yet complete.
+- [ ] **Step 2: Verify red.** Run `npm run test:e2e:analytics`; expect consent or page-view behavior assertions to fail while the plugin is absent.
 
 - [ ] **Step 3: Add environment guidance.** Add the two `NUXT_PUBLIC_GA4_*` keys to `.env.example` as empty/off values and document that Vercel Production alone receives `true` and the given ID. The test config created in Step 1 uses the existing port/configuration and only `analytics.spec.ts`, with `webServer.env` setting the two variables and `reuseExistingServer: false` so an unrelated dev server cannot invalidate the test. A script-only `package.json` change does not require a lockfile change.
 
@@ -336,7 +336,7 @@ import { registerAnalyticsSender } from '~/lib/analytics-events'
 import { isAnalyticsEnabled } from '~/lib/analytics-consent'
 import { useAnalyticsConsent } from '~/composables/useAnalyticsConsent'
 
-type AnalyticsWindow = Window & { dataLayer?: unknown[][]; gtag?: (...args: unknown[]) => void }
+type AnalyticsWindow = Window & { dataLayer?: IArguments[]; gtag?: (...args: unknown[]) => void }
 
 export default defineNuxtPlugin(nuxtApp => {
   const config = useRuntimeConfig().public
@@ -368,7 +368,7 @@ export default defineNuxtPlugin(nuxtApp => {
     if (active) return
     active = true
     gaWindow.dataLayer ??= []
-    gaWindow.gtag = (...args: unknown[]) => { gaWindow.dataLayer!.push(args) }
+    gaWindow.gtag = function (..._args: unknown[]) { gaWindow.dataLayer!.push(arguments) }
     gaWindow.gtag('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' })
     gaWindow.gtag('consent', 'update', { analytics_storage: 'granted' })
     gaWindow.gtag('js', new Date())
