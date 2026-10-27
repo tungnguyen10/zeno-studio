@@ -23,6 +23,72 @@ async function persistConsent(page: Page, choice: 'accepted' | 'rejected') {
   await page.addInitScript(({ key, choice }) => localStorage.setItem(key, choice), { key: CONSENT_KEY, choice })
 }
 
+test('default server emits no Google tag in HTML or browser requests', async ({ page }, testInfo) => {
+  test.skip(testInfo.config.configFile.endsWith('playwright.analytics.config.ts'), 'Default-disabled server only')
+  const requests = await interceptGoogle(page)
+  await persistConsent(page, 'accepted') // A previous choice cannot bypass the environment gate.
+  const response = await page.goto('/')
+  expect(await response!.text()).not.toMatch(/<script[^>]+src=["'][^"']*(?:googletagmanager|google-analytics)/i)
+  await expect(page.getByRole('link', { name: /Tạo album nhanh/ }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cài đặt phân tích', exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: /Tạo album nhanh/ }).first().click()
+  await expect(page).toHaveURL(/\/create$/)
+  expect(requests).toEqual([])
+  expect(await commands(page)).toEqual([])
+})
+
+test.describe('enabled analytics with intercepted Google requests', () => {
+  test.beforeEach(async ({}, testInfo) => {
+    test.skip(!testInfo.config.configFile.endsWith('playwright.analytics.config.ts'), 'Enabled isolated server only')
+  })
+
+  test.afterEach(async ({ page }, testInfo) => {
+    await testInfo.attach('sanitized-data-layer', { body: JSON.stringify(await commands(page)), contentType: 'application/json' })
+  })
+
+  for (const width of [320, 1280]) {
+    test(`consent controls support rejection, navigation, acceptance and revocation at ${width}px`, async ({ page }) => {
+      const requests = await interceptGoogle(page)
+      await page.setViewportSize({ width, height: 700 })
+      await page.goto('/')
+      await expect(page.getByRole('button', { name: 'Đồng ý', exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Từ chối', exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Từ chối', exact: true }).click()
+      expect(await page.evaluate(key => localStorage.getItem(key), CONSENT_KEY)).toBe('rejected')
+      await page.getByRole('link', { name: /Tạo album nhanh/ }).first().click()
+      await expect(page).toHaveURL(/\/create$/)
+      expect(requests).toEqual([])
+      expect(await commands(page)).toEqual([])
+      await page.getByRole('button', { name: 'Cài đặt phân tích', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Đồng ý', exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Đồng ý', exact: true }).click()
+      await expect.poll(async () => (await views(page)).length).toBe(1)
+      expect(requests).toHaveLength(1)
+      await page.getByRole('button', { name: 'Cài đặt phân tích', exact: true }).click()
+      await Promise.all([
+        page.waitForEvent('load'),
+        page.getByRole('button', { name: 'Từ chối', exact: true }).click(),
+      ])
+      await expect(page.getByRole('button', { name: 'Cài đặt phân tích', exact: true })).toBeVisible()
+      expect(await page.evaluate(key => localStorage.getItem(key), CONSENT_KEY)).toBe('rejected')
+      expect(requests).toHaveLength(1)
+      expect(await commands(page)).toEqual([])
+    })
+  }
+
+  test('global settings restores keyboard focus after dismissal', async ({ page }) => {
+    await interceptGoogle(page)
+    await persistConsent(page, 'rejected')
+    await page.goto('/album/test-only')
+    const settings = page.getByRole('button', { name: 'Cài đặt phân tích', exact: true })
+    await expect(settings).toBeVisible()
+    await settings.focus()
+    await settings.press('Enter')
+    await expect(page.locator('#analytics-consent-title')).toBeFocused()
+    await page.getByRole('button', { name: 'Đóng' }).click()
+    await expect(page.getByRole('button', { name: 'Cài đặt phân tích', exact: true })).toBeFocused()
+  })
+
 test('loads only after consent and reports safe manual views', async ({ page, baseURL }) => {
   const requests = await interceptGoogle(page)
   await page.goto('/?token=secret#private-fragment')
@@ -376,3 +442,5 @@ for (const mode of ['aborted', 'failed'] as const) {
     expect(JSON.stringify(await commands(page))).not.toMatch(/Private|private-|\.CR3|\.JPG/)
   })
 }
+
+})

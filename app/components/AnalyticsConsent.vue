@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { isAnalyticsEnabled } from '~/lib/analytics-consent'
 const config = useRuntimeConfig().public
 const route = useRoute()
@@ -7,6 +8,22 @@ const enabled = computed(() => isAnalyticsEnabled(config.ga4Enabled, config.ga4M
 const bannerVisible = computed(() => enabled.value && ready.value && (choice.value === 'unknown' || settingsOpen.value))
 const settingsVisible = computed(() => enabled.value && ready.value && choice.value !== 'unknown'
   && !bannerVisible.value && !['/', '/create', '/tools/file-filter', '/studio'].includes(route.path))
+const bannerTitle = ref<HTMLElement | null>(null)
+const floatingSettingsButton = ref<HTMLButtonElement | null>(null)
+let settingsOpener: HTMLElement | null = null
+
+watch(settingsOpen, async open => {
+  if (open) {
+    settingsOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    await nextTick()
+    bannerTitle.value?.focus()
+  } else if (choice.value !== 'unknown') {
+    await nextTick()
+    const target = settingsOpener?.isConnected ? settingsOpener : floatingSettingsButton.value
+    target?.focus()
+    settingsOpener = null
+  }
+})
 
 onMounted(initialize)
 </script>
@@ -21,7 +38,7 @@ onMounted(initialize)
   >
     <div class="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div class="min-w-0">
-        <h2 id="analytics-consent-title" class="font-semibold">Phân tích lượt sử dụng</h2>
+        <h2 id="analytics-consent-title" ref="bannerTitle" tabindex="-1" class="font-semibold">Phân tích lượt sử dụng</h2>
         <p class="mt-1 text-muted">
           Cho phép Google Analytics giúp chúng tôi hiểu cách sử dụng Zeno Studio và cải thiện sản phẩm.
           Bạn có thể thay đổi lựa chọn bất cứ lúc nào.
@@ -36,6 +53,6 @@ onMounted(initialize)
     </div>
   </section>
   <div v-else-if="settingsVisible" class="px-4 pt-2 pb-[max(8rem,env(safe-area-inset-bottom))] text-center text-xs text-muted">
-    <button type="button" class="focus-ring min-h-11 rounded px-2 hover:text-brand" @click="openSettings">Cài đặt phân tích</button>
+    <button ref="floatingSettingsButton" type="button" class="focus-ring min-h-11 rounded px-2 hover:text-brand" @click="openSettings">Cài đặt phân tích</button>
   </div>
 </template>

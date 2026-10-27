@@ -45,8 +45,21 @@ Kiểm tra tại máy ngày 2026-10-15: `test:drive-live` đạt với 307 ảnh
 
 ## Google Analytics 4 — chỉ Production
 
-Giữ `NUXT_PUBLIC_GA4_ENABLED` và `NUXT_PUBLIC_GA4_MEASUREMENT_ID` trống ở Local/Preview. Chỉ đặt tại scope **Vercel Production**: `NUXT_PUBLIC_GA4_ENABLED=true` và `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S`. Không dùng scope All Environments. Tag chỉ được tải sau khi người dùng đồng ý; từ chối không gửi dữ liệu, thu hồi đồng ý sẽ reload để dừng tag đã tải.
+Tích hợp đã có trên branch và được kiểm local; **Production vẫn tắt** cho tới khi xác nhận trang chính sách bên ngoài và cấu hình GA4. Tag chỉ được tải sau khi người dùng đồng ý; từ chối không tải tag, thu hồi đồng ý sẽ reload để dừng tag đã tải. Giữ hai biến public trống ở Local/Preview; sau khi các gate bên dưới đạt, chỉ đặt chúng trong scope **Vercel Production**, không dùng All Environments:
 
-Trước khi bật Production, tắt **Enhanced Measurement → Page views → Page changes based on browser history events** trong GA4 và tắt các thu thập tự động tùy chọn có thể lấy URL/form nhạy cảm. Ứng dụng dùng `send_page_view: false` và tự gửi page view với đường dẫn đã loại query, fragment và ID riêng tư. Không bật lại automatic history tracking: nó có thể gửi URL gốc và tạo view trùng.
+| Biến | Giá trị sau khi các gate bên ngoài đã đạt |
+| --- | --- |
+| `NUXT_PUBLIC_GA4_ENABLED` | `true` |
+| `NUXT_PUBLIC_GA4_MEASUREMENT_ID` | `G-2GD5P03B7S` |
+
+Thứ tự QA/phát hành:
+
+1. Công bố và kiểm trực tiếp [chính sách bảo mật](https://www.zenocorp.vn/privacy): mô tả Google Analytics, mục đích đo lường, lựa chọn đồng ý/từ chối và cách mở **Cài đặt phân tích** để thu hồi. Đây là trang ngoài repo; chưa xác nhận nội dung đã cập nhật.
+2. Trong đúng GA4 web stream, tắt **Enhanced Measurement → Page views → Page changes based on browser history events**. Tắt các sự kiện tự động tùy chọn (form interactions, site search, outbound clicks, file downloads, video engagement, scrolls) có thể thu thập URL/nội dung riêng tư. App dùng `send_page_view: false` và chỉ gửi page view thủ công.
+3. Cấu hình **Data redaction → Redact URL query parameters** cho các tham số nhạy cảm như `token`, `studio`, `version`, `email`, `code`, `state`, `redirect`, `callbackURL` và `returnTo`; bật redaction email. Đây là lớp bảo vệ phụ, không thay thế allowlist URL/event trong app; phải rà lại khi có tham số mới.
+4. Chỉ sau khi bước 1–3 đã được xác nhận, đặt hai biến ở Production và deploy build đã qua gate local. Local/Preview tiếp tục để trống. Checklist này không tự cấp phép triển khai hay bật flag.
+5. Dùng một lượt thử có đồng ý, kiểm Browser Network và GA4 DebugView (bật debug cho phiên QA tại trình duyệt, không thêm định danh vào app): đúng một `page_view` mỗi màn hình, không thêm view khi chỉ đổi query/hash; `page_location` và `page_referrer` đã template ID, bỏ query/fragment, referrer ngoài chỉ còn origin. Không có token, ghi chú, filename, email hay tên riêng trong payload. Kiểm từ chối không tải tag, chấp nhận mới tải, thu hồi reload và không gửi tiếp. Thử cả 320 px và 1280 px, đồng thời kiểm navigation vẫn chạy khi tag bị chặn.
+
+Bộ local chỉ dùng script Google giả và API/filesystem mock, không chứng minh cấu hình tài khoản GA4 hoặc dữ liệu nhận thật. Network/DebugView sau triển khai và xác nhận chính sách là gate thủ công còn mở. GA4 này không triển khai analytics nội bộ T48–T49 (`analytics_events`, daily aggregation, North Star).
 
 `npm run test:e2e:analytics` chạy server local riêng với hai biến bật chỉ trong tiến trình test và chặn request Google bằng script giả; bộ test không gửi dữ liệu tới GA thật. Cấu hình mặc định vẫn tắt analytics và SSR không chèn tag Google.
