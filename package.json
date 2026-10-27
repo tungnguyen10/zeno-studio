@@ -27,7 +27,8 @@
     "test:drive-http": "node --env-file-if-exists=.env --import tsx tests/live/drive-album-http.ts",
     "test:drive-preview-http": "node --env-file-if-exists=.env --import tsx tests/live/preview-drive-album-http.ts",
     "test:drive-download": "node --env-file-if-exists=.env --import tsx tests/live/drive-download.ts",
-    "measure:drive-downloads": "node --env-file-if-exists=.env --import tsx scripts/measure-drive-downloads.ts"
+    "measure:drive-downloads": "node --env-file-if-exists=.env --import tsx scripts/measure-drive-downloads.ts",
+    "test:e2e:analytics": "playwright test --config playwright.analytics.config.ts --project=chromium"
   },
   "dependencies": {
     "@neon/config": "^1.9.1",

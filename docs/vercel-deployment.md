@@ -42,3 +42,11 @@ Gate Neon test branch tạm ngày 26/10 đã đạt: migration 021–023, SHA-25
 4. Smoke qua `vercel curl` trên bản ngay trước chỉnh sửa accessibility cuối: Better Auth đăng nhập tài khoản fixture, POST album 307 ảnh, danh sách studio, publish, cấp link khách mới từ album đã xuất bản, gallery đủ 307 ảnh qua link mới và endpoint ảnh trả nội dung ảnh thật. Bản mới nhất đã build/deploy thành công; tài khoản fixture đã được xóa. Cần kiểm tiếp SMTP thật và gallery lớn. Không promote production trước khi các gate release còn lại đạt.
 
 Kiểm tra tại máy ngày 2026-10-15: `test:drive-live` đạt với 307 ảnh; local và Preview HTTP smoke đạt với cùng folder. Vercel Preview build và smoke HTTP ở trên đã chạy thật. Kết quả test/typecheck hiện tại ghi tại tiến độ triển khai.
+
+## Google Analytics 4 — chỉ Production
+
+Giữ `NUXT_PUBLIC_GA4_ENABLED` và `NUXT_PUBLIC_GA4_MEASUREMENT_ID` trống ở Local/Preview. Chỉ đặt tại scope **Vercel Production**: `NUXT_PUBLIC_GA4_ENABLED=true` và `NUXT_PUBLIC_GA4_MEASUREMENT_ID=G-2GD5P03B7S`. Không dùng scope All Environments. Tag chỉ được tải sau khi người dùng đồng ý; từ chối không gửi dữ liệu, thu hồi đồng ý sẽ reload để dừng tag đã tải.
+
+Trước khi bật Production, tắt **Enhanced Measurement → Page views → Page changes based on browser history events** trong GA4 và tắt các thu thập tự động tùy chọn có thể lấy URL/form nhạy cảm. Ứng dụng dùng `send_page_view: false` và tự gửi page view với đường dẫn đã loại query, fragment và ID riêng tư. Không bật lại automatic history tracking: nó có thể gửi URL gốc và tạo view trùng.
+
+`npm run test:e2e:analytics` chạy server local riêng với hai biến bật chỉ trong tiến trình test và chặn request Google bằng script giả; bộ test không gửi dữ liệu tới GA thật. Cấu hình mặc định vẫn tắt analytics và SSR không chèn tag Google.
