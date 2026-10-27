@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onMounted, ref } from 'vue'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 import { publicPage } from '~~/shared/site'
@@ -34,6 +35,8 @@ async function create() {
         limit: limited.value ? { kind: 'maximum', count: maxCount.value } : { kind: 'unlimited' },
       },
     })
+    trackAnalyticsEvent({ name: 'album_created', creation_flow: 'guest' })
+    trackAnalyticsEvent({ name: 'album_published', creation_flow: 'guest' })
     customerLink.value = `${location.origin}/album/${result.id}?token=${result.customerToken}`
     adminLink.value = `${location.origin}/guest/albums/${result.id}#admin-${result.adminToken}`
     createdTitle.value = title.value

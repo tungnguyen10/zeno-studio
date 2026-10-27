@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { DownloadCapabilities } from '~~/shared/domain/download-policy'
 import { driveFitSrcset, driveFocusSrc, driveFocusSrcset, driveGridSrc, driveGridSrcset, driveThumbnailUrl, focusWidthCap } from '~/lib/drive-image'
@@ -156,6 +157,7 @@ async function enter() {
     await loadPhotos()
     loading.value = false
     await selectionPromise
+    if (!paged.error.value && !error.value) trackAnalyticsEvent({ name: 'album_opened' })
     if (import.meta.client) {
       pollTimer = setInterval(() => {
         if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && (!focusPhoto.value || !selectionLoaded.value)) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
@@ -210,6 +212,7 @@ async function saveSelection(photoId: string, wanted: boolean) {
   try {
     const result = await $fetch<SaveResult>(`${root}/selection/${photoId}`, { method: 'PUT', body: { selected: wanted, expectedVersion: selectionVersion.value } })
     if (result.status === 'saved') {
+      trackAnalyticsEvent({ name: wanted ? 'photo_selected' : 'photo_unselected', selected_count: result.count })
       selectionVersion.value = result.version
       setSelected(photoId, wanted)
       return
@@ -308,6 +311,7 @@ async function persistNote(photoId: string, text: string): Promise<boolean> {
   status.value = 'Đang lưu ghi chú…'
   try {
     const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string }>(`${root}/notes/${photoId}`, { method: 'PUT', body: { text, expectedVersion: noteVersion.value } })
+    if (note.status === 'saved') trackAnalyticsEvent({ name: 'photo_note_saved' })
     if (focusPhoto.value?.id !== photoId) return true
     noteVersion.value = note.version
     noteSavedText.value = note.body
@@ -506,7 +510,7 @@ onBeforeUnmount(() => {
         <template v-else>
           <div class="mb-3 mt-5 flex items-center justify-between gap-3 px-1 sm:mb-4 sm:mt-6 sm:px-0">
             <p class="text-sm font-semibold text-muted">{{ filter === 'selected' ? 'Ảnh đã chọn' : '' }}</p>
-            <GalleryLayoutSwitch v-model="layout" />
+            <GalleryLayoutSwitch v-model="layout" @changed="next => trackAnalyticsEvent({ name: 'gallery_view_changed', layout: next, surface: 'customer' })" />
           </div>
           <p v-if="overview.status === 'PUBLISHED' && !selectionLoaded" role="status" class="mb-3 px-1 text-xs text-muted sm:px-0">Đang đồng bộ lựa chọn…</p>
           <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">

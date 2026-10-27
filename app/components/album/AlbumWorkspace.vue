@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onMounted, ref } from 'vue'
 import type { DownloadSettings } from '~~/shared/domain/download-policy'
 import { ALBUM_STATUS_LABELS, effectiveStatus, type AlbumStatus } from '~~/shared/domain/album-status'
@@ -223,7 +224,7 @@ onMounted(() => { void load() })
 
         <div class="mt-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <UiTabs label="Lọc ảnh" :items="filterTabs" :current="filter" class="min-w-0 flex-1" @select="filter = $event" />
-          <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" />
+          <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" @changed="next => trackAnalyticsEvent({ name: 'gallery_view_changed', layout: next, surface: 'studio' })" />
         </div>
 
         <p v-if="canChoose" class="mt-4 text-sm text-pretty text-muted">Bấm vào ảnh để thêm hoặc bỏ khỏi bộ chốt. Ảnh khách đã chọn được đánh dấu sẵn; ghi chú được đóng băng trong phiên bản kết quả.</p>

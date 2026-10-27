@@ -2,6 +2,13 @@
 import { GALLERY_LAYOUTS, type GalleryLayout } from '~/lib/gallery-layout'
 
 const layout = defineModel<GalleryLayout>({ required: true })
+const emit = defineEmits<{ changed: [layout: GalleryLayout] }>()
+
+function chooseLayout(next: GalleryLayout) {
+  if (next === layout.value) return
+  layout.value = next
+  emit('changed', next)
+}
 
 const ICONS: Record<GalleryLayout, string> = {
   justified: 'M3 5h7v6H3zM12 5h9v6h-9zM3 13h11v6H3zM16 13h5v6h-5z',
@@ -22,7 +29,7 @@ const ICONS: Record<GalleryLayout, string> = {
       :aria-label="option.label"
       :title="option.label"
       :aria-pressed="layout === option.value"
-      @click="layout = option.value"
+      @click="chooseLayout(option.value)"
     >
       <svg viewBox="0 0 24 24" class="size-5" fill="currentColor" aria-hidden="true"><path :d="ICONS[option.value]" /></svg>
     </button>

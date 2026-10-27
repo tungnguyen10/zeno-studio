@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import type { AlbumStatus } from '~~/shared/domain/album-status'
@@ -62,6 +63,7 @@ async function request(action: 'publish' | 'share') {
   const copying = copy(pending)
   try {
     link.value = await pending
+    if (action === 'publish') trackAnalyticsEvent({ name: 'album_published', creation_flow: 'studio' })
     localStorage.setItem(storageKey, link.value)
     const ok = await copying
     if (action === 'publish') {

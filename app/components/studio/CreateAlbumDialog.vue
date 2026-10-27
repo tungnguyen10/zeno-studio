@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { ref, watch } from 'vue'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 
@@ -31,6 +32,7 @@ async function submit() {
       method: 'POST',
       body: { title: title.value, folderUrl: folderUrl.value, expiresInDays: days.value, limit: { kind: 'maximum', count: limit.value } },
     })
+    trackAnalyticsEvent({ name: 'album_created', creation_flow: 'studio' })
     created.value = result.album
     emit('changed')
   } catch (cause) { error.value = studioAlbumErrorMessage(cause) }
