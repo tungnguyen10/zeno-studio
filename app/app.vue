@@ -27,4 +27,5 @@ useSeoMeta({
 <template>
   <NuxtRouteAnnouncer />
   <NuxtPage />
+  <AnalyticsConsent />
 </template>

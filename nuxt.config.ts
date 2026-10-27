@@ -43,6 +43,8 @@ export default defineNuxtConfig({
     public: {
       // Absolute origin for canonical, sitemap and structured data; falls back to the request origin.
       siteUrl: '',
+      ga4Enabled: '',
+      ga4MeasurementId: '',
     },
   },
 })
