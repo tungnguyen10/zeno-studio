@@ -8,7 +8,7 @@ afterAll(async () => { await db.close() })
 
 describe('database migrations', () => {
   it('creates the V1 tables with RLS on album data', async () => {
-    for (const filename of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '014_review_delivery.sql', '015_review_policy_lockdown.sql', '016_photo_thumbnails.sql', '017_guest_albums.sql', '018_sort_photos_by_filename.sql', '019_shared_customer_participant.sql', '020_album_archive.sql', '021_album_download.sql', '022_album_download_public_settings.sql', '023_album_download_rate_limit.sql', '024_platform_admins.sql', '025_studio_analytics.sql']) {
+    for (const filename of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '014_review_delivery.sql', '015_review_policy_lockdown.sql', '016_photo_thumbnails.sql', '017_guest_albums.sql', '018_sort_photos_by_filename.sql', '019_shared_customer_participant.sql', '020_album_archive.sql', '021_album_download.sql', '022_album_download_public_settings.sql', '023_album_download_rate_limit.sql', '024_platform_admins.sql', '025_studio_analytics.sql', '026_album_download_default_enabled.sql']) {
       const sql = await readFile(new URL(`../../db/migrations/${filename}`, import.meta.url), 'utf8')
       await db.exec(sql)
     }
@@ -83,7 +83,7 @@ describe('database migrations', () => {
     }
   })
 
-  it('defaults existing album download settings to disabled', async () => {
+  it('defaults album download settings to enabled', async () => {
     const columns = await db.query<{ column_name: string }>(`
       SELECT column_name FROM information_schema.columns
       WHERE table_name = 'album_settings' AND column_name LIKE 'download_%'
@@ -98,7 +98,7 @@ describe('database migrations', () => {
     }>(`SELECT download_enabled, download_allow_single, download_allow_selected,
       download_allow_all, download_available_when FROM album_settings`)
     expect(settings.rows[0]).toMatchObject({
-      download_enabled: false, download_allow_single: true, download_allow_selected: true,
+      download_enabled: true, download_allow_single: true, download_allow_selected: true,
       download_allow_all: false, download_available_when: 'anytime',
     })
   })
