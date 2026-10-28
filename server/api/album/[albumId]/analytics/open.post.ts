@@ -8,11 +8,8 @@ export default defineEventHandler(async event => {
   if (!['customer', 'participant', 'finalizer'].includes(access.scope)) {
     throw createError({ statusCode: 403, statusMessage: 'Không có quyền mở gallery' })
   }
-  if (getCookie(event, 'zeno_analytics_consent') !== 'accepted') {
-    throw createError({ statusCode: 403, statusMessage: 'Chưa đồng ý thống kê lượt xem' })
-  }
   const config = useRuntimeConfig(event).public
-  if (String(config.ga4Enabled) !== 'true' || String(config.studioGalleryAnalyticsEnabled) !== 'true') {
+  if (String(config.studioGalleryAnalyticsEnabled) !== 'true') {
     throw createError({ statusCode: 404, statusMessage: 'Thống kê lượt mở chưa được bật' })
   }
   try {

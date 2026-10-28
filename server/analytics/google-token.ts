@@ -3,9 +3,11 @@ import { createSign } from 'node:crypto'
 type Credentials = { client_email: string; private_key: string }
 let cached: { credentials: string; token: string; expiresAt: number } | undefined
 
-function parseCredentials(raw: string): Credentials {
-  let value: unknown
-  try { value = JSON.parse(raw) } catch { throw new Error('GA4 service account is not configured') }
+function parseCredentials(raw: string | Record<string, unknown>): Credentials {
+  let value: unknown = raw
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw) } catch { throw new Error('GA4 service account is not configured') }
+  }
   if (!value || typeof value !== 'object') throw new Error('GA4 service account is not configured')
   const record = value as Record<string, unknown>
   if (typeof record.client_email !== 'string' || !record.client_email.endsWith('.gserviceaccount.com')
@@ -15,7 +17,7 @@ function parseCredentials(raw: string): Credentials {
   return { client_email: record.client_email, private_key: record.private_key }
 }
 
-export async function requestServiceAccountToken(credentialsJson: string, fetcher: typeof fetch = fetch): Promise<{ token: string; expiresIn: number }> {
+export async function requestServiceAccountToken(credentialsJson: string | Record<string, unknown>, fetcher: typeof fetch = fetch): Promise<{ token: string; expiresIn: number }> {
   const credentials = parseCredentials(credentialsJson)
   const now = Math.floor(Date.now() / 1000)
   const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url')
@@ -48,9 +50,10 @@ export async function requestServiceAccountToken(credentialsJson: string, fetche
   return { token, expiresIn }
 }
 
-export async function getGoogleAccessToken(credentialsJson: string, fetcher: typeof fetch = fetch): Promise<string> {
-  if (cached?.credentials === credentialsJson && cached.expiresAt > Date.now()) return cached.token
+export async function getGoogleAccessToken(credentialsJson: string | Record<string, unknown>, fetcher: typeof fetch = fetch): Promise<string> {
+  const credentialKey = typeof credentialsJson === 'string' ? credentialsJson : JSON.stringify(credentialsJson)
+  if (cached?.credentials === credentialKey && cached.expiresAt > Date.now()) return cached.token
   const result = await requestServiceAccountToken(credentialsJson, fetcher)
-  cached = { credentials: credentialsJson, token: result.token, expiresAt: Date.now() + (result.expiresIn - 60) * 1000 }
+  cached = { credentials: credentialKey, token: result.token, expiresAt: Date.now() + (result.expiresIn - 60) * 1000 }
   return result.token
 }

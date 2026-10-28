@@ -33,7 +33,7 @@ export function createSiteReportCache(
 export interface SiteReportConfig {
   propertyId: string
   propertyTimezone: string
-  serviceAccountJson: string
+  serviceAccountJson: string | Record<string, unknown>
 }
 
 const caches = new Map<string, ReturnType<typeof createSiteReportCache>>()

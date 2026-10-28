@@ -1,8 +1,6 @@
-import { watch } from 'vue'
 import { buildAnalyticsEvent, safePage, safeReferrer } from '~/lib/analytics-model'
 import { registerAnalyticsSender } from '~/lib/analytics-events'
-import { isAnalyticsEnabled } from '~/lib/analytics-consent'
-import { useAnalyticsConsent } from '~/composables/useAnalyticsConsent'
+import { isAnalyticsEnabled } from '~/lib/analytics-config'
 
 type AnalyticsWindow = Window & {
   dataLayer?: IArguments[]
@@ -13,7 +11,6 @@ export default defineNuxtPlugin(nuxtApp => {
   const config = useRuntimeConfig().public
   if (!isAnalyticsEnabled(config.ga4Enabled, config.ga4MeasurementId)) return
 
-  const consent = useAnalyticsConsent()
   const router = useRouter()
   const gaWindow = window as AnalyticsWindow
   let active = false
@@ -21,7 +18,7 @@ export default defineNuxtPlugin(nuxtApp => {
   let previousSafeLocation: string | undefined
 
   function pageView(path: string): void {
-    if (!active || consent.choice.value !== 'accepted' || path === lastPath) return
+    if (!active || path === lastPath) return
     const page = safePage(path, location.origin)
     const referrer = previousSafeLocation ?? safeReferrer(document.referrer, location.origin)
     const metadata = {
@@ -44,8 +41,10 @@ export default defineNuxtPlugin(nuxtApp => {
     active = true
     gaWindow.dataLayer ??= []
     gaWindow.gtag ??= function () { gaWindow.dataLayer!.push(arguments) }
-    gaWindow.gtag('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' })
-    gaWindow.gtag('consent', 'update', { analytics_storage: 'granted' })
+    gaWindow.gtag('consent', 'default', {
+      analytics_storage: 'granted', ad_storage: 'denied',
+      ad_user_data: 'denied', ad_personalization: 'denied',
+    })
     gaWindow.gtag('js', new Date())
     const page = safePage(router.currentRoute.value.path, location.origin)
     // Queue safe defaults before the remote tag can execute.
@@ -61,7 +60,7 @@ export default defineNuxtPlugin(nuxtApp => {
     document.head.append(script)
 
     registerAnalyticsSender(event => {
-      if (!active || consent.choice.value !== 'accepted') return
+      if (!active) return
       const safe = safePage(router.currentRoute.value.path, location.origin)
       const built = buildAnalyticsEvent(event)
       gaWindow.gtag?.('event', built.name, {
@@ -76,18 +75,5 @@ export default defineNuxtPlugin(nuxtApp => {
   router.afterEach((to, _from, failure) => {
     if (!failure) pageView(to.path)
   })
-  nuxtApp.hook('app:mounted', () => {
-    watch([consent.ready, consent.choice], ([ready, choice]) => {
-      if (!ready) return
-      if (choice === 'accepted') start()
-      else {
-        registerAnalyticsSender(null)
-        if (active) {
-          active = false
-          gaWindow.gtag?.('consent', 'update', { analytics_storage: 'denied' })
-          location.reload()
-        }
-      }
-    }, { immediate: true })
-  })
+  nuxtApp.hook('app:mounted', start)
 })

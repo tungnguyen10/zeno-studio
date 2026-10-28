@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { isAnalyticsEnabled } from '~/lib/analytics-consent'
 import { pageContainerClass, type PageWidth } from '~/lib/page-container'
 
 const props = withDefaults(defineProps<{ width?: PageWidth }>(), { width: '7xl' })
 const containerClass = pageContainerClass[props.width]
-const config = useRuntimeConfig().public
-const { openSettings } = useAnalyticsConsent()
-const analyticsEnabled = computed(() => isAnalyticsEnabled(config.ga4Enabled, config.ga4MeasurementId))
 const linkClass = 'focus-ring inline-flex min-h-11 items-center rounded hover:text-brand'
 </script>
 
@@ -33,7 +29,6 @@ const linkClass = 'focus-ring inline-flex min-h-11 items-center rounded hover:te
       <div class="flex flex-col gap-1 border-t border-line pt-3 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <p class="py-2">© 2026 Công ty TNHH Zeno Corporation · MST 0319455594</p>
         <ul class="flex flex-wrap gap-x-5">
-          <li v-if="analyticsEnabled"><button type="button" :class="linkClass" @click="openSettings">Cài đặt phân tích</button></li>
           <li><a href="https://www.zenocorp.vn/privacy" :class="linkClass">Bảo mật</a></li>
           <li><a href="https://www.zenocorp.vn/terms" :class="linkClass">Điều khoản</a></li>
         </ul>

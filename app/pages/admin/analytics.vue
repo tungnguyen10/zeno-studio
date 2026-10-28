@@ -12,8 +12,8 @@ const error = shallowRef('')
 let requestNumber = 0
 
 const metrics = computed(() => report.value ? [
-  { label: 'Người dùng hoạt động', value: report.value.activeUsers, hint: 'Chỉ những phiên đã đồng ý phân tích' },
-  { label: 'Lượt xem trang', value: report.value.pageViews, hint: 'Từ GA4, không gồm người từ chối' },
+  { label: 'Người dùng hoạt động', value: report.value.activeUsers, hint: 'Theo báo cáo GA4 trong khoảng ngày đã chọn' },
+  { label: 'Lượt xem trang', value: report.value.pageViews, hint: 'Từ GA4; có thể thiếu lượt nếu trình duyệt chặn tag' },
 ] : [])
 const usersByDay = computed(() => report.value?.trend.map(item => ({ date: item.date, value: item.activeUsers })) ?? [])
 const viewsByDay = computed(() => report.value?.trend.map(item => ({ date: item.date, value: item.pageViews })) ?? [])
@@ -57,7 +57,7 @@ watch(days, () => { if (import.meta.client) void load() })
   <div class="min-h-dvh bg-canvas text-ink">
     <StudioHeader />
     <main class="mx-auto max-w-6xl space-y-5 px-4 pb-20 pt-5 sm:px-6 sm:pt-8 lg:px-8">
-      <UiPageHeader title="Thống kê toàn Zeno Studio" description="Dữ liệu GA4 của các phiên đã đồng ý phân tích." />
+      <UiPageHeader title="Thống kê toàn Zeno Studio" description="Lượt truy cập và sự kiện workflow từ GA4." />
       <AnalyticsRangePicker v-model="days" />
 
       <p v-if="loading" role="status" class="rounded-2xl border border-line bg-white p-5 text-sm text-muted">Đang tải báo cáo GA4…</p>

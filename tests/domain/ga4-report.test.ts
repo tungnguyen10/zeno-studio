@@ -39,6 +39,7 @@ describe('Google Analytics Data API', () => {
       return new Response(JSON.stringify({ access_token: 'test-access-token', expires_in: 3600 }), { status: 200 })
     }
     expect(await requestServiceAccountToken(credentials, fetcher as typeof fetch)).toEqual({ token: 'test-access-token', expiresIn: 3600 })
+    expect(await requestServiceAccountToken(JSON.parse(credentials), fetcher as typeof fetch)).toEqual({ token: 'test-access-token', expiresIn: 3600 })
   })
 
   it('normalizes fixed site reports and excludes unsafe page paths', async () => {

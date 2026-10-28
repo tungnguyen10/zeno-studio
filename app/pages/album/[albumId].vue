@@ -18,7 +18,6 @@ type Photo = { id: string; sourceFileId: string; filename: string; width: number
 type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
 type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
 const route = useRoute()
-const analyticsConsent = useAnalyticsConsent()
 const analyticsConfig = useRuntimeConfig().public
 const galleryReady = ref(false)
 let reportedOpen = false
@@ -475,10 +474,10 @@ onMounted(() => {
   window.addEventListener('keydown', handleFocusKey)
   void enter()
 })
-watch([galleryReady, analyticsConsent.choice], () => {
-  if (!galleryReady.value || analyticsConsent.choice.value !== 'accepted' || reportedOpen) return
+watch(galleryReady, ready => {
+  if (!ready || reportedOpen) return
   reportedOpen = true
-  void reportGalleryOpen(albumId, analyticsConfig.ga4Enabled, analyticsConfig.ga4MeasurementId, analyticsConfig.studioGalleryAnalyticsEnabled)
+  void reportGalleryOpen(albumId, analyticsConfig.studioGalleryAnalyticsEnabled)
     .catch(() => { status.value = 'Không ghi được lượt mở album vào thống kê studio.' })
 })
 onBeforeUnmount(() => {

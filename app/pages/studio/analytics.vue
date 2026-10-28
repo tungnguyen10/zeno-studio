@@ -20,7 +20,7 @@ const metrics = computed(() => report.value ? [
   { label: 'Album đã tạo', value: report.value.albumsCreated, hint: 'Toàn bộ thao tác hợp lệ trong kỳ' },
   { label: 'Album xuất bản', value: report.value.albumsPublished },
   { label: 'Lần chốt lựa chọn', value: report.value.selectionFinalized, hint: `${format.format(report.value.albumsFinalized)} album còn lưu có lần chốt trong kỳ` },
-  { label: 'Lượt mở gallery', value: report.value.galleryOpens, hint: galleryTrackingEnabled ? 'Chỉ tính lượt đã đồng ý phân tích; không phải số người' : 'Tạm tắt ghi nhận lượt mở; số cũ vẫn hiển thị' },
+  { label: 'Lượt mở gallery', value: report.value.galleryOpens, hint: galleryTrackingEnabled ? 'Lượt mở hợp lệ sau khi gallery tải; không phải số người' : 'Tạm tắt ghi nhận lượt mở; số cũ vẫn hiển thị' },
   { label: 'Lần đối chiếu file', value: report.value.fileMatchRuns, hint: 'Kết quả do công cụ trên máy báo cáo' },
   { label: 'File khớp / thiếu / mơ hồ', value: report.value.matchedCount, hint: `${format.format(report.value.missingCount)} thiếu · ${format.format(report.value.ambiguousCount)} mơ hồ` },
 ] : [])
@@ -62,7 +62,7 @@ watch([days, () => store.studio?.id, preferredStudio], () => {
   <div class="min-h-dvh bg-canvas text-ink">
     <StudioHeader />
     <main class="mx-auto max-w-6xl space-y-5 px-4 pb-20 pt-5 sm:px-6 sm:pt-8 lg:px-8">
-      <UiPageHeader title="Thống kê studio" description="Tiến độ công việc đầy đủ và lượt mở gallery đã đồng ý phân tích." />
+      <UiPageHeader title="Thống kê studio" description="Tiến độ công việc và lượt mở gallery của studio." />
       <p v-if="!store.sessionChecked || store.studiosLoading" role="status" class="text-sm text-muted">Đang tải studio…</p>
       <div v-else-if="!store.user" class="rounded-2xl border border-line bg-white p-5 text-sm">
         <p>Đăng nhập để xem thống kê studio.</p>
@@ -80,7 +80,7 @@ watch([days, () => store.studio?.id, preferredStudio], () => {
           <button type="button" class="focus-ring mt-3 min-h-10 rounded-full bg-brand px-4 text-sm font-semibold text-white" @click="load">Thử lại</button>
         </div>
         <template v-else-if="report">
-          <p class="text-xs text-muted">Cập nhật {{ asOfLabel }} · Múi giờ {{ report.timezone }} · Các thao tác workflow không phụ thuộc đồng ý GA4.</p>
+          <p class="text-xs text-muted">Cập nhật {{ asOfLabel }} · Múi giờ {{ report.timezone }} · Workflow được đếm từ dữ liệu studio.</p>
           <AnalyticsMetricCards :items="metrics" />
           <div class="grid gap-3 lg:grid-cols-2">
             <AnalyticsDailyBars title="Thao tác workflow theo ngày" :points="workflowTrend" unit="thao tác" />
@@ -106,7 +106,7 @@ watch([days, () => store.studio?.id, preferredStudio], () => {
                 </tr></tbody>
               </table>
             </div>
-            <p class="mt-3 text-xs text-muted">Tối đa 50 album còn lưu. Lượt mở chỉ tính người đã đồng ý và trong khoảng ngày đã chọn.</p>
+            <p class="mt-3 text-xs text-muted">Tối đa 50 album còn lưu. Lượt mở chỉ tính gallery tải thành công trong khoảng ngày đã chọn; dữ liệu trước khi bật ghi nhận không thể khôi phục.</p>
           </section>
         </template>
       </template>
