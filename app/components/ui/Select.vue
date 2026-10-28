@@ -23,6 +23,23 @@ const active = ref(0)
 const listId = useId()
 let typed = ''
 let typedAt = 0
+const listStyle = ref<Record<string, string>>({})
+
+// Fixed coords escape ancestors with overflow (e.g. dialogs, scroll panels) that would clip an absolute list.
+function placeList() {
+  if (!trigger.value) return
+  const rect = trigger.value.getBoundingClientRect()
+  const gap = 4
+  const below = window.innerHeight - rect.bottom - gap - 8
+  const above = rect.top - gap - 8
+  const flip = below < 160 && above > below
+  listStyle.value = {
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    maxHeight: `${Math.max(120, Math.min(256, flip ? above : below))}px`,
+    ...(flip ? { bottom: `${window.innerHeight - rect.top + gap}px` } : { top: `${rect.bottom + gap}px` }),
+  }
+}
 
 const selectedIndex = computed(() => props.options.findIndex(option => option.value === model.value))
 const selected = computed(() => props.options[selectedIndex.value])
@@ -34,7 +51,10 @@ function setOpen(value: boolean) {
   open.value = value
   if (value) {
     active.value = selectedIndex.value >= 0 && !props.options[selectedIndex.value]?.disabled ? selectedIndex.value : enabled.value[0]!
-    void nextTick(() => document.getElementById(activeId.value ?? '')?.scrollIntoView({ block: 'nearest' }))
+    void nextTick(() => {
+      placeList()
+      document.getElementById(activeId.value ?? '')?.scrollIntoView({ block: 'nearest' })
+    })
   }
 }
 
@@ -95,14 +115,20 @@ watch(open, value => {
   if (value) {
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('focusin', onFocusIn)
+    window.addEventListener('resize', placeList)
+    window.addEventListener('scroll', placeList, true)
   } else {
     document.removeEventListener('pointerdown', onPointerDown)
     document.removeEventListener('focusin', onFocusIn)
+    window.removeEventListener('resize', placeList)
+    window.removeEventListener('scroll', placeList, true)
   }
 })
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onPointerDown)
   document.removeEventListener('focusin', onFocusIn)
+  window.removeEventListener('resize', placeList)
+  window.removeEventListener('scroll', placeList, true)
 })
 </script>
 
@@ -128,7 +154,7 @@ onBeforeUnmount(() => {
       <span class="min-w-0 truncate">{{ selected?.label ?? 'Chọn…' }}</span>
       <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0 text-muted transition-transform motion-reduce:transition-none" :class="open && 'rotate-180'"><path d="M5.2 7.2a.75.75 0 0 1 1.06 0L10 10.94l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L5.2 8.26a.75.75 0 0 1 0-1.06Z" /></svg>
     </button>
-    <ul v-if="open" :id="listId" role="listbox" :aria-label="label" class="absolute inset-x-0 top-full z-50 mt-1 max-h-64 min-w-full overflow-y-auto overscroll-contain rounded-xl border border-line-strong bg-white p-1 shadow-xl">
+    <ul v-if="open" :id="listId" role="listbox" :aria-label="label" :style="listStyle" class="fixed z-50 overflow-y-auto overscroll-contain rounded-xl border border-line-strong bg-white p-1 shadow-xl">
       <li
         v-for="(option, index) in options"
         :id="`${listId}-${index}`"

@@ -9,6 +9,21 @@ const root = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLButtonElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 const panelId = useId()
+const panelStyle = ref<Record<string, string>>({})
+
+// Fixed coords escape ancestors with overflow (e.g. the album table wrapper) that would clip an absolute panel.
+function placePanel() {
+  if (!window.matchMedia('(min-width: 640px)').matches || !trigger.value || !panel.value) { panelStyle.value = {}; return }
+  const rect = trigger.value.getBoundingClientRect()
+  const height = panel.value.offsetHeight
+  const below = rect.bottom + 8 + height <= window.innerHeight || rect.top - 8 - height < 0
+  panelStyle.value = {
+    right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+    top: `${below ? rect.bottom + 8 : rect.top - 8 - height}px`,
+  }
+}
+
+function onViewportChange() { close(false) }
 
 function itemButtons() {
   return Array.from(panel.value?.querySelectorAll<HTMLButtonElement>('button[data-menu-item]') ?? [])
@@ -46,11 +61,22 @@ function onFocusOut(event: FocusEvent) {
 watch(open, async value => {
   if (value) {
     document.addEventListener('pointerdown', onDocumentPointer)
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
     await nextTick()
-    itemButtons()[0]?.focus()
-  } else document.removeEventListener('pointerdown', onDocumentPointer)
+    placePanel()
+    itemButtons()[0]?.focus({ preventScroll: true })
+  } else {
+    document.removeEventListener('pointerdown', onDocumentPointer)
+    window.removeEventListener('resize', onViewportChange)
+    window.removeEventListener('scroll', onViewportChange, true)
+  }
 })
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointer))
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointer)
+  window.removeEventListener('resize', onViewportChange)
+  window.removeEventListener('scroll', onViewportChange, true)
+})
 </script>
 
 <template>
@@ -85,7 +111,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       v-show="open"
       :id="panelId"
       ref="panel"
-      class="fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 overscroll-contain rounded-2xl border border-line bg-white p-2 shadow-xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:mt-2 sm:min-w-48"
+      :style="panelStyle"
+      class="fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 overscroll-contain rounded-2xl border border-line bg-white p-2 shadow-xl sm:inset-x-auto sm:bottom-auto sm:min-w-48"
     >
       <li v-for="item in items" :key="item.key">
         <button type="button" data-menu-item class="focus-ring flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm font-medium text-ink hover:bg-tint" @click="choose(item.key)">{{ item.label }}</button>
