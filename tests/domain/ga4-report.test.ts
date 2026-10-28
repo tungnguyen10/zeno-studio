@@ -73,4 +73,18 @@ describe('Google Analytics Data API', () => {
     const broken = (async () => response([], ['activeUsers', 'screenPageViews'], [[[], ['NaN', '1']]])) as typeof fetch
     await expect(fetchGa4SiteReport('123', 'Asia/Ho_Chi_Minh', 30, 'token', broken)).rejects.toBeInstanceOf(Ga4UpstreamError)
   })
+
+  it('treats a valid headerless empty GA4 report as zero activity', async () => {
+    const fetcher = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      if (!body.dimensions) {
+        return new Response(JSON.stringify({ kind: 'analyticsData#runReport', metadata: { timeZone: 'Asia/Ho_Chi_Minh' } }))
+      }
+      return response([body.dimensions[0].name], body.metrics.map((metric: { name: string }) => metric.name), [])
+    }) as typeof fetch
+    const report = await fetchGa4SiteReport('123', 'Asia/Ho_Chi_Minh', 7, 'token', fetcher)
+    expect(report).toMatchObject({ activeUsers: 0, pageViews: 0, trend: [], pages: [] })
+    expect(report.events).toHaveLength(10)
+    expect(report.events.every(event => event.count === 0)).toBe(true)
+  })
 })

@@ -22,6 +22,7 @@ export interface SiteReport {
 }
 
 interface Ga4ReportResponse {
+  kind?: unknown
   dimensionHeaders?: Array<{ name?: unknown }>
   metricHeaders?: Array<{ name?: unknown }>
   rows?: Array<{ dimensionValues?: Array<{ value?: unknown }>; metricValues?: Array<{ value?: unknown }> }>
@@ -35,6 +36,8 @@ function integer(value: unknown): number {
 }
 
 function rows(body: Ga4ReportResponse, dimensions: string[], metrics: string[]): Array<{ dimensions: string[]; metrics: number[] }> {
+  if (body.kind === 'analyticsData#runReport' && body.dimensionHeaders === undefined
+    && body.metricHeaders === undefined && body.rows === undefined) return []
   if (JSON.stringify(body.dimensionHeaders?.map(item => item.name) ?? []) !== JSON.stringify(dimensions)
     || JSON.stringify(body.metricHeaders?.map(item => item.name) ?? []) !== JSON.stringify(metrics)
     || (body.rows !== undefined && !Array.isArray(body.rows))) throw new Ga4UpstreamError(502)
