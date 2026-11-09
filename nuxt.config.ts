@@ -5,7 +5,8 @@ export default defineNuxtConfig({
   modules: ['@pinia/nuxt'],
   nitro: {
     vercel: {
-      functions: { runtime: 'nodejs24.x' },
+      // Same region as the Neon database (aws-ap-southeast-1) and closest to Vietnamese users.
+      functions: { runtime: 'nodejs24.x', regions: ['sin1'] },
     },
   },
   routeRules: {

@@ -30,7 +30,7 @@ const {
   closeSheet: closeDownloadSheet, prepare: prepareDownload,
   shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
   completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
-  singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview,
+  singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview, singleStatus,
 } = useAlbumDownload(root, () => refreshAlbumState())
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
@@ -595,9 +595,10 @@ onBeforeUnmount(() => {
           <p class="shrink-0 text-sm font-semibold tabular-nums text-white/90">{{ focusIndex + 1 }} / {{ focusTotal }}</p>
           <h2 class="min-w-0 flex-1 truncate text-sm text-white/70" :title="focusPhoto.filename">{{ focusPhoto.filename }}</h2>
           <label v-if="downloadMode === 'basket' && canBasket" class="grid size-11 shrink-0 place-items-center rounded-full bg-white/10" :title="`Tải ${focusPhoto.filename}`"><input type="checkbox" class="size-5 accent-brand" :aria-label="`Tải ${focusPhoto.filename}`" :checked="downloadBasket.has(focusPhoto.id)" @change="toggleBasket(focusPhoto.id)"></label>
-          <button v-if="overview?.download?.canSingle" type="button" :aria-label="`Tải ảnh gốc ${focusPhoto.filename}`" :aria-busy="singleSaving" :disabled="singleSaving" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait" title="Tải ảnh gốc" @click="saveSingle(focusPhoto.id)">
-            <span v-if="singleSaving" aria-hidden="true" class="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white motion-reduce:animate-none" />
-            <span v-else aria-hidden="true">↓</span>
+          <button v-if="overview?.download?.canSingle" type="button" :aria-label="`Tải ảnh gốc ${focusPhoto.filename}`" :aria-busy="singleSaving || singleStatus === 'loading'" :disabled="singleSaving" class="relative grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait" :title="singleStatus === 'ready' ? 'Ảnh gốc đã sẵn sàng' : 'Tải ảnh gốc'" @click="saveSingle(focusPhoto.id)">
+            <span v-if="singleSaving || singleStatus === 'loading'" aria-hidden="true" class="absolute inset-1.5 animate-spin rounded-full border-2 border-white/15 border-t-white/70 motion-reduce:animate-none" />
+            <span aria-hidden="true">↓</span>
+            <span v-if="singleStatus === 'ready'" aria-hidden="true" class="absolute right-1.5 top-1.5 size-2 rounded-full bg-green-400" />
           </button>
           <button ref="focusCloseButton" type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Đóng ảnh" @click="closePhoto">✕</button>
         </div>

@@ -7,7 +7,7 @@ export type ClientDownloadPlan = { kind: DownloadMode; cycle: number; totalFiles
   parts: ClientDownloadPart[]; unavailable: Array<{ photoId: string; reason: string }> }
 
 const maxShareBytes = 48 * 1024 * 1024
-const prefetchDelayMs = 800
+const prefetchDelayMs = 300
 class TooLargeError extends Error {}
 type SaveHandle = { createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> }> }
 
@@ -332,5 +332,6 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
   return { basket, mode, sheetOpen, plan, busy, error, toggleBasket, clearBasket, setMode, openSheet, closeSheet, prepare,
     preparedFiles, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
     completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
-    singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview }
+    singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview,
+    singleStatus: computed(() => single.value?.status ?? null) }
 }
