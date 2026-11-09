@@ -13,6 +13,7 @@ import PhotoTile from '~/components/album/PhotoTile.vue'
 import SelectionIsland from '~/components/album/SelectionIsland.vue'
 import DownloadSheet from '~/components/album/DownloadSheet.vue'
 import { useAlbumDownload } from '~/composables/useAlbumDownload'
+import { useOriginalCache } from '~/composables/useOriginalCache'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number; selected: boolean }
 type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
@@ -23,6 +24,7 @@ const galleryReady = ref(false)
 let reportedOpen = false
 const albumId = String(route.params.albumId)
 const root = `/api/album/${albumId}`
+const originals = useOriginalCache(root)
 const {
   basket: downloadBasket, mode: downloadMode, sheetOpen: downloadSheetOpen,
   plan: downloadPlan, busy: downloadBusy, error: downloadError,
@@ -32,7 +34,7 @@ const {
   completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
   singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview, singleStatus,
   photosMode, batches: saveBatches, batchState, saveBatch, retryBatch,
-} = useAlbumDownload(root, () => refreshAlbumState())
+} = useAlbumDownload(root, () => refreshAlbumState(), originals.getFile)
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
 const selectionVersion = ref(0)
@@ -218,6 +220,7 @@ function toggle(photo: Photo) {
 function showDownloadSheet() {
   if (downloadMode.value === 'selected' && !overview.value?.download?.selectedCount) setDownloadMode('basket')
   openDownloadSheet()
+  if (downloadMode.value === 'selected' && !downloadPlan.value) void prepareCurrentDownload()
 }
 
 async function prepareCurrentDownload() {
@@ -432,6 +435,16 @@ watch(stageEl, element => {
 
 watch(() => !!focusPhoto.value, open => { if (import.meta.client) document.documentElement.style.overflow = open ? 'hidden' : '' })
 watch(focusSelected, selected => { if (!selected) noteOpen.value = false })
+watch([selectedIds, selectionLoaded, () => overview.value?.download, () => overview.value?.status], () => {
+  const album = overview.value
+  if (!album || (album.status === 'PUBLISHED' && !selectionLoaded.value)) return
+  const count = album.status === 'PUBLISHED' ? selectedIds.value.length : album.download?.selectedCount ?? 0
+  originals.schedule({
+    allowed: !!album.download?.canSelected && count > 0,
+    key: `${album.status}:${album.currentCycle}:${count}:${selectedIds.value.join(',')}`,
+    beforePlan: () => selectionQueue,
+  })
+})
 
 watch([() => focusPhoto.value?.id ?? null, () => !!overview.value?.download?.canSingle], ([id, allowed]) => focusSingle(id, allowed))
 

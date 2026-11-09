@@ -11,7 +11,8 @@ export type SaveBatchState = { status: 'loading' | 'ready' | 'saved' | 'error'; 
 
 const maxShareBytes = 48 * 1024 * 1024
 const batchMaxFiles = 12
-const batchesAhead = 2
+// One prepared batch in RAM keeps phones cool; the rest waits on disk in Cache Storage.
+const batchesAhead = 1
 const prefetchDelayMs = 300
 class TooLargeError extends Error {}
 type SaveHandle = { createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> }> }
@@ -25,7 +26,8 @@ function responseFilename(response: Response): string {
   return header.match(/filename="([^"]+)"/)?.[1]?.split(/[/\\]/).at(-1) || 'image'
 }
 
-export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Promise<void>) {
+export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Promise<void>,
+  cachedFile: (photoId: string) => Promise<File | null> = async () => null) {
   const basket = ref<Set<string>>(new Set())
   const mode = ref<DownloadMode>('selected')
   const sheetOpen = ref(false)
@@ -181,8 +183,8 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     const controller = new AbortController()
     singleController = controller
     single.value = { photoId, status: 'loading' }
-    const task = fetch(`${apiRoot}/photos/${photoId}/download`, { signal: controller.signal })
-      .then(response => boundedFile(response, controller.signal, maxShareBytes))
+    const task = cachedFile(photoId).then(async cached => cached ?? boundedFile(
+      await fetch(`${apiRoot}/photos/${photoId}/download`, { signal: controller.signal }), controller.signal, maxShareBytes))
     singleTask = task
     task.then(file => { if (singleTask === task) single.value = { photoId, status: 'ready', file } },
       () => { if (singleTask === task) single.value = { photoId, status: 'error' } })
@@ -327,9 +329,13 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
         try {
           const files: File[] = []
           for (const item of next.items) {
-            const response = await fetch(`${apiRoot}/download/file`, { method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ ticket: item.ticket }), signal: controller.signal })
-            files.push(await boundedFile(response, controller.signal, Math.max(maxShareBytes, item.sizeBytes)))
+            const cached = await cachedFile(item.photoId)
+            if (cached) files.push(cached)
+            else {
+              const response = await fetch(`${apiRoot}/download/file`, { method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ ticket: item.ticket }), signal: controller.signal })
+              files.push(await boundedFile(response, controller.signal, Math.max(maxShareBytes, item.sizeBytes)))
+            }
             if (controller.signal.aborted) return
             setBatch(next.index, { status: 'loading', loaded: files.length })
           }

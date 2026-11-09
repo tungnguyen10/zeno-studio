@@ -189,6 +189,47 @@ test('iOS saves many selected photos to Photos in batches of 12 and keeps ZIP as
   expect(zipForms).toEqual(['ticket=zip-signed'])
 })
 
+test('selected originals are prefetched to disk cache so saving needs no new download', async ({ page }) => {
+  await stubDevice(page, iosUserAgent)
+  const ids = ['44444444-4444-4444-8444-000000000001', '44444444-4444-4444-8444-000000000002']
+  const fileRequests: string[] = []
+  await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }))
+  await page.route(`**/api/album/${albumId}/**`, route => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    if (path.endsWith('/access')) return json({ album: {
+      id: albumId, title: 'Album tải sẵn', status: 'FINALIZED', currentCycle: 1, expiresAt: '2030-01-01T00:00:00Z', joined: true, canJoin: false,
+      settings: { limitKind: 'unlimited', limitMin: null, limitMax: null },
+      download: { canSingle: true, canSelected: true, canAll: false, reason: null, selectedSource: 'snapshot', selectedCount: 2 },
+    } })
+    if (path.endsWith('/photos')) return json({ items: [{ id: photoId, sourceFileId: 'drive-download', filename: 'A.jpg', width: 800, height: 1000, status: 'READY', sortOrder: 0, selected: true }], nextCursor: null, total: 1, selectedCount: 1 })
+    if (path.endsWith('/download/plan')) return json({ kind: 'selected', cycle: 1, totalFiles: 2, totalBytes: 6, unavailable: [], parts: [{
+      index: 0, format: 'zip', filename: 'album-001.zip', count: 2, byteLength: 6, photoIds: ids, ticket: 'zip-signed',
+      fileTickets: ids.map((id, index) => ({ photoId: id, ticket: `cached-${index + 1}`, sizeBytes: 3 })),
+    }] })
+    if (path.endsWith('/download/file')) {
+      const ticket = (request.postDataJSON() as { ticket: string }).ticket
+      fileRequests.push(ticket)
+      return route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'content-disposition': `attachment; filename="${ticket}.jpg"` }, body: Buffer.from([7, 8, 9]) })
+    }
+    return route.continue()
+  })
+  await page.goto(`/album/${albumId}`)
+  await expect.poll(() => fileRequests, { timeout: 15_000 }).toEqual(['cached-1', 'cached-2'])
+  await expect.poll(() => page.evaluate(async () => {
+    const names = await caches.keys()
+    const cache = await caches.open(names.find(name => name.startsWith('zeno-originals-v1:'))!)
+    return (await cache.keys()).length
+  })).toBe(2)
+
+  await page.getByRole('button', { name: 'Tải xuống' }).click()
+  await page.getByRole('button', { name: 'Lưu 2 ảnh vào Ảnh' }).click()
+  await expect.poll(() => sharedFiles(page)).toEqual([{ name: 'cached-1.jpg', bytes: [7, 8, 9] }])
+  expect(await page.evaluate(() => (window as unknown as { __shared: File[][] }).__shared[0]!.map(file => file.name))).toEqual(['cached-1.jpg', 'cached-2.jpg'])
+  expect(fileRequests).toEqual(['cached-1', 'cached-2'])
+})
+
 test('download basket stays independent of saved hearts and shows a bounded plan', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const requests: unknown[] = []
@@ -268,7 +309,7 @@ test('selected plan waits until a pending heart save finishes', async ({ page })
   await page.goto(`/album/${albumId}`)
   await page.getByRole('button', { name: 'Bỏ chọn A.jpg' }).click()
   await page.getByRole('button', { name: 'Tải xuống' }).click()
-  await page.getByRole('button', { name: 'Chuẩn bị tải 1 ảnh' }).click()
+  await expect(page.getByRole('button', { name: 'Đang lập kế hoạch…' })).toBeDisabled()
   expect(planCount).toBe(0)
   releaseSave()
   await expect.poll(() => planCount).toBe(1)
