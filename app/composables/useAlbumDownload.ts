@@ -1,12 +1,17 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 
 export type DownloadMode = 'selected' | 'basket' | 'all'
+export type FileTicket = { photoId: string; ticket: string; sizeBytes: number }
 export type ClientDownloadPart = { index: number; format: 'file' | 'zip'; filename: string; count: number;
-  byteLength: number; photoIds: string[]; ticket: string; fileTickets: Array<{ photoId: string; ticket: string }> }
+  byteLength: number; photoIds: string[]; ticket: string; fileTickets: FileTicket[] }
 export type ClientDownloadPlan = { kind: DownloadMode; cycle: number; totalFiles: number; totalBytes: number;
   parts: ClientDownloadPart[]; unavailable: Array<{ photoId: string; reason: string }> }
+export type SaveBatch = { index: number; start: number; items: FileTicket[]; bytes: number }
+export type SaveBatchState = { status: 'loading' | 'ready' | 'saved' | 'error'; loaded: number; message?: string }
 
 const maxShareBytes = 48 * 1024 * 1024
+const batchMaxFiles = 12
+const batchesAhead = 2
 const prefetchDelayMs = 300
 class TooLargeError extends Error {}
 type SaveHandle = { createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> }> }
@@ -42,7 +47,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     plan.value.totalBytes <= maxShareBytes &&
     plan.value.parts.reduce((sum, part) => sum + part.fileTickets.length, 0) === plan.value.totalFiles)
 
-  function clearPrepared() { preparedFiles.value = []; shareReady.value = false; shareStatus.value = '' }
+  function clearPrepared() { preparedFiles.value = []; shareReady.value = false; shareStatus.value = ''; resetBatches() }
   function invalidateRights() {
     clearBasket()
     clearPrepared()
@@ -103,6 +108,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
           ? { kind: 'basket', photoIds: [...basket.value] }
           : { kind: mode.value },
       })
+      if (photosMode.value) void pumpBatches()
     } catch (cause) {
       if ((cause as { statusCode?: number } | null)?.statusCode === 403) invalidateRights()
       error.value = cause instanceof Error ? cause.message : 'Không lập được kế hoạch tải ảnh'
@@ -139,7 +145,10 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     return /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   }
   function canShareFile(file: File): boolean {
-    try { return !!navigator.share && !!navigator.canShare?.({ files: [file] }) }
+    return canShareFiles([file])
+  }
+  function canShareFiles(files: File[]): boolean {
+    try { return !!navigator.share && !!navigator.canShare?.({ files }) }
     catch { return false }
   }
 
@@ -260,10 +269,10 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     } catch { transferMessage.value = 'Không mở được bảng chia sẻ. Hãy tải file gốc hoặc ZIP.'; return false }
   }
 
-  function submitDirectFile(ticket: string) {
+  function submitDirectFile(ticket: string, kind: 'file' | 'zip' = 'file') {
     const form = document.createElement('form')
     form.method = 'POST'
-    form.action = `${apiRoot}/download/file`
+    form.action = `${apiRoot}/download/${kind}`
     form.style.display = 'none'
     const input = document.createElement('input')
     input.name = 'ticket'
@@ -272,13 +281,96 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     document.body.append(form)
     form.submit()
     form.remove()
-    transferMessage.value = 'Trình duyệt đang xử lý ảnh gốc. Nếu chưa thấy file, hãy thử lại phần này.'
+    transferMessage.value = kind === 'zip' && isIOS()
+      ? 'Safari đang tải ZIP vào app Tệp (Downloads). Muốn vào Ảnh, dùng nút “Lưu vào Ảnh” ở trên.'
+      : 'Trình duyệt đang xử lý ảnh gốc. Nếu chưa thấy file, hãy thử lại phần này.'
+  }
+
+  // iOS: originals are fetched in batches ahead of time so each "Lưu vào Ảnh" tap can open the share sheet directly.
+  const photosMode = computed(() => !!plan.value && import.meta.client && isIOS() && !!navigator.share)
+  const batches = computed<SaveBatch[]>(() => {
+    const items = plan.value?.parts.flatMap(part => part.fileTickets) ?? []
+    if (!plan.value || items.length !== plan.value.totalFiles) return []
+    const result: SaveBatch[] = []
+    let start = 0
+    for (const item of items) {
+      const last = result.at(-1)
+      if (last && last.items.length < batchMaxFiles && last.bytes + item.sizeBytes <= maxShareBytes) {
+        last.items.push(item)
+        last.bytes += item.sizeBytes
+      } else result.push({ index: result.length, start, items: [item], bytes: item.sizeBytes })
+      start++
+    }
+    return result
+  })
+  const batchState = ref<Record<number, SaveBatchState>>({})
+  const batchFiles = new Map<number, File[]>()
+  let batchController: AbortController | null = null
+
+  function setBatch(index: number, state: SaveBatchState) { batchState.value = { ...batchState.value, [index]: state } }
+  function resetBatches() {
+    batchController?.abort()
+    batchController = null
+    batchFiles.clear()
+    batchState.value = {}
+  }
+  async function pumpBatches() {
+    if (batchController) return
+    const controller = new AbortController()
+    batchController = controller
+    try {
+      while (!controller.signal.aborted) {
+        const waiting = Object.values(batchState.value).filter(state => state.status === 'ready').length
+        const next = batches.value.find(batch => !batchState.value[batch.index])
+        if (!next || waiting >= batchesAhead) return
+        setBatch(next.index, { status: 'loading', loaded: 0 })
+        try {
+          const files: File[] = []
+          for (const item of next.items) {
+            const response = await fetch(`${apiRoot}/download/file`, { method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ticket: item.ticket }), signal: controller.signal })
+            files.push(await boundedFile(response, controller.signal, Math.max(maxShareBytes, item.sizeBytes)))
+            if (controller.signal.aborted) return
+            setBatch(next.index, { status: 'loading', loaded: files.length })
+          }
+          batchFiles.set(next.index, files)
+          setBatch(next.index, { status: 'ready', loaded: files.length })
+        } catch (cause) {
+          if (controller.signal.aborted) return
+          setBatch(next.index, { status: 'error', loaded: 0, message: cause instanceof Error ? cause.message : 'Không tải được ảnh gốc' })
+        }
+      }
+    } finally { if (batchController === controller) batchController = null }
+  }
+  // Must run synchronously inside the tap handler, otherwise iOS refuses the share sheet.
+  function saveBatch(index: number) {
+    const files = batchFiles.get(index)
+    if (!files) return
+    if (!canShareFiles(files)) {
+      setBatch(index, { status: 'error', loaded: 0, message: 'Trình duyệt này không lưu được nhiều ảnh. Hãy mở link bằng Safari.' })
+      return
+    }
+    navigator.share({ files }).then(() => {
+      batchFiles.delete(index)
+      setBatch(index, { status: 'saved', loaded: files.length })
+      void pumpBatches()
+    }).catch(cause => {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      transferMessage.value = 'Không mở được bảng lưu ảnh. Bấm lại nút Lưu vào Ảnh.'
+    })
+  }
+  function retryBatch(index: number) {
+    const next = { ...batchState.value }
+    delete next[index]
+    batchState.value = next
+    void pumpBatches()
   }
 
   async function downloadPart(index: number) {
     const part = plan.value?.parts.find(item => item.index === index)
     if (!part || transferBusy.value) return
     if (part.format === 'file') { submitDirectFile(part.ticket); return }
+    if (isIOS()) { submitDirectFile(part.ticket, 'zip'); return }
     let handle: SaveHandle | undefined
     const pickerWindow = window as Window & { showSaveFilePicker?: (options: { suggestedName: string }) => Promise<SaveHandle> }
     if (pickerWindow.showSaveFilePicker) {
@@ -328,10 +420,11 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
   }
 
   function cancelTransfer() { activeController?.abort(); transferMessage.value = 'Đã dừng tải. Giỏ ảnh vẫn được giữ.' }
-  onBeforeUnmount(() => { activeController?.abort(); cancelSingle(); for (const url of objectUrls) URL.revokeObjectURL(url); objectUrls.clear() })
+  onBeforeUnmount(() => { activeController?.abort(); cancelSingle(); resetBatches(); for (const url of objectUrls) URL.revokeObjectURL(url); objectUrls.clear() })
   return { basket, mode, sheetOpen, plan, busy, error, toggleBasket, clearBasket, setMode, openSheet, closeSheet, prepare,
     preparedFiles, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
     completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
     singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview,
-    singleStatus: computed(() => single.value?.status ?? null) }
+    singleStatus: computed(() => single.value?.status ?? null),
+    photosMode, batches, batchState, saveBatch, retryBatch }
 }

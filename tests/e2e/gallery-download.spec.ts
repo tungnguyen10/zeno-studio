@@ -143,6 +143,52 @@ test('Focus shows a denied single download inline', async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/album/${albumId}$`))
 })
 
+test('iOS saves many selected photos to Photos in batches of 12 and keeps ZIP as a Files fallback', async ({ page }) => {
+  await stubDevice(page, iosUserAgent)
+  const ids = Array.from({ length: 13 }, (_, index) => `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`)
+  const zipForms: string[] = []
+  await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }))
+  await page.route(`**/api/album/${albumId}/**`, route => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    if (path.endsWith('/access')) return json({ album: {
+      id: albumId, title: 'Album nhiều ảnh', status: 'FINALIZED', currentCycle: 1, expiresAt: '2030-01-01T00:00:00Z', joined: true, canJoin: false,
+      settings: { limitKind: 'unlimited', limitMin: null, limitMax: null },
+      download: { canSingle: true, canSelected: true, canAll: false, reason: null, selectedSource: 'snapshot', selectedCount: 13 },
+    } })
+    if (path.endsWith('/photos')) return json({ items: [{ id: photoId, sourceFileId: 'drive-download', filename: 'A.jpg', width: 800, height: 1000, status: 'READY', sortOrder: 0, selected: true }], nextCursor: null, total: 1, selectedCount: 1 })
+    if (path.endsWith('/download/plan')) return json({ kind: 'selected', cycle: 1, totalFiles: 13, totalBytes: 39, unavailable: [], parts: [{
+      index: 0, format: 'zip', filename: 'album-001.zip', count: 13, byteLength: 39, photoIds: ids, ticket: 'zip-signed',
+      fileTickets: ids.map((id, index) => ({ photoId: id, ticket: `file-${index + 1}`, sizeBytes: 3 })),
+    }] })
+    if (path.endsWith('/download/file')) {
+      const ticket = (request.postDataJSON() as { ticket: string }).ticket
+      return route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'content-disposition': `attachment; filename="${ticket}.jpg"` }, body: Buffer.from([1, 2, 3]) })
+    }
+    if (path.endsWith('/download/zip')) {
+      zipForms.push(request.postData() ?? '')
+      return route.fulfill({ status: 200, contentType: 'application/zip', headers: { 'content-disposition': 'attachment; filename="album-001.zip"' }, body: Buffer.from([4, 5, 6]) })
+    }
+    return route.continue()
+  })
+  await page.goto(`/album/${albumId}`)
+  await page.getByRole('button', { name: 'Tải xuống' }).click()
+  await page.getByRole('button', { name: 'Chuẩn bị tải 13 ảnh' }).click()
+  await page.getByRole('button', { name: 'Lưu ảnh 1–12 vào Ảnh' }).click()
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __shared: File[][] }).__shared.map(files => files.length)))).toEqual([12])
+  await page.getByRole('button', { name: 'Lưu ảnh 13–13 vào Ảnh' }).click()
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __shared: File[][] }).__shared.map(files => files.length)))).toEqual([12, 1])
+  expect(await page.evaluate(() => (window as unknown as { __shared: File[][] }).__shared[0]!.map(file => file.name).slice(0, 2))).toEqual(['file-1.jpg', 'file-2.jpg'])
+  await expect(page.getByText('Đã chuyển 13/13 ảnh')).toBeVisible()
+
+  await page.getByText('Tải file ZIP (lưu vào app Tệp)').click()
+  const downloadEvent = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Tải phần 1' }).click()
+  await downloadEvent
+  expect(zipForms).toEqual(['ticket=zip-signed'])
+})
+
 test('download basket stays independent of saved hearts and shows a bounded plan', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const requests: unknown[] = []

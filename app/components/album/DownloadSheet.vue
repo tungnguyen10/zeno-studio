@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DownloadCapabilities } from '~~/shared/domain/download-policy'
-import type { ClientDownloadPlan, DownloadMode } from '~/composables/useAlbumDownload'
+import type { ClientDownloadPlan, DownloadMode, SaveBatch, SaveBatchState } from '~/composables/useAlbumDownload'
 
 const props = defineProps<{
   mode: DownloadMode; basketCount: number; selectedCount: number; capabilities: DownloadCapabilities;
@@ -9,9 +9,10 @@ const props = defineProps<{
   shareEligible: boolean; shareReady: boolean; shareStatus: string;
   transferBusy: boolean; transferPart: number | null; transferBytes: number;
   completedParts: ReadonlySet<number>; failedParts: Record<number, string>; transferMessage: string
+  photosMode: boolean; batches: SaveBatch[]; batchState: Record<number, SaveBatchState>
 }>()
 const emit = defineEmits<{ close: []; mode: [mode: DownloadMode]; clear: []; prepare: [];
-  prepareFiles: []; share: []; downloadPart: [index: number]; cancel: [] }>()
+  prepareFiles: []; share: []; downloadPart: [index: number]; cancel: []; saveBatch: [index: number]; retryBatch: [index: number] }>()
 const dialog = ref<HTMLElement | null>(null)
 const closeButton = ref<HTMLButtonElement | null>(null)
 let returnFocus: HTMLElement | null = null
@@ -36,6 +37,22 @@ function onKeydown(event: KeyboardEvent) {
 const prepareLabel = computed(() => props.mode === 'basket'
   ? `Chuẩn bị tải ${props.basketCount} ảnh`
   : props.mode === 'all' ? 'Chuẩn bị tải toàn album' : `Chuẩn bị tải ${props.selectedCount} ảnh`)
+const savedPhotos = computed(() => props.batches.reduce((sum, batch) =>
+  sum + (props.batchState[batch.index]?.status === 'saved' ? batch.items.length : 0), 0))
+function batchLabel(batch: SaveBatch) {
+  const state = props.batchState[batch.index]
+  const range = props.batches.length === 1 ? `${batch.items.length} ảnh` : `ảnh ${batch.start + 1}–${batch.start + batch.items.length}`
+  if (state?.status === 'ready') return `Lưu ${range} vào Ảnh`
+  if (state?.status === 'saved') return `Đã mở bảng lưu ${range}`
+  if (state?.status === 'error') return `Thử lại ${range}`
+  if (state?.status === 'loading') return `Đang chuẩn bị ${state.loaded}/${batch.items.length}…`
+  return `Chờ chuẩn bị ${range}`
+}
+function onBatch(batch: SaveBatch) {
+  const status = props.batchState[batch.index]?.status
+  if (status === 'ready') emit('saveBatch', batch.index)
+  else if (status === 'error') emit('retryBatch', batch.index)
+}
 </script>
 
 <template>
@@ -58,6 +75,23 @@ const prepareLabel = computed(() => props.mode === 'basket'
       <p v-if="error" role="alert" class="mt-3 text-sm text-danger">{{ error }}</p>
       <button type="button" class="focus-ring mt-4 min-h-12 w-full rounded-full bg-brand px-5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="busy || (mode === 'basket' && (!capabilities.canSelected || basketCount === 0)) || (mode === 'selected' && (!capabilities.canSelected || selectedCount === 0)) || (mode === 'all' && !capabilities.canAll)" @click="emit('prepare')">{{ busy ? 'Đang lập kế hoạch…' : prepareLabel }}</button>
       <section v-if="plan" class="mt-5 border-t border-line pt-4" aria-label="Kế hoạch tải ảnh">
+        <template v-if="photosMode && batches.length">
+          <h3 class="font-semibold">Lưu {{ plan.totalFiles }} ảnh gốc vào Ảnh</h3>
+          <p class="mt-1 text-xs text-muted">Bấm Lưu, rồi chọn “Lưu hình ảnh”. Đã chuyển {{ savedPhotos }}/{{ plan.totalFiles }} ảnh.</p>
+          <ol class="mt-3 space-y-2">
+            <li v-for="batch in batches" :key="batch.index">
+              <button type="button" class="focus-ring min-h-12 w-full rounded-full px-4 text-sm font-semibold disabled:cursor-wait" :class="batchState[batch.index]?.status === 'ready' ? 'bg-brand text-white' : batchState[batch.index]?.status === 'error' ? 'border border-danger text-danger' : 'border border-line text-muted'" :disabled="!['ready', 'error'].includes(batchState[batch.index]?.status ?? '')" :aria-busy="batchState[batch.index]?.status === 'loading'" @click="onBatch(batch)">{{ batchLabel(batch) }}</button>
+              <p v-if="batchState[batch.index]?.message" role="alert" class="mt-1 text-xs text-danger">{{ batchState[batch.index]?.message }}</p>
+            </li>
+          </ol>
+          <details class="mt-4 text-sm">
+            <summary class="focus-ring min-h-11 cursor-pointer py-2 font-semibold text-brand">Tải file ZIP (lưu vào app Tệp)</summary>
+            <ol class="mt-2 space-y-2"><li v-for="part in plan.parts" :key="part.index" class="rounded-xl border border-line bg-canvas px-3 py-2"><span class="break-all font-medium">Phần {{ part.index + 1 }}: {{ part.filename }}</span><span class="block text-muted">{{ part.count }} ảnh · {{ (part.byteLength / 1048576).toFixed(1) }} MB</span><button type="button" class="focus-ring mt-2 min-h-11 rounded-full border border-brand px-4 text-sm font-semibold text-brand" @click="emit('downloadPart', part.index)">Tải phần {{ part.index + 1 }}</button></li></ol>
+          </details>
+          <p v-if="transferMessage" role="status" class="mt-3 text-sm text-muted">{{ transferMessage }}</p>
+        </template>
+        <template v-else>
+        <p v-if="photosMode" class="mb-3 text-sm text-muted">Lưu vào Ảnh hỗ trợ tối đa 300 ảnh mỗi lượt. Hãy chọn ít ảnh hơn, hoặc tải ZIP vào app Tệp.</p>
         <h3 class="font-semibold">{{ plan.totalFiles }} ảnh · {{ plan.parts.length }} phần</h3>
         <p class="mt-1 text-xs text-muted">Mỗi phần tải riêng để tránh ZIP quá lớn.</p>
         <div v-if="shareEligible" class="mt-4 flex flex-wrap gap-2">
@@ -70,6 +104,7 @@ const prepareLabel = computed(() => props.mode === 'basket'
         <button v-if="transferBusy" type="button" class="focus-ring mt-2 min-h-11 rounded-full border border-line-strong px-4 text-sm font-semibold text-ink" @click="emit('cancel')">Dừng tải</button>
         <p v-if="transferMessage" role="status" class="mt-3 text-sm text-muted">{{ transferMessage }}</p>
         <p v-if="shareStatus" role="status" class="mt-2 text-sm text-muted">{{ shareStatus }}</p>
+        </template>
       </section>
     </section>
   </div>

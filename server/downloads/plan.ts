@@ -37,7 +37,7 @@ export function partitionFiles(files: PlannedFile[], limits: PartitionLimits): P
 export type DownloadPlanRequest = { kind: DownloadPlanKind; photoIds?: string[] }
 export type DownloadPlanPart = {
   index: number; format: 'file' | 'zip'; filename: string; count: number; byteLength: number;
-  photoIds: string[]; ticket: string; fileTickets: Array<{ photoId: string; ticket: string }>
+  photoIds: string[]; ticket: string; fileTickets: Array<{ photoId: string; ticket: string; sizeBytes: number }>
 }
 export type DownloadPlan = { kind: DownloadPlanKind; cycle: number; totalFiles: number; totalBytes: number;
   parts: DownloadPlanPart[]; unavailable: Array<{ photoId: string; reason: string }> }
@@ -122,7 +122,8 @@ export async function createDownloadPlan(pool: ConnectionPool, access: AlbumAcce
   }
   if (!files.length) throw new StudioOperationError('Không có ảnh khả dụng để tải', 422)
   const totalBytes = files.reduce((sum, file) => sum + file.sizeBytes, 0)
-  const shareAllowed = files.length <= DOWNLOAD_LIMITS.shareMaxFiles && totalBytes <= DOWNLOAD_LIMITS.shareMaxBytes
+  // Per-file tickets let iOS save batches to Photos through the share sheet.
+  const issueFileTickets = files.length <= DOWNLOAD_LIMITS.fileTicketMaxFiles
   const now = Math.floor(Date.now() / 1000)
   const base = { v: 1 as const, albumId: access.albumId, cycle: catalog.cycle, kind: parsed.kind,
     issuedAt: now, expiresAt: now + DOWNLOAD_LIMITS.ticketSeconds }
@@ -130,7 +131,7 @@ export async function createDownloadPlan(pool: ConnectionPool, access: AlbumAcce
     const byteLength = part.reduce((sum, file) => sum + file.sizeBytes, 0)
     const format = part.length === 1 && part[0]!.sizeBytes > DOWNLOAD_LIMITS.maxBytes ? 'file' : 'zip'
     const ticket = signDownloadTicket({ ...base, format, photoIds: part.map(file => file.photoId), part: index }, secret)
-    const fileTickets = shareAllowed ? part.map(file => ({ photoId: file.photoId,
+    const fileTickets = issueFileTickets ? part.map(file => ({ photoId: file.photoId, sizeBytes: file.sizeBytes,
       ticket: signDownloadTicket({ ...base, format: 'file', photoIds: [file.photoId], part: index }, secret) })) : []
     return { index, format, filename: format === 'file' ? part[0]!.filename : `album-${access.albumId.slice(0, 8)}-${String(index + 1).padStart(3, '0')}.zip`,
       count: part.length, byteLength, photoIds: part.map(file => file.photoId), ticket, fileTickets }

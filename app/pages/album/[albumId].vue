@@ -31,6 +31,7 @@ const {
   shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
   completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
   singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview, singleStatus,
+  photosMode, batches: saveBatches, batchState, saveBatch, retryBatch,
 } = useAlbumDownload(root, () => refreshAlbumState())
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
@@ -654,6 +655,6 @@ onBeforeUnmount(() => {
       <img :src="previewUrl" :alt="focusPhoto?.filename ?? 'Ảnh gốc'" class="min-h-0 flex-1 object-contain">
       <p class="px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-white/70">Nếu không thấy mục lưu, hãy mở link album bằng Safari (menu ⋯ → Mở trong trình duyệt).</p>
     </div>
-    <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" :share-eligible="shareEligible" :share-ready="shareReady" :share-status="shareStatus" :transfer-busy="transferBusy" :transfer-part="transferPart" :transfer-bytes="transferBytes" :completed-parts="completedParts" :failed-parts="failedParts" :transfer-message="transferMessage" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" @prepare-files="prepareFiles" @share="sharePrepared" @download-part="downloadPart" @cancel="cancelTransfer" />
+    <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" :share-eligible="shareEligible" :share-ready="shareReady" :share-status="shareStatus" :transfer-busy="transferBusy" :transfer-part="transferPart" :transfer-bytes="transferBytes" :completed-parts="completedParts" :failed-parts="failedParts" :transfer-message="transferMessage" :photos-mode="photosMode" :batches="saveBatches" :batch-state="batchState" @save-batch="saveBatch" @retry-batch="retryBatch" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" @prepare-files="prepareFiles" @share="sharePrepared" @download-part="downloadPart" @cancel="cancelTransfer" />
   </div>
 </template>

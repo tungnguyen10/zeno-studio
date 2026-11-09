@@ -53,6 +53,8 @@ describe('download plan under customer RLS', () => {
     expect(basket.parts[0]?.photoIds).toEqual([photos[2]!.id, photos[1]!.id])
     const all = await createDownloadPlan(pool, access, originalSource, { kind: 'all' })
     expect(all.parts[0]?.photoIds).toEqual(photos.map(photo => photo.id))
+    expect(all.parts.flatMap(part => part.fileTickets).map(item => item.photoId)).toEqual(photos.map(photo => photo.id))
+    expect(all.parts.flatMap(part => part.fileTickets).every(item => Number.isSafeInteger(item.sizeBytes))).toBe(true)
     expect(readOriginal).not.toHaveBeenCalled()
     expect(metadata).not.toHaveBeenCalled()
 
