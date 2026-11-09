@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import type { AlbumStatus } from '~~/shared/domain/album-status'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
+import { buildShareMessage } from '~~/shared/domain/share-message'
 
 const props = defineProps<{
   studioId: string
@@ -99,18 +100,25 @@ async function openPanel() {
 
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
 onBeforeUnmount(() => clearTimeout(copiedTimer))
+const messageCopied = ref(false)
 
-async function copy(source: string | Promise<string>) {
+async function copyMessage() {
+  messageCopied.value = await copy(buildShareMessage({ albumTitle: props.albumTitle, link: link.value }), 'Đã sao chép lời nhắn kèm link.')
+  if (messageCopied.value) copied.value = false
+}
+
+async function copy(source: string | Promise<string>, success = 'Đã sao chép link khách hàng.') {
   try {
     if (typeof source !== 'string' && typeof ClipboardItem !== 'undefined') {
       await navigator.clipboard.write([new ClipboardItem({ 'text/plain': source.then(text => new Blob([text], { type: 'text/plain' })) })])
     } else {
       await navigator.clipboard.writeText(await source)
     }
-    message.value = { text: 'Đã sao chép link khách hàng.', tone: 'quiet' }
+    message.value = { text: success, tone: 'quiet' }
     copied.value = true
+    messageCopied.value = false
     clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => { copied.value = false }, 2500)
+    copiedTimer = setTimeout(() => { copied.value = false; messageCopied.value = false }, 2500)
     return true
   } catch {
     // A failed link request is reported by `request`; only report clipboard failures here.
@@ -137,12 +145,13 @@ async function copy(source: string | Promise<string>) {
       <UiModal v-model:open="panelOpen" :title="albumTitle ? `Chia sẻ ${albumTitle}` : 'Chia sẻ album'" description="Gửi link hoặc cho khách quét mã QR để mở album.">
         <div v-if="link" class="space-y-4">
           <StudioAlbumShareLink :link="link" @copy="copy(link)" />
+          <UiButton variant="outline" block @click="copyMessage">{{ messageCopied ? 'Đã sao chép lời nhắn' : 'Sao chép link kèm lời nhắn' }}</UiButton>
           <div class="flex justify-center rounded-2xl border border-line bg-canvas p-4">
             <img v-if="qrDataUrl" :src="qrDataUrl" :alt="`Mã QR mở album cho khách: ${link}`" width="200" height="200" class="rounded-lg">
             <p v-else-if="qrError" role="alert" class="text-sm text-danger">Không tạo được mã QR.</p>
             <p v-else class="grid size-[200px] place-items-center text-sm text-muted">Đang tạo mã QR…</p>
           </div>
-          <p class="text-sm" :class="copied ? 'text-brand' : 'text-muted'" aria-hidden="true">{{ copied ? 'Đã sao chép link khách hàng.' : 'Khách mở link hoặc quét mã để chọn ảnh.' }}</p>
+          <p class="text-sm" :class="copied || messageCopied ? 'text-brand' : 'text-muted'" aria-hidden="true">{{ messageCopied ? 'Lời nhắn nhắc khách mở bằng Safari/Chrome đã được sao chép.' : copied ? 'Đã sao chép link khách hàng.' : 'Khách mở link hoặc quét mã để chọn ảnh.' }}</p>
         </div>
       </UiModal>
     </template>

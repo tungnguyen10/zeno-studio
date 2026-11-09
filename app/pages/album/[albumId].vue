@@ -12,6 +12,8 @@ import PhotoGallery from '~/components/album/PhotoGallery.vue'
 import PhotoTile from '~/components/album/PhotoTile.vue'
 import SelectionIsland from '~/components/album/SelectionIsland.vue'
 import DownloadSheet from '~/components/album/DownloadSheet.vue'
+import InAppBrowserNotice from '~/components/album/InAppBrowserNotice.vue'
+import { buildAndroidIntentUrl, detectInAppBrowser, type InAppBrowser } from '~/lib/in-app-browser'
 import { useAlbumDownload } from '~/composables/useAlbumDownload'
 import { useOriginalCache } from '~/composables/useOriginalCache'
 
@@ -77,6 +79,10 @@ const pendingSelections = ref(0)
 const heartPop = ref(false)
 const preloaded = new Map<string, HTMLImageElement>()
 let navigationDirection: 1 | -1 = 1
+const inAppGate = ref<(InAppBrowser & { link: string }) | null>(null)
+const inAppNoticeVisible = ref(false)
+const inAppContinueKey = `zeno:inapp-continue:${albumId}`
+let intentTimer: ReturnType<typeof setTimeout> | undefined
 
 useSeoMeta({ title: () => overview.value ? `${overview.value.title} — Zeno Studio` : 'Album — Zeno Studio' })
 const visiblePhotos = computed(() => paged.items.value)
@@ -496,9 +502,41 @@ function handleFocusImageError() {
   else focusImageFailed.value = true
 }
 
+function revealInAppNotice() {
+  if (inAppGate.value && document.visibilityState === 'visible') inAppNoticeVisible.value = true
+}
+
+function openInBrowser() {
+  clearTimeout(intentTimer)
+  // If the app ignores the intent we are still visible after the delay; show manual steps instead.
+  intentTimer = setTimeout(revealInAppNotice, 1500)
+  location.href = buildAndroidIntentUrl(location.href)
+}
+
+function continueInApp() {
+  try { sessionStorage.setItem(inAppContinueKey, '1') } catch { /* storage may be blocked in webviews */ }
+  clearTimeout(intentTimer)
+  document.removeEventListener('visibilitychange', revealInAppNotice)
+  inAppGate.value = null
+  inAppNoticeVisible.value = false
+  void enter()
+}
+
+function startInAppGate(): boolean {
+  const detected = detectInAppBrowser(navigator.userAgent)
+  if (!detected) return false
+  try { if (sessionStorage.getItem(inAppContinueKey)) return false } catch { /* storage may be blocked in webviews */ }
+  // Defer token redemption so the external browser, not this webview, becomes the participant.
+  inAppGate.value = { ...detected, link: location.href }
+  document.addEventListener('visibilitychange', revealInAppNotice)
+  if (detected.platform === 'android') openInBrowser()
+  else inAppNoticeVisible.value = true
+  return true
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleFocusKey)
-  void enter()
+  if (!startInAppGate()) void enter()
 })
 watch(galleryReady, ready => {
   if (!ready || reportedOpen) return
@@ -510,6 +548,8 @@ onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   clearTimeout(noteSaveTimer)
   clearTimeout(statusTimer)
+  clearTimeout(intentTimer)
+  document.removeEventListener('visibilitychange', revealInAppNotice)
   window.removeEventListener('keydown', handleFocusKey)
   stageObserver?.disconnect()
   cancelPreloads()
@@ -521,7 +561,8 @@ onBeforeUnmount(() => {
   <div class="min-h-dvh bg-canvas text-ink">
     <SiteHeader />
     <main class="mx-auto max-w-7xl px-4 pb-28 pt-5 sm:px-8 sm:pt-8">
-      <div v-if="loading" role="status" aria-busy="true" aria-label="Đang mở album">
+      <InAppBrowserNotice v-if="inAppGate && inAppNoticeVisible" :app="inAppGate.app" :platform="inAppGate.platform" :link="inAppGate.link" @continue="continueInApp" @retry="openInBrowser" />
+      <div v-else-if="loading" role="status" aria-busy="true" aria-label="Đang mở album">
         <UiSkeleton class="h-9 w-2/3 max-w-md sm:h-12" />
         <UiSkeleton class="mt-3 h-4 w-48 max-w-full" />
         <div class="mt-6 flex justify-end">
