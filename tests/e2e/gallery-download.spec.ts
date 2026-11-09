@@ -31,24 +31,29 @@ for (const status of ['PUBLISHED', 'FINALIZED'] as const) {
 const iosUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
 const androidUserAgent = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'
 
-async function stubDevice(page: Page, userAgent: string, shareError?: string) {
+async function stubDevice(page: Page, userAgent: string, shareError?: string, withShare = true) {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.addInitScript(([agent, error]) => {
+  await page.addInitScript(([agent, error, share]) => {
     const state = window as unknown as { __shared: File[][] }
     state.__shared = []
     let failNext = !!error
     Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => agent })
+    if (!share) {
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: undefined })
+      return
+    }
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: ({ files }: { files?: File[] }) => !!files?.length })
     Object.defineProperty(navigator, 'share', { configurable: true, value: async ({ files }: { files: File[] }) => {
       if (failNext) { failNext = false; throw new DOMException('activation expired', error) }
       state.__shared.push(files)
     } })
-  }, [userAgent, shareError] as const)
+  }, [userAgent, shareError, withShare] as const)
 }
 
-async function setupFocusAlbum(page: Page, onOriginal: () => void, originalStatus = 200) {
+async function setupFocusAlbum(page: Page, onOriginal: () => void, originalStatus = 200, originalDelayMs = 0) {
   await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }))
-  await page.route(`**/api/album/${albumId}/**`, route => {
+  await page.route(`**/api/album/${albumId}/**`, async route => {
     const path = new URL(route.request().url()).pathname
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
     if (path.endsWith('/access')) return json({ album: {
@@ -59,6 +64,7 @@ async function setupFocusAlbum(page: Page, onOriginal: () => void, originalStatu
     if (path.endsWith('/photos')) return json({ items: [{ id: photoId, sourceFileId: 'drive-download', filename: 'Ảnh A.jpg', width: 800, height: 1000, status: 'READY', sortOrder: 0, selected: false }], nextCursor: null, total: 1, selectedCount: 0 })
     if (path.endsWith(`/photos/${photoId}/download`)) {
       onOriginal()
+      if (originalDelayMs) await new Promise(resolve => setTimeout(resolve, originalDelayMs))
       if (originalStatus !== 200) return route.fulfill({ status: originalStatus, body: 'Denied' })
       return route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'content-disposition': "attachment; filename=\"Anh A.jpg\"; filename*=UTF-8''%E1%BA%A2nh%20A.jpg" }, body: Buffer.from([1, 2, 3]) })
     }
@@ -81,15 +87,41 @@ test('iOS Focus prefetches the original so one tap opens the share sheet', async
   expect(requests).toBe(1)
 })
 
-test('iOS asks for a second tap when share activation expired while loading', async ({ page }) => {
+test('iOS never shares after waiting and offers an explicit save button instead', async ({ page }) => {
   let requests = 0
-  await stubDevice(page, iosUserAgent, 'NotAllowedError')
-  await setupFocusAlbum(page, () => { requests++ })
+  await stubDevice(page, iosUserAgent)
+  await setupFocusAlbum(page, () => { requests++ }, 200, 1500)
   await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
-  await expect(page.getByText('Bấm nút tải lần nữa để lưu vào Ảnh')).toBeVisible()
-  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  const save = page.getByRole('button', { name: /Lưu vào Ảnh/ })
+  await expect(save).toBeVisible()
+  expect(await sharedFiles(page)).toEqual([])
+  await save.click()
   await expect.poll(() => sharedFiles(page)).toEqual([{ name: 'Ảnh A.jpg', bytes: [1, 2, 3] }])
+  await expect(save).toHaveCount(0)
   expect(requests).toBe(1)
+})
+
+test('iOS shows the save button again when the share sheet is refused', async ({ page }) => {
+  await stubDevice(page, iosUserAgent, 'NotAllowedError')
+  let requests = 0
+  await setupFocusAlbum(page, () => { requests++ })
+  await expect.poll(() => requests).toBe(1)
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  await page.getByRole('button', { name: /Lưu vào Ảnh/ }).click()
+  await expect.poll(() => sharedFiles(page)).toEqual([{ name: 'Ảnh A.jpg', bytes: [1, 2, 3] }])
+})
+
+test('iOS in-app browser without file sharing shows the original for long-press save', async ({ page }) => {
+  await stubDevice(page, iosUserAgent, undefined, false)
+  let requests = 0
+  await setupFocusAlbum(page, () => { requests++ })
+  await expect.poll(() => requests).toBe(1)
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  const preview = page.getByRole('dialog', { name: 'Lưu ảnh gốc' })
+  await expect(preview.getByText('Nhấn giữ ảnh')).toBeVisible()
+  await expect(preview.getByRole('img')).toHaveAttribute('src', /^blob:/)
+  await preview.getByRole('button', { name: 'Đóng ảnh gốc' }).click()
+  await expect(preview).toHaveCount(0)
 })
 
 test('Android Focus saves the original as a file in one tap without prefetch', async ({ page }) => {

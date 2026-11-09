@@ -30,7 +30,7 @@ const {
   closeSheet: closeDownloadSheet, prepare: prepareDownload,
   shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
   completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
-  singleSaving, singleMessage, focusSingle, saveSingle,
+  singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview,
 } = useAlbumDownload(root, () => refreshAlbumState())
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
@@ -614,6 +614,12 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
           </button>
         </div>
+        <div v-if="sharePrompt" class="flex justify-center px-3 pb-3">
+          <button type="button" class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-brand" @click="shareReadySingle">
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M10 3.5v9M6 9l4 4 4-4M4 16.5h12" /></svg>
+            Ảnh gốc đã sẵn sàng — Lưu vào Ảnh
+          </button>
+        </div>
         <p v-if="singleMessage" role="status" class="px-3 pb-3 text-center text-xs text-white/80">{{ singleMessage }}</p>
       </div>
       <aside v-if="overview?.status === 'PUBLISHED'" class="shrink-0 rounded-t-2xl bg-white px-3 pt-2 pb-[max(.5rem,env(safe-area-inset-bottom))] text-ink sm:max-h-none sm:w-80 sm:overflow-y-auto sm:rounded-none sm:p-5 lg:w-96" :class="noteOpen ? 'max-h-[45dvh] overflow-y-auto overscroll-contain' : ''">
@@ -638,6 +644,14 @@ onBeforeUnmount(() => {
         </div>
         <p role="status" aria-live="polite" :class="status ? 'mt-1 text-xs text-muted' : 'sr-only'">{{ status }}</p>
       </aside>
+    </div>
+    <div v-if="previewUrl" class="fixed inset-0 z-40 flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label="Lưu ảnh gốc">
+      <div class="flex items-center gap-3 px-3 pt-[max(.5rem,env(safe-area-inset-top))] pb-2">
+        <p class="min-w-0 flex-1 text-sm font-semibold">Nhấn giữ ảnh, chọn “Lưu vào Ảnh”</p>
+        <button type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Đóng ảnh gốc" @click="closePreview">✕</button>
+      </div>
+      <img :src="previewUrl" :alt="focusPhoto?.filename ?? 'Ảnh gốc'" class="min-h-0 flex-1 object-contain">
+      <p class="px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-white/70">Nếu không thấy mục lưu, hãy mở link album bằng Safari (menu ⋯ → Mở trong trình duyệt).</p>
     </div>
     <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" :share-eligible="shareEligible" :share-ready="shareReady" :share-status="shareStatus" :transfer-busy="transferBusy" :transfer-part="transferPart" :transfer-bytes="transferBytes" :completed-parts="completedParts" :failed-parts="failedParts" :transfer-message="transferMessage" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" @prepare-files="prepareFiles" @share="sharePrepared" @download-part="downloadPart" @cancel="cancelTransfer" />
   </div>

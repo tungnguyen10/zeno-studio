@@ -134,23 +134,28 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     } finally { activeController = null; transferBusy.value = false }
   }
 
-  // iOS Safari only reaches the Photos library through the share sheet ("Lưu hình ảnh").
-  let savesViaShare: boolean | undefined
-  function sharesToPhotos(): boolean {
-    if (savesViaShare !== undefined) return savesViaShare
-    const ios = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-    try { savesViaShare = ios && !!navigator.share && !!navigator.canShare?.({ files: [new File([''], 'a.jpg', { type: 'image/jpeg' })] }) }
-    catch { savesViaShare = false }
-    return savesViaShare
+  // iOS only reaches Photos via the share sheet or long-press on an image, and both must start from a direct tap.
+  function isIOS(): boolean {
+    return /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  }
+  function canShareFile(file: File): boolean {
+    try { return !!navigator.share && !!navigator.canShare?.({ files: [file] }) }
+    catch { return false }
   }
 
   const single = ref<{ photoId: string; status: 'loading' | 'ready' | 'error'; file?: File } | null>(null)
   const singleSaving = ref(false)
   const singleMessage = ref('')
+  const sharePrompt = ref(false)
+  const previewUrl = ref('')
   let singleController: AbortController | null = null
   let singleTask: Promise<File> | null = null
   let prefetchTimer: ReturnType<typeof setTimeout> | undefined
 
+  function closePreview() {
+    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+  }
   function cancelSingle() {
     clearTimeout(prefetchTimer)
     singleController?.abort()
@@ -158,6 +163,8 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     singleTask = null
     single.value = null
     singleSaving.value = false
+    sharePrompt.value = false
+    closePreview()
   }
   function loadSingle(photoId: string): Promise<File> {
     if (single.value?.photoId === photoId && single.value.status !== 'error' && singleTask) return singleTask
@@ -176,23 +183,37 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     clearTimeout(prefetchTimer)
     singleMessage.value = ''
     if (single.value && single.value.photoId !== photoId) cancelSingle()
-    if (photoId && allowed && sharesToPhotos()) {
+    if (photoId && allowed && isIOS()) {
       prefetchTimer = setTimeout(() => { loadSingle(photoId).catch(() => {}) }, prefetchDelayMs)
     }
   }
+  function showPreview(file: File) {
+    closePreview()
+    previewUrl.value = URL.createObjectURL(file)
+  }
+  // Must run synchronously inside a tap handler, otherwise iOS rejects the share sheet.
   function shareSingle(file: File) {
+    sharePrompt.value = false
     navigator.share({ files: [file] }).catch(cause => {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
-      singleMessage.value = cause instanceof DOMException && cause.name === 'NotAllowedError'
-        ? 'Ảnh gốc đã sẵn sàng. Bấm nút tải lần nữa để lưu vào Ảnh.'
-        : 'Không mở được bảng lưu ảnh. Vui lòng thử lại.'
+      if (cause instanceof DOMException && cause.name === 'NotAllowedError') { sharePrompt.value = true; return }
+      showPreview(file)
     })
+  }
+  function presentIOS(file: File, inTap: boolean) {
+    if (!canShareFile(file)) { showPreview(file); return }
+    if (inTap) shareSingle(file)
+    else sharePrompt.value = true
+  }
+  function shareReadySingle() {
+    const file = single.value?.status === 'ready' ? single.value.file : undefined
+    if (file) shareSingle(file)
   }
   async function saveSingle(photoId: string) {
     if (singleSaving.value) return
     singleMessage.value = ''
     const ready = single.value?.photoId === photoId && single.value.status === 'ready' ? single.value.file : undefined
-    if (ready && sharesToPhotos()) { shareSingle(ready); return }
+    if (ready && isIOS()) { presentIOS(ready, true); return }
     singleSaving.value = true
     let file: File
     try { file = ready ?? await loadSingle(photoId) }
@@ -207,7 +228,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
       return
     } finally { singleSaving.value = false }
     if (single.value?.photoId !== photoId) return
-    if (sharesToPhotos()) shareSingle(file)
+    if (isIOS()) presentIOS(file, false)
     else saveBlob(file, file.name)
   }
 
@@ -311,5 +332,5 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
   return { basket, mode, sheetOpen, plan, busy, error, toggleBasket, clearBasket, setMode, openSheet, closeSheet, prepare,
     preparedFiles, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
     completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
-    singleSaving, singleMessage, focusSingle, saveSingle }
+    singleSaving, singleMessage, sharePrompt, previewUrl, focusSingle, saveSingle, shareReadySingle, closePreview }
 }
