@@ -28,8 +28,9 @@ const {
   plan: downloadPlan, busy: downloadBusy, error: downloadError,
   toggleBasket, clearBasket, setMode: setDownloadMode, openSheet: openDownloadSheet,
   closeSheet: closeDownloadSheet, prepare: prepareDownload,
-  preparedSingleId, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
-  completedParts, failedParts, transferMessage, prepareFiles, prepareSingle, sharePrepared, downloadPart, cancelTransfer,
+  shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
+  completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
+  singleSaving, singleMessage, focusSingle, saveSingle,
 } = useAlbumDownload(root, () => refreshAlbumState())
 const overview = ref<Overview | null>(null)
 const selectedIds = ref<string[]>([])
@@ -41,6 +42,7 @@ const noteSavedText = ref('')
 const noteVersion = ref(0)
 const noteLoading = ref(false)
 const noteLoadError = ref(false)
+const noteOpen = ref(false)
 const layout = useGalleryLayout('zeno-gallery-layout')
 const paged = usePagedPhotos<Photo>(params => $fetch<PhotoPageResponse<Photo>>(`${root}/photos`, { query: { limit: params.limit, filter: params.filter, ...(params.cursor ? { cursor: params.cursor } : {}) } }))
 const filter = computed<PhotoFilter>({ get: () => paged.filter.value, set: value => { if (value !== paged.filter.value) void paged.reset(value) } })
@@ -85,6 +87,12 @@ const hasPrev = computed(() => focusIndex.value > 0)
 const hasNext = computed(() => focusIndex.value >= 0 && (focusIndex.value < visiblePhotos.value.length - 1 || paged.hasMore.value))
 const noteDirty = computed(() => focusSelected.value && !noteLoading.value && !noteLoadError.value && noteText.value !== noteSavedText.value)
 const focusBox = computed(() => focusPhoto.value ? fitBox(focusPhoto.value) : null)
+const notePreview = computed(() => noteText.value.trim().split('\n')[0] ?? '')
+
+function toggleNote() {
+  noteOpen.value = !noteOpen.value
+  if (noteOpen.value) void nextTick(() => document.getElementById('focus-note')?.focus({ preventScroll: true }))
+}
 const limitLabel = computed(() => {
   const s = overview.value?.settings
   if (!s || s.limitKind === 'unlimited') return 'Không giới hạn'
@@ -243,6 +251,7 @@ function handleStageDoubleClick() {
 }
 
 async function openPhoto(photo: Photo) {
+  if (focusPhoto.value?.id !== photo.id) noteOpen.value = false
   if (!focusPhoto.value && import.meta.client) {
     navigationDirection = 1
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -421,6 +430,9 @@ watch(stageEl, element => {
 })
 
 watch(() => !!focusPhoto.value, open => { if (import.meta.client) document.documentElement.style.overflow = open ? 'hidden' : '' })
+watch(focusSelected, selected => { if (!selected) noteOpen.value = false })
+
+watch([() => focusPhoto.value?.id ?? null, () => !!overview.value?.download?.canSingle], ([id, allowed]) => focusSingle(id, allowed))
 
 watch(focusIndex, index => { if (index >= 0 && index >= visiblePhotos.value.length - 3 && paged.hasMore.value && !paged.loading.value) void paged.loadMore() })
 
@@ -583,7 +595,10 @@ onBeforeUnmount(() => {
           <p class="shrink-0 text-sm font-semibold tabular-nums text-white/90">{{ focusIndex + 1 }} / {{ focusTotal }}</p>
           <h2 class="min-w-0 flex-1 truncate text-sm text-white/70" :title="focusPhoto.filename">{{ focusPhoto.filename }}</h2>
           <label v-if="downloadMode === 'basket' && canBasket" class="grid size-11 shrink-0 place-items-center rounded-full bg-white/10" :title="`Tải ${focusPhoto.filename}`"><input type="checkbox" class="size-5 accent-brand" :aria-label="`Tải ${focusPhoto.filename}`" :checked="downloadBasket.has(focusPhoto.id)" @change="toggleBasket(focusPhoto.id)"></label>
-          <a v-if="overview?.download?.canSingle" :href="`${root}/photos/${focusPhoto.id}/download`" :aria-label="`Tải ảnh gốc ${focusPhoto.filename}`" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" title="Tải ảnh gốc">↓</a>
+          <button v-if="overview?.download?.canSingle" type="button" :aria-label="`Tải ảnh gốc ${focusPhoto.filename}`" :aria-busy="singleSaving" :disabled="singleSaving" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait" title="Tải ảnh gốc" @click="saveSingle(focusPhoto.id)">
+            <span v-if="singleSaving" aria-hidden="true" class="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white motion-reduce:animate-none" />
+            <span v-else aria-hidden="true">↓</span>
+          </button>
           <button ref="focusCloseButton" type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Đóng ảnh" @click="closePhoto">✕</button>
         </div>
         <div ref="stageEl" class="relative flex min-h-0 flex-1 touch-manipulation items-center justify-center px-2 pb-2 select-none sm:px-20 sm:pb-6" @touchstart.passive="onStageTouchStart" @touchend.passive="onStageTouchEnd">
@@ -599,23 +614,29 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
           </button>
         </div>
-        <div v-if="overview?.download?.canSingle" class="flex flex-wrap items-center justify-center gap-2 px-3 pb-3 sm:hidden">
-          <button type="button" class="focus-ring min-h-11 rounded-full border border-white/50 px-4 text-sm font-semibold disabled:opacity-50" :disabled="transferBusy" @click="prepareSingle(focusPhoto.id)">{{ transferBusy ? 'Đang chuẩn bị…' : 'Chuẩn bị ảnh gốc' }}</button>
-          <button v-if="preparedSingleId === focusPhoto.id && shareReady" type="button" class="focus-ring min-h-11 rounded-full bg-white px-4 text-sm font-semibold text-brand" @click="sharePrepared">Mở bảng lưu/chia sẻ</button>
-          <p v-if="transferMessage || shareStatus" role="status" class="w-full text-center text-xs text-white/80">{{ transferMessage || shareStatus }}</p>
-        </div>
+        <p v-if="singleMessage" role="status" class="px-3 pb-3 text-center text-xs text-white/80">{{ singleMessage }}</p>
       </div>
-      <aside v-if="overview?.status === 'PUBLISHED'" class="max-h-[45dvh] shrink-0 overflow-y-auto overscroll-contain rounded-t-2xl bg-white px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-ink sm:max-h-none sm:w-80 sm:rounded-none sm:p-5 lg:w-96">
-        <button type="button" class="focus-ring min-h-12 w-full rounded-full border text-base font-semibold transition-colors disabled:cursor-wait disabled:opacity-50" :class="focusSelected ? 'border-heart bg-heart text-white' : 'border-line-strong bg-white text-brand'" :aria-pressed="focusSelected" :disabled="!canSelect" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
-        <div v-if="focusSelected && noteLoading" role="status" aria-busy="true" aria-label="Đang tải ghi chú" class="mt-4">
-          <UiSkeleton class="h-4 w-32" />
-          <UiSkeleton class="mt-2 h-20 w-full rounded-xl sm:h-32" />
-          <span class="sr-only">Đang tải ghi chú…</span>
+      <aside v-if="overview?.status === 'PUBLISHED'" class="shrink-0 rounded-t-2xl bg-white px-3 pt-2 pb-[max(.5rem,env(safe-area-inset-bottom))] text-ink sm:max-h-none sm:w-80 sm:overflow-y-auto sm:rounded-none sm:p-5 lg:w-96" :class="noteOpen ? 'max-h-[45dvh] overflow-y-auto overscroll-contain' : ''">
+        <div class="flex items-center gap-2 sm:block">
+          <button type="button" class="focus-ring min-h-11 min-w-0 flex-1 rounded-full border text-base font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 sm:min-h-12 sm:w-full" :class="focusSelected ? 'border-heart bg-heart text-white' : 'border-line-strong bg-white text-brand'" :aria-pressed="focusSelected" :disabled="!canSelect" @click="toggle(focusPhoto)">{{ focusSelected ? '♥ Đã chọn' : '♡ Chọn ảnh' }}</button>
+          <button v-if="focusSelected" type="button" class="focus-ring inline-flex min-h-11 max-w-[50%] shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-4 text-sm font-semibold text-brand sm:hidden" :aria-expanded="noteOpen" aria-controls="focus-note-panel" @click="toggleNote">
+            <span aria-hidden="true">{{ noteOpen ? '⌄' : '✎' }}</span>
+            <span class="truncate"><span class="sr-only">Ghi chú: </span>{{ noteOpen ? 'Thu gọn' : notePreview || 'Ghi chú' }}</span>
+            <span v-if="noteLoadError" class="text-heart"><span aria-hidden="true">!</span><span class="sr-only">(lỗi tải)</span></span>
+          </button>
         </div>
-        <label v-else-if="focusSelected" class="mt-4 block text-sm font-semibold">Ghi chú chỉnh sửa<UiTextarea v-model="noteText" :disabled="noteLoading || noteLoadError" maxlength="5000" rows="3" name="photo-note" class="mt-2 py-3 sm:min-h-36" placeholder="Bạn muốn chỉnh gì ở ảnh này?" /></label>
-        <p v-else-if="overview.joined" class="mt-3 text-center text-sm text-muted sm:text-left">Chọn ảnh này để ghi chú cần chỉnh sửa.</p>
-        <UiButton v-if="noteLoadError && focusSelected" variant="secondary" size="sm" class="mt-3" @click="openPhoto(focusPhoto)">Thử tải lại ghi chú</UiButton>
-        <p role="status" aria-live="polite" class="mt-1 min-h-5 text-xs text-muted">{{ status || (focusSelected && !noteLoading ? 'Ghi chú tự lưu khi bạn gõ.' : '') }}</p>
+        <div id="focus-note-panel" :class="noteOpen ? 'block' : 'hidden sm:block'">
+          <div v-if="focusSelected && noteLoading" role="status" aria-busy="true" aria-label="Đang tải ghi chú" class="mt-3 sm:mt-4">
+            <UiSkeleton class="h-4 w-32" />
+            <UiSkeleton class="mt-2 h-20 w-full rounded-xl sm:h-32" />
+            <span class="sr-only">Đang tải ghi chú…</span>
+          </div>
+          <label v-else-if="focusSelected" class="mt-3 block text-sm font-semibold sm:mt-4">Ghi chú chỉnh sửa<UiTextarea id="focus-note" v-model="noteText" :disabled="noteLoading || noteLoadError" maxlength="5000" rows="3" name="photo-note" class="mt-2 py-3 sm:min-h-36" placeholder="Bạn muốn chỉnh gì ở ảnh này?" /></label>
+          <p v-else-if="overview.joined" class="mt-3 text-sm text-muted">Chọn ảnh này để ghi chú cần chỉnh sửa.</p>
+          <UiButton v-if="noteLoadError && focusSelected" variant="secondary" size="sm" class="mt-3" @click="openPhoto(focusPhoto)">Thử tải lại ghi chú</UiButton>
+          <p v-if="focusSelected && !noteLoading && !status" class="mt-1 text-xs text-muted">Ghi chú tự lưu khi bạn gõ.</p>
+        </div>
+        <p role="status" aria-live="polite" :class="status ? 'mt-1 text-xs text-muted' : 'sr-only'">{{ status }}</p>
       </aside>
     </div>
     <DownloadSheet v-if="downloadSheetOpen && overview?.download" :mode="downloadMode" :basket-count="downloadBasket.size" :selected-count="overview.download.selectedCount" :capabilities="overview.download" :plan="downloadPlan" :busy="downloadBusy" :error="downloadError" :share-eligible="shareEligible" :share-ready="shareReady" :share-status="shareStatus" :transfer-busy="transferBusy" :transfer-part="transferPart" :transfer-bytes="transferBytes" :completed-parts="completedParts" :failed-parts="failedParts" :transfer-message="transferMessage" @close="closeDownloadSheet" @mode="setDownloadMode" @clear="clearBasket" @prepare="prepareCurrentDownload" @prepare-files="prepareFiles" @share="sharePrepared" @download-part="downloadPart" @cancel="cancelTransfer" />

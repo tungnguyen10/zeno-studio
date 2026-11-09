@@ -332,4 +332,33 @@ test.describe('focus view on mobile', () => {
     }, stage)
     await expect(page.getByRole('dialog', { name: 'Nav 2.JPG' })).toBeVisible()
   })
+
+  test('keeps the note collapsed so the photo gets more room', async ({ page }) => {
+    const savedNotes: string[] = []
+    await mockNavigationAlbum(page, savedNotes)
+    await page.goto(`/album/${albumId}`)
+    await page.getByRole('button', { name: 'Mở ảnh Nav 0.JPG' }).click()
+    const aside = page.getByRole('dialog').locator('aside')
+    await expect(page.getByRole('button', { name: '♥ Đã chọn' })).toBeVisible()
+    await expect(page.getByLabel('Ghi chú chỉnh sửa')).toBeHidden()
+    expect((await aside.boundingBox())!.height).toBeLessThan(90)
+
+    const noteToggle = page.getByRole('button', { name: /Ghi chú/ })
+    await expect(noteToggle).toHaveAttribute('aria-expanded', 'false')
+    await noteToggle.click()
+    await expect(noteToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByLabel('Ghi chú chỉnh sửa')).toBeFocused()
+    await page.getByLabel('Ghi chú chỉnh sửa').fill('Làm sáng da')
+    await expect.poll(() => savedNotes).toEqual(['Làm sáng da'])
+    await noteToggle.click()
+    await expect(page.getByLabel('Ghi chú chỉnh sửa')).toBeHidden()
+    await expect(noteToggle).toContainText('Làm sáng da')
+
+    await noteToggle.click()
+    await page.getByRole('button', { name: 'Ảnh tiếp theo' }).click()
+    await expect(page.getByRole('dialog', { name: 'Nav 1.JPG' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Ghi chú/ })).toHaveCount(0)
+    await page.getByRole('button', { name: '♡ Chọn ảnh' }).click()
+    await expect(page.getByRole('button', { name: /Ghi chú/ })).toHaveAttribute('aria-expanded', 'false')
+  })
 })

@@ -17,13 +17,99 @@ for (const status of ['PUBLISHED', 'FINALIZED'] as const) {
       } })
       if (path.endsWith('/photos')) return json({ items: [{ id: photoId, sourceFileId: 'drive-download', filename: 'A.jpg', width: 800, height: 1000, status: 'READY', sortOrder: 0, selected: false }], nextCursor: null, total: 1, selectedCount: 0 })
       if (path.endsWith('/selection')) return json({ version: 0, selectedPhotoIds: [] })
+      if (path.endsWith(`/photos/${photoId}/download`)) return route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'content-disposition': 'attachment; filename="A.jpg"' }, body: Buffer.from([1, 2, 3]) })
       return route.continue()
     })
     await page.goto(`/album/${albumId}`)
     await page.getByRole('button', { name: 'Mở ảnh A.jpg' }).click()
-    await expect(page.getByRole('link', { name: 'Tải ảnh gốc A.jpg' })).toHaveAttribute('href', `/api/album/${albumId}/photos/${photoId}/download`)
+    const downloadEvent = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Tải ảnh gốc A.jpg' }).click()
+    expect((await downloadEvent).suggestedFilename()).toBe('A.jpg')
   })
 }
+
+const iosUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+const androidUserAgent = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'
+
+async function stubDevice(page: Page, userAgent: string, shareError?: string) {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(([agent, error]) => {
+    const state = window as unknown as { __shared: File[][] }
+    state.__shared = []
+    let failNext = !!error
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => agent })
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: ({ files }: { files?: File[] }) => !!files?.length })
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async ({ files }: { files: File[] }) => {
+      if (failNext) { failNext = false; throw new DOMException('activation expired', error) }
+      state.__shared.push(files)
+    } })
+  }, [userAgent, shareError] as const)
+}
+
+async function setupFocusAlbum(page: Page, onOriginal: () => void, originalStatus = 200) {
+  await page.route('https://drive.google.com/thumbnail**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }))
+  await page.route(`**/api/album/${albumId}/**`, route => {
+    const path = new URL(route.request().url()).pathname
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    if (path.endsWith('/access')) return json({ album: {
+      id: albumId, title: 'Album Focus', status: 'FINALIZED', currentCycle: 1, expiresAt: '2030-01-01T00:00:00Z', joined: true, canJoin: false,
+      settings: { limitKind: 'unlimited', limitMin: null, limitMax: null },
+      download: { canSingle: true, canSelected: false, canAll: false, reason: null, selectedSource: 'snapshot', selectedCount: 0 },
+    } })
+    if (path.endsWith('/photos')) return json({ items: [{ id: photoId, sourceFileId: 'drive-download', filename: 'Ảnh A.jpg', width: 800, height: 1000, status: 'READY', sortOrder: 0, selected: false }], nextCursor: null, total: 1, selectedCount: 0 })
+    if (path.endsWith(`/photos/${photoId}/download`)) {
+      onOriginal()
+      if (originalStatus !== 200) return route.fulfill({ status: originalStatus, body: 'Denied' })
+      return route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'content-disposition': "attachment; filename=\"Anh A.jpg\"; filename*=UTF-8''%E1%BA%A2nh%20A.jpg" }, body: Buffer.from([1, 2, 3]) })
+    }
+    return route.continue()
+  })
+  await page.goto(`/album/${albumId}`)
+  await page.getByRole('button', { name: 'Mở ảnh Ảnh A.jpg' }).click()
+}
+
+const sharedFiles = (page: Page) => page.evaluate(async () => Promise.all((window as unknown as { __shared: File[][] }).__shared
+  .map(async files => ({ name: files[0]!.name, bytes: [...new Uint8Array(await files[0]!.arrayBuffer())] }))))
+
+test('iOS Focus prefetches the original so one tap opens the share sheet', async ({ page }) => {
+  let requests = 0
+  await stubDevice(page, iosUserAgent)
+  await setupFocusAlbum(page, () => { requests++ })
+  await expect.poll(() => requests).toBe(1)
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  await expect.poll(() => sharedFiles(page)).toEqual([{ name: 'Ảnh A.jpg', bytes: [1, 2, 3] }])
+  expect(requests).toBe(1)
+})
+
+test('iOS asks for a second tap when share activation expired while loading', async ({ page }) => {
+  let requests = 0
+  await stubDevice(page, iosUserAgent, 'NotAllowedError')
+  await setupFocusAlbum(page, () => { requests++ })
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  await expect(page.getByText('Bấm nút tải lần nữa để lưu vào Ảnh')).toBeVisible()
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  await expect.poll(() => sharedFiles(page)).toEqual([{ name: 'Ảnh A.jpg', bytes: [1, 2, 3] }])
+  expect(requests).toBe(1)
+})
+
+test('Android Focus saves the original as a file in one tap without prefetch', async ({ page }) => {
+  let requests = 0
+  await stubDevice(page, androidUserAgent)
+  await setupFocusAlbum(page, () => { requests++ })
+  await page.waitForTimeout(1200)
+  expect(requests).toBe(0)
+  const downloadEvent = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  expect((await downloadEvent).suggestedFilename()).toBe('Ảnh A.jpg')
+  expect(await sharedFiles(page)).toEqual([])
+})
+
+test('Focus shows a denied single download inline', async ({ page }) => {
+  await setupFocusAlbum(page, () => {}, 403)
+  await page.getByRole('button', { name: 'Tải ảnh gốc Ảnh A.jpg' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Quyền tải đã thay đổi' })).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`/album/${albumId}$`))
+})
 
 test('download basket stays independent of saved hearts and shows a bounded plan', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -164,22 +250,6 @@ test('desktop transfers one ZIP part on click and reports completion', async ({ 
   const download = await downloadEvent
   expect(download.suggestedFilename()).toBe('album-001.zip')
   await expect(page.getByText('Đã chuyển 1/1 phần')).toBeVisible()
-})
-
-test('Focus mobile prepares one original before opening the share sheet', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true })
-    Object.defineProperty(navigator, 'share', { configurable: true, value: async ({ files }: { files: File[] }) => {
-      (window as unknown as { __focusShared: File[] }).__focusShared = files
-    } })
-  })
-  await setupTransferAlbum(page, [])
-  await page.getByRole('button', { name: 'Đóng tải ảnh' }).click()
-  await page.getByRole('button', { name: 'Mở ảnh Ảnh A.jpg' }).click()
-  await page.getByRole('button', { name: 'Chuẩn bị ảnh gốc' }).click()
-  await page.getByRole('button', { name: 'Mở bảng lưu/chia sẻ' }).click()
-  expect(await page.evaluate(() => (window as unknown as { __focusShared: File[] }).__focusShared[0]?.name)).toBe('Ảnh A.jpg')
 })
 
 test('unsupported mobile share falls back to the manual ZIP action', async ({ page }) => {

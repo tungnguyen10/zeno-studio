@@ -7,6 +7,8 @@ export type ClientDownloadPlan = { kind: DownloadMode; cycle: number; totalFiles
   parts: ClientDownloadPart[]; unavailable: Array<{ photoId: string; reason: string }> }
 
 const maxShareBytes = 48 * 1024 * 1024
+const prefetchDelayMs = 800
+class TooLargeError extends Error {}
 type SaveHandle = { createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> }> }
 
 function responseFilename(response: Response): string {
@@ -26,7 +28,6 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
   const busy = ref(false)
   const error = ref('')
   const preparedFiles = ref<File[]>([])
-  const preparedSingleId = ref<string | null>(null)
   const shareReady = ref(false)
   const shareStatus = ref('')
   const transferBusy = ref(false)
@@ -41,7 +42,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     plan.value.totalBytes <= maxShareBytes &&
     plan.value.parts.reduce((sum, part) => sum + part.fileTickets.length, 0) === plan.value.totalFiles)
 
-  function clearPrepared() { preparedFiles.value = []; preparedSingleId.value = null; shareReady.value = false; shareStatus.value = '' }
+  function clearPrepared() { preparedFiles.value = []; shareReady.value = false; shareStatus.value = '' }
   function invalidateRights() {
     clearBasket()
     clearPrepared()
@@ -56,7 +57,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
   async function boundedFile(response: Response, signal: AbortSignal, remainingBytes: number): Promise<File> {
     assertResponse(response)
     const length = Number(response.headers.get('content-length'))
-    if (Number.isFinite(length) && length > remainingBytes) throw new Error('Ảnh vượt giới hạn chia sẻ trên thiết bị')
+    if (Number.isFinite(length) && length > remainingBytes) throw new TooLargeError('Ảnh vượt giới hạn chia sẻ trên thiết bị')
     if (!response.body) throw new Error('Drive không trả về ảnh gốc')
     const reader = response.body.getReader()
     const chunks: Uint8Array[] = []
@@ -66,7 +67,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
         const item = await reader.read()
         if (item.done) break
         count += item.value.byteLength
-        if (count > remainingBytes) { await reader.cancel(); throw new Error('Ảnh vượt giới hạn chia sẻ trên thiết bị') }
+        if (count > remainingBytes) { await reader.cancel(); throw new TooLargeError('Ảnh vượt giới hạn chia sẻ trên thiết bị') }
         chunks.push(item.value)
       }
     } finally { reader.releaseLock() }
@@ -133,23 +134,93 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     } finally { activeController = null; transferBusy.value = false }
   }
 
-  async function prepareSingle(photoId: string) {
-    if (transferBusy.value) return
-    transferBusy.value = true
-    transferMessage.value = ''
-    clearPrepared()
-    activeController = new AbortController()
-    try {
-      const response = await fetch(`${apiRoot}/photos/${photoId}/download`, { signal: activeController.signal })
-      const file = await boundedFile(response, activeController.signal, maxShareBytes)
-      preparedFiles.value = [file]
-      preparedSingleId.value = photoId
-      shareReady.value = !!navigator.canShare?.({ files: [file] })
-      if (!shareReady.value) transferMessage.value = 'Trình duyệt này không hỗ trợ chia sẻ file. Hãy dùng nút tải ảnh gốc.'
-    } catch (cause) {
-      clearPrepared()
-      if (!activeController.signal.aborted) transferMessage.value = cause instanceof Error ? cause.message : 'Không chuẩn bị được ảnh gốc'
-    } finally { activeController = null; transferBusy.value = false }
+  // iOS Safari only reaches the Photos library through the share sheet ("Lưu hình ảnh").
+  let savesViaShare: boolean | undefined
+  function sharesToPhotos(): boolean {
+    if (savesViaShare !== undefined) return savesViaShare
+    const ios = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    try { savesViaShare = ios && !!navigator.share && !!navigator.canShare?.({ files: [new File([''], 'a.jpg', { type: 'image/jpeg' })] }) }
+    catch { savesViaShare = false }
+    return savesViaShare
+  }
+
+  const single = ref<{ photoId: string; status: 'loading' | 'ready' | 'error'; file?: File } | null>(null)
+  const singleSaving = ref(false)
+  const singleMessage = ref('')
+  let singleController: AbortController | null = null
+  let singleTask: Promise<File> | null = null
+  let prefetchTimer: ReturnType<typeof setTimeout> | undefined
+
+  function cancelSingle() {
+    clearTimeout(prefetchTimer)
+    singleController?.abort()
+    singleController = null
+    singleTask = null
+    single.value = null
+    singleSaving.value = false
+  }
+  function loadSingle(photoId: string): Promise<File> {
+    if (single.value?.photoId === photoId && single.value.status !== 'error' && singleTask) return singleTask
+    cancelSingle()
+    const controller = new AbortController()
+    singleController = controller
+    single.value = { photoId, status: 'loading' }
+    const task = fetch(`${apiRoot}/photos/${photoId}/download`, { signal: controller.signal })
+      .then(response => boundedFile(response, controller.signal, maxShareBytes))
+    singleTask = task
+    task.then(file => { if (singleTask === task) single.value = { photoId, status: 'ready', file } },
+      () => { if (singleTask === task) single.value = { photoId, status: 'error' } })
+    return task
+  }
+  function focusSingle(photoId: string | null, allowed: boolean) {
+    clearTimeout(prefetchTimer)
+    singleMessage.value = ''
+    if (single.value && single.value.photoId !== photoId) cancelSingle()
+    if (photoId && allowed && sharesToPhotos()) {
+      prefetchTimer = setTimeout(() => { loadSingle(photoId).catch(() => {}) }, prefetchDelayMs)
+    }
+  }
+  function shareSingle(file: File) {
+    navigator.share({ files: [file] }).catch(cause => {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      singleMessage.value = cause instanceof DOMException && cause.name === 'NotAllowedError'
+        ? 'Ảnh gốc đã sẵn sàng. Bấm nút tải lần nữa để lưu vào Ảnh.'
+        : 'Không mở được bảng lưu ảnh. Vui lòng thử lại.'
+    })
+  }
+  async function saveSingle(photoId: string) {
+    if (singleSaving.value) return
+    singleMessage.value = ''
+    const ready = single.value?.photoId === photoId && single.value.status === 'ready' ? single.value.file : undefined
+    if (ready && sharesToPhotos()) { shareSingle(ready); return }
+    singleSaving.value = true
+    let file: File
+    try { file = ready ?? await loadSingle(photoId) }
+    catch (cause) {
+      if (single.value?.photoId !== photoId) return
+      if (cause instanceof TooLargeError) {
+        singleMessage.value = 'Ảnh quá lớn để lưu trực tiếp vào Ảnh; trình duyệt sẽ tải file gốc.'
+        window.location.assign(`${apiRoot}/photos/${photoId}/download`)
+        return
+      }
+      singleMessage.value = cause instanceof Error ? cause.message : 'Không tải được ảnh gốc'
+      return
+    } finally { singleSaving.value = false }
+    if (single.value?.photoId !== photoId) return
+    if (sharesToPhotos()) shareSingle(file)
+    else saveBlob(file, file.name)
+  }
+
+  function saveBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    objectUrls.add(url)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.append(link)
+    link.click()
+    link.remove()
+    setTimeout(() => { URL.revokeObjectURL(url); objectUrls.delete(url) }, 1000)
   }
 
   function sharePrepared(): boolean {
@@ -218,17 +289,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
         }
       } finally { reader.releaseLock() }
       if (writable) { await writable.close(); writable = undefined }
-      else {
-        const url = URL.createObjectURL(new Blob(chunks as BlobPart[], { type: 'application/zip' }))
-        objectUrls.add(url)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = part.filename
-        document.body.append(link)
-        link.click()
-        link.remove()
-        setTimeout(() => { URL.revokeObjectURL(url); objectUrls.delete(url) }, 1000)
-      }
+      else saveBlob(new Blob(chunks as BlobPart[], { type: 'application/zip' }), part.filename)
       completedParts.value = new Set([...completedParts.value, index])
       const nextErrors = { ...failedParts.value }
       delete nextErrors[index]
@@ -246,8 +307,9 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
   }
 
   function cancelTransfer() { activeController?.abort(); transferMessage.value = 'Đã dừng tải. Giỏ ảnh vẫn được giữ.' }
-  onBeforeUnmount(() => { activeController?.abort(); for (const url of objectUrls) URL.revokeObjectURL(url); objectUrls.clear() })
+  onBeforeUnmount(() => { activeController?.abort(); cancelSingle(); for (const url of objectUrls) URL.revokeObjectURL(url); objectUrls.clear() })
   return { basket, mode, sheetOpen, plan, busy, error, toggleBasket, clearBasket, setMode, openSheet, closeSheet, prepare,
-    preparedFiles, preparedSingleId, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
-    completedParts, failedParts, transferMessage, prepareFiles, prepareSingle, sharePrepared, downloadPart, cancelTransfer }
+    preparedFiles, shareReady, shareStatus, shareEligible, transferBusy, transferPart, transferBytes,
+    completedParts, failedParts, transferMessage, prepareFiles, sharePrepared, downloadPart, cancelTransfer,
+    singleSaving, singleMessage, focusSingle, saveSingle }
 }
