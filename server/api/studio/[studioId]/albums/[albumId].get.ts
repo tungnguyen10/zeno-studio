@@ -9,5 +9,5 @@ export default defineEventHandler(async event => {
   const albumId = getRouterParam(event, 'albumId')
   if (!albumId || !/^[0-9a-f-]{36}$/i.test(albumId)) throw createError({ statusCode: 400, statusMessage: 'Album ID không hợp lệ' })
   setHeader(event, 'cache-control', 'no-store')
-  return studioApi(() => getStudioAlbumWorkspace(getAppPool(), studioId, user.id, albumId))
+  return studioApi(() => getStudioAlbumWorkspace(getAppPool(), studioId, user.id, albumId, { analyticsIdSecret: useRuntimeConfig(event).analyticsIdSecret }))
 })

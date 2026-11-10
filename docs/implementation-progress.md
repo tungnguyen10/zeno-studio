@@ -44,3 +44,10 @@ Benchmark bộ lọc cục bộ trên dữ liệu giả lập trong Node 24 (kh�
 2. **Email:** cần SMTP thật để xác minh gửi/nhận email end to end.
 3. **Dependency:** `npm audit --omit=dev` ngày 2026-10-14 còn 14 advisory (12 high, 2 critical). `npm audit fix --omit=dev` không giảm số lượng. Nguồn là `simple-git` trong `@nuxt/devtools`, `node-forge` trong `nitropack/listhen`, và `braces` trong `micromatch`; bản Nuxt mới nhất hiện là 4.6.1. `node-forge@1.4.0` và `braces@3.0.3` vẫn là bản npm mới nhất nhưng nằm trong affected range; `simple-git@4.0.2` đã vá nhưng vượt major range của `@nuxt/devtools`. `npm audit fix --force` đề xuất Nuxt 3.7.4 nên chưa áp vì phá vỡ mục tiêu Nuxt 4. Cần theo dõi bản vá upstream và kiểm lại trước release.
 4. **Các task còn thiếu:** xem bảng trên. Production đã có deployment và GA4 bật theo yêu cầu chủ dự án; các gate Drive và nghiệm thu V1 vẫn cần hoàn thành theo checklist.
+
+
+## GA4 zeno_v2 — triển khai 10/11/2026
+
+Code P0 hoàn tất và đã kiểm chứng ngày 10/11/2026: `npm run typecheck`, `npm run build` đạt; Vitest 61 file/309 test đạt; `npm run test:e2e:analytics` Chromium 51 đạt, 1 bỏ qua; bài Local mặc định tắt không lỗi. Theo [plan thích ứng](./superpowers/plans/2026-11-10-adapt-ga4-event-tracking.md), taxonomy tại [event tracking](./analytics-event-tracking.md). Phạm vi: bổ sung funnel create/share/autosave/finalize, ID album giả danh, context môi trường/phiên bản, chống trùng, QA privacy và bộ lọc report Production. Giữ autosave và mốc chốt snapshot hiện có; không thêm upload trực tiếp hay nút khách xác nhận.
+
+Chưa deploy bản này, chưa thay đổi cấu hình GA4/Vercel và chưa có evidence DebugView cho taxonomy mới. BigQuery/end-to-end theo album là P1; không thay thế trạng thái nghiệm thu Production ở các release trước.

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { trackAnalyticsEvent } from '~/lib/analytics-events'
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+import { photoCountBucket } from '~/lib/analytics-model'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import type { AlbumStatus } from '~~/shared/domain/album-status'
@@ -7,6 +9,9 @@ import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 import { buildShareMessage } from '~~/shared/domain/share-message'
 
 const props = defineProps<{
+  analytics?: AnalyticsIdentity
+  photoCount?: number
+  screenName?: 'studio_home' | 'album_create' | 'album_manage'
   studioId: string
   albumId: string
   status: AlbumStatus
@@ -24,7 +29,15 @@ const emit = defineEmits<{ published: [] }>()
 const storageKey = `zeno-studio:album-link:${props.albumId}`
 
 const link = ref('')
-onMounted(() => { link.value = localStorage.getItem(storageKey) ?? '' })
+const resolvedAnalytics = ref<AnalyticsIdentity>()
+onMounted(() => {
+  try { link.value = localStorage.getItem(storageKey) ?? '' }
+  catch { /* Sharing remains available without persistent storage. */ }
+})
+function persistLink(value: string) {
+  try { localStorage.setItem(storageKey, value) }
+  catch { /* Keep the resolved link in memory when storage is blocked. */ }
+}
 const copied = ref(false)
 const qrDataUrl = ref('')
 const qrError = ref(false)
@@ -55,18 +68,28 @@ const showShare = computed(() => ['PUBLISHED', 'FINALIZED', 'DELIVERED'].include
 const base = 'focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors disabled:opacity-50 sm:px-5'
 const buttonClass = computed(() => [base, props.primary ? 'bg-brand text-white hover:bg-brand-dark' : 'border border-line bg-white text-brand hover:bg-tint'])
 
+function shared(content: 'link' | 'message' = 'link') {
+  trackAnalyticsEvent({ name: 'album_shared', analytics: resolvedAnalytics.value ?? props.analytics, actor_type: 'studio', screen_name: props.screenName ?? 'album_manage', share_method: 'clipboard', share_content: content, share_channel: 'copy_link' })
+}
+
 async function request(action: 'publish' | 'share') {
+  if (busy.value) return
   busy.value = action
   message.value = null
-  const pending = $fetch<{ customerToken: string }>(`/api/studio/${props.studioId}/albums/${props.albumId}/${action}`, { method: 'POST' })
-    .then(result => `${location.origin}/album/${props.albumId}?token=${result.customerToken}`)
+  const analytics = props.analytics
+  const pending = $fetch<{ customerToken: string; analytics?: AnalyticsIdentity; photoCount: number }>(`/api/studio/${props.studioId}/albums/${props.albumId}/${action}`, { method: 'POST' })
+    .then(result => {
+      resolvedAnalytics.value = result.analytics ?? analytics
+      if (action === 'publish') trackAnalyticsEvent({ name: 'album_published', analytics: result.analytics ?? analytics, actor_type: 'studio', screen_name: props.screenName ?? 'album_manage', creation_flow: 'studio', photo_count_bucket: photoCountBucket(result.photoCount ?? props.photoCount ?? 0), event_id: `album_published:${(result.analytics ?? analytics)?.albumId}` })
+      return `${location.origin}/album/${props.albumId}?token=${result.customerToken}`
+    })
   // Start the clipboard write inside the click so Safari keeps the user activation.
-  const copying = copy(pending)
+  const copying = copy(pending, 'Đã sao chép link khách hàng.', false)
   try {
     link.value = await pending
-    if (action === 'publish') trackAnalyticsEvent({ name: 'album_published', creation_flow: 'studio' })
-    localStorage.setItem(storageKey, link.value)
+    persistLink(link.value)
     const ok = await copying
+    if (ok) shared()
     if (action === 'publish') {
       publishedNow.value = true
       if (ok) message.value = { text: 'Đã xuất bản và sao chép link khách hàng. Dán để gửi cho khách.', tone: 'info' }
@@ -89,7 +112,7 @@ async function openPanel() {
     try {
       const result = await $fetch<{ customerToken: string }>(`/api/studio/${props.studioId}/albums/${props.albumId}/share`, { method: 'POST' })
       link.value = `${location.origin}/album/${props.albumId}?token=${result.customerToken}`
-      localStorage.setItem(storageKey, link.value)
+      persistLink(link.value)
     } catch (error) {
       message.value = { text: studioAlbumErrorMessage(error), tone: 'error' }
       return
@@ -103,17 +126,18 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
 const messageCopied = ref(false)
 
 async function copyMessage() {
-  messageCopied.value = await copy(buildShareMessage({ albumTitle: props.albumTitle, link: link.value }), 'Đã sao chép lời nhắn kèm link.')
+  messageCopied.value = await copy(buildShareMessage({ albumTitle: props.albumTitle, link: link.value }), 'Đã sao chép lời nhắn kèm link.', true, 'message')
   if (messageCopied.value) copied.value = false
 }
 
-async function copy(source: string | Promise<string>, success = 'Đã sao chép link khách hàng.') {
+async function copy(source: string | Promise<string>, success = 'Đã sao chép link khách hàng.', report = true, content: 'link' | 'message' = 'link') {
   try {
     if (typeof source !== 'string' && typeof ClipboardItem !== 'undefined') {
       await navigator.clipboard.write([new ClipboardItem({ 'text/plain': source.then(text => new Blob([text], { type: 'text/plain' })) })])
     } else {
       await navigator.clipboard.writeText(await source)
     }
+    if (report) shared(content)
     message.value = { text: success, tone: 'quiet' }
     copied.value = true
     messageCopied.value = false

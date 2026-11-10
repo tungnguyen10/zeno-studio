@@ -1,10 +1,12 @@
+import { albumAnalyticsMetadata, type AnalyticsMetadataOptions, type AlbumAnalyticsMetadata } from '../analytics/identity'
 import type { ConnectionPool } from '../db/context'
 import { StudioOperationError } from '../studios/error'
 import { withManagedAlbum, type AlbumManager } from './manager'
 import { queryPhotoPage, type PhotoPage, type PhotoPageOptions } from './photo-page'
 import type { DownloadSettings } from '../../shared/domain/download-policy'
 
-export interface StudioAlbumWorkspace {
+export interface StudioAlbumWorkspace extends AlbumAnalyticsMetadata {
+  currentCycle: number
   id: string
   title: string
   status: string
@@ -19,14 +21,14 @@ export interface StudioAlbumWorkspace {
   selectedCount: number
 }
 
-export async function getStudioAlbumWorkspace(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<StudioAlbumWorkspace> {
-  return getManagedAlbumWorkspace(pool, { kind: 'member', studioId, userId }, albumId)
+export async function getStudioAlbumWorkspace(pool: ConnectionPool, studioId: string, userId: string, albumId: string, metadata: AnalyticsMetadataOptions = {}): Promise<StudioAlbumWorkspace> {
+  return getManagedAlbumWorkspace(pool, { kind: 'member', studioId, userId }, albumId, metadata)
 }
 
-export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: AlbumManager, albumId: string): Promise<StudioAlbumWorkspace> {
+export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: AlbumManager, albumId: string, metadata: AnalyticsMetadataOptions = {}): Promise<StudioAlbumWorkspace> {
   return withManagedAlbum(pool, manager, albumId, 'album.view', async (client, session) => {
-    const result = await client.query<{ id: string; title: string; status: string; expires_at: Date; limit_kind: string; limit_min: number | null; limit_max: number | null; duration_days: 15 | 30; has_results: boolean; download_enabled: boolean; download_allow_single: boolean; download_allow_selected: boolean; download_allow_all: boolean; download_available_when: DownloadSettings['availableWhen'] }>(
-      `SELECT a.id, a.title, a.status, a.expires_at, s.limit_kind, s.limit_min, s.limit_max, s.duration_days,
+    const result = await client.query<{ id: string; title: string; status: string; current_cycle: number; expires_at: Date; limit_kind: string; limit_min: number | null; limit_max: number | null; duration_days: 15 | 30; has_results: boolean; download_enabled: boolean; download_allow_single: boolean; download_allow_selected: boolean; download_allow_all: boolean; download_available_when: DownloadSettings['availableWhen'] }>(
+      `SELECT a.id, a.title, a.status, a.current_cycle, a.expires_at, s.limit_kind, s.limit_min, s.limit_max, s.duration_days,
          s.download_enabled, s.download_allow_single, s.download_allow_selected, s.download_allow_all, s.download_available_when,
          EXISTS (SELECT 1 FROM selection_versions v WHERE v.album_id = a.id) AS has_results
        FROM albums a JOIN album_settings s ON s.album_id = a.id WHERE a.id = $1`, [albumId])
@@ -37,6 +39,7 @@ export async function getManagedAlbumWorkspace(pool: ConnectionPool, manager: Al
       `SELECT (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id) AS count
        FROM selection_versions v WHERE v.album_id = $1 ORDER BY v.version_number DESC LIMIT 1`, [albumId])
     return {
+      ...albumAnalyticsMetadata(album.id, metadata), currentCycle: album.current_cycle,
       id: album.id, title: album.title, status: album.status, expiresAt: album.expires_at,
       canFinalize: session.canFinalize, hasResults: album.has_results,
       previousCount: previous.rows[0]?.count ?? 0,

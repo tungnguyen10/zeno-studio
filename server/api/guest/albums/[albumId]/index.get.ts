@@ -6,5 +6,5 @@ import { studioApi } from '../../../../utils/studio-api'
 export default defineEventHandler(async event => {
   guestNoStore(event)
   const manager = guestManager(event)
-  return studioApi(() => getManagedAlbumWorkspace(getAppPool(), manager, manager.albumId))
+  return studioApi(() => getManagedAlbumWorkspace(getAppPool(), manager, manager.albumId, { analyticsIdSecret: useRuntimeConfig(event).analyticsIdSecret }))
 })

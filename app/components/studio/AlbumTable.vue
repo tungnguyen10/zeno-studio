@@ -56,7 +56,7 @@ const rows = computed(() => props.albums.map(album => {
               <template v-if="!row.album.archivedAt">
                 <UiButton v-if="row.step.kind === 'finalize'" :to="`/studio/albums/${row.album.id}?studio=${studioId}`" size="sm">{{ NEXT_STEP_LABELS.finalize }}</UiButton>
                 <UiButton v-else-if="row.step.kind === 'results'" :to="`/studio/albums/${row.album.id}/results?studio=${studioId}`" size="sm">{{ NEXT_STEP_LABELS.results }}</UiButton>
-                <StudioAlbumShareActions compact :album-title="row.album.title" :primary="row.step.kind === 'publish' || row.step.kind === 'share'" :studio-id="studioId" :album-id="row.album.id" :status="row.status" :can-publish="canManage" :can-share="canShare" @published="emit('published')" />
+                <StudioAlbumShareActions screen-name="studio_home" compact :album-title="row.album.title" :primary="row.step.kind === 'publish' || row.step.kind === 'share'" :studio-id="studioId" :album-id="row.album.id" :analytics="row.album.analytics" :photo-count="row.album.photoCount" :status="row.status" :can-publish="canManage" :can-share="canShare" @published="emit('published')" />
               </template>
               <UiButton v-if="row.album.archivedAt || row.step.kind !== 'finalize'" :to="`/studio/albums/${row.album.id}?studio=${studioId}`" variant="secondary" size="sm">Chi tiết</UiButton>
               <UiMenu v-if="row.menu.length" icon-only :label="`Tùy chọn ${row.album.title}`" :items="row.menu" @select="emit('manage', $event, row.album)" />

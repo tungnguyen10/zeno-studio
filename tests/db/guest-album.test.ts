@@ -1,3 +1,6 @@
+import { createAlbumShareLink } from '../../server/albums/album'
+import { getStudioAlbumWorkspace } from '../../server/albums/workspace'
+import { getAlbumOverview } from '../../server/albums/access'
 import { afterAll, describe, expect, it } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFile, readdir } from 'node:fs/promises'
@@ -6,7 +9,7 @@ import { createGuestAlbum, createGuestShareLink, claimGuestAlbum } from '../../s
 import { joinAlbum, resolveAlbumAccess } from '../../server/albums/access'
 import { ensureStudio, getStudiosForUser } from '../../server/studios/studio'
 import { getManagedAlbumWorkspace, listManagedAlbumPhotos } from '../../server/albums/workspace'
-import { finalizeManagedSelection, getManagedSelectionResults, getSelectionState, setPhotoSelection } from '../../server/albums/selection'
+import { finalizeManagedSelection, reopenManagedSelection, getManagedSelectionResults, getSelectionState, setPhotoSelection } from '../../server/albums/selection'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 import { hashAccessToken } from '../../server/security/access-token'
 
@@ -28,7 +31,8 @@ describe('guest album ownership', () => {
     const created = await createGuestAlbum(pool, source, {
       title: 'Guest wedding', folderUrl: 'https://drive.google.com/drive/folders/folder123',
       expiresInDays: 15, limit: { kind: 'unlimited' },
-    })
+    }, { analyticsIdSecret: 'fixed-test-secret' })
+    expect(created.analytics?.albumId).toMatch(/^alb_[a-f0-9]{64}$/)
     expect(created.status).toBe('PUBLISHED')
     expect(created.photoCount).toBe(1)
     expect(created.adminToken).not.toBe(created.customerToken)
@@ -43,6 +47,9 @@ describe('guest album ownership', () => {
     const first = await createGuestAlbum(pool, source, {
       title: 'First', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'unlimited' },
     })
+    const metadata = { analyticsIdSecret: 'fixed-test-secret' }
+    const before = await getManagedAlbumWorkspace(pool, { kind: 'guest', albumId: first.id, token: first.adminToken }, first.id, metadata)
+    expect(before.analytics?.albumId).toMatch(/^alb_[a-f0-9]{64}$/)
     const second = await createGuestAlbum(pool, source, {
       title: 'Second', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'unlimited' },
     })
@@ -57,6 +64,9 @@ describe('guest album ownership', () => {
     await expect(claimGuestAlbum(pool, first.id, second.adminToken, studio.id, 'claim-owner')).rejects.toMatchObject({ statusCode: 403 })
     await claimGuestAlbum(pool, first.id, first.adminToken, studio.id, 'claim-owner')
     expect(await resolveAlbumAccess(pool, first.adminToken)).toBeNull()
+    expect((await getStudioAlbumWorkspace(pool, studio.id, 'claim-owner', first.id, metadata)).analytics).toEqual(before.analytics)
+    const reissued = await createAlbumShareLink(pool, studio.id, 'claim-owner', first.id)
+    expect((await getAlbumOverview(pool, (await resolveAlbumAccess(pool, reissued.customerToken))!, metadata)).analytics).toEqual(before.analytics)
     expect(await resolveAlbumAccess(pool, first.customerToken)).toMatchObject({ albumId: first.id, scope: 'customer' })
     expect((await getSelectionState(pool, participant)).selectedPhotoIds).toEqual([firstPhotoId])
     expect(await resolveAlbumAccess(pool, second.adminToken)).toMatchObject({ albumId: second.id, scope: 'guest_admin' })
@@ -87,6 +97,9 @@ describe('guest album ownership', () => {
       client.query<{ count: string }>('SELECT count(*)::text AS count FROM production_tasks WHERE album_id = $1', [created.id]))
     expect(taskCount.rows[0]?.count).toBe('0')
     const finalized = await getManagedSelectionResults(pool, manager, created.id)
+    await reopenManagedSelection(pool, manager, created.id)
+    expect(await getManagedAlbumWorkspace(pool, manager, created.id)).toMatchObject({ currentCycle: 2 })
+    expect(await getManagedSelectionResults(pool, manager, created.id, { versionId: finalized.selectionVersionId })).toMatchObject({ cycle: 1, versionNumber: 1 })
     expect((await getManagedSelectionResults(pool, manager, created.id, { versionId: finalized.selectionVersionId })).items[0]?.filename).toBe('01.jpg')
     const other = await createGuestAlbum(pool, source, {
       title: 'Other album', folderUrl: 'https://drive.google.com/drive/folders/folder123',

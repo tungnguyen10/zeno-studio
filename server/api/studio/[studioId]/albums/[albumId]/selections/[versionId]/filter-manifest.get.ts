@@ -1,3 +1,4 @@
+import { albumAnalyticsMetadata } from '../../../../../../../analytics/identity'
 import { getAppPool } from '../../../../../../../db/pool'
 import { getSelectionResults } from '../../../../../../../albums/selection'
 import { albumIdParam } from '../../../../../../../utils/album-api'
@@ -13,6 +14,8 @@ export default defineEventHandler(async event => {
   setHeader(event, 'cache-control', 'no-store')
   const result = await studioApi(() => getSelectionResults(getAppPool(), studioId, user.id, albumId, { versionId }))
   return {
+    ...albumAnalyticsMetadata(albumId, { analyticsIdSecret: useRuntimeConfig(event).analyticsIdSecret }),
+    cycle: result.cycle,
     albumId, selectionVersionId: result.selectionVersionId, versionNumber: result.versionNumber,
     finalizedAt: result.finalizedAt,
     items: result.items.map(item => ({ photoId: item.photoId, originalFilename: item.filename, notes: item.notes })),

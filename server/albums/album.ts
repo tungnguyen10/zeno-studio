@@ -1,3 +1,4 @@
+import { albumAnalyticsMetadata, type AnalyticsMetadataOptions, type AlbumAnalyticsMetadata } from '../analytics/identity'
 import { randomUUID } from 'node:crypto'
 import { recordStudioMetric } from '../analytics/studio-writer'
 import { withDatabaseContext, type ConnectionPool, type QueryClient } from '../db/context'
@@ -8,7 +9,7 @@ import { StudioOperationError } from '../studios/error'
 import { canPerform, type Role } from '../../shared/domain/workflow'
 import type { SelectionLimit } from '../../shared/domain/selection'
 
-export interface AlbumSummary {
+export interface AlbumSummary extends AlbumAnalyticsMetadata {
   id: string
   title: string
   status: 'DRAFT' | 'PUBLISHED' | 'FINALIZED' | 'EXPIRED' | 'DELIVERED'
@@ -89,7 +90,7 @@ export async function collectPhotos(source: PhotoSourceAdapter, folder: ReturnTy
   return photos.sort((a, b) => (a.filename < b.filename ? -1 : a.filename > b.filename ? 1 : 0))
 }
 
-export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapter, input: CreateAlbumInput): Promise<AlbumSummary> {
+export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapter, input: CreateAlbumInput, metadata: AnalyticsMetadataOptions = {}): Promise<AlbumSummary> {
   validateAlbumInput(input)
   let folder: ReturnType<typeof parseGoogleDriveFolderLink>
   try { folder = parseGoogleDriveFolderLink(input.folderUrl) }
@@ -108,7 +109,7 @@ export async function createAlbum(pool: ConnectionPool, source: PhotoSourceAdapt
   })
   const limit = input.limit
   const selectionLimit = limit.kind === 'range' ? limit.max : limit.kind === 'maximum' || limit.kind === 'exact' ? limit.count : null
-  return { id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length, selectedCount: 0, selectionLimit, latestVersionNumber: null, archivedAt: null }
+  return { ...albumAnalyticsMetadata(id, metadata), id, title: input.title.trim(), status: 'DRAFT', expiresAt: expiresAt!, photoCount: photos.length, selectedCount: 0, selectionLimit, latestVersionNumber: null, archivedAt: null }
 }
 
 export async function insertAlbumRecords(
@@ -152,7 +153,7 @@ export async function insertAlbumRecords(
   return expiresAt
 }
 
-export async function getStudioAlbums(pool: ConnectionPool, studioId: string, userId: string): Promise<AlbumSummary[]> {
+export async function getStudioAlbums(pool: ConnectionPool, studioId: string, userId: string, metadata: AnalyticsMetadataOptions = {}): Promise<AlbumSummary[]> {
   return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
     await requireAlbumPermission(client, studioId, userId, 'album.view')
     const result = await client.query<{ id: string; title: string; status: AlbumSummary['status']; expires_at: Date; archived_at: Date | null; photo_count: number; selected_count: number; limit_max: number | null; latest_version: number | null }>(
@@ -167,7 +168,7 @@ export async function getStudioAlbums(pool: ConnectionPool, studioId: string, us
        FROM albums a LEFT JOIN album_settings st ON st.album_id = a.id
        WHERE a.studio_id = $1 ORDER BY a.created_at DESC`, [studioId])
     return result.rows.map(row => ({
-      id: row.id, title: row.title, status: row.status, expiresAt: row.expires_at, photoCount: row.photo_count,
+      ...albumAnalyticsMetadata(row.id, metadata), id: row.id, title: row.title, status: row.status, expiresAt: row.expires_at, photoCount: row.photo_count,
       selectedCount: row.selected_count, selectionLimit: row.limit_max, latestVersionNumber: row.latest_version, archivedAt: row.archived_at,
     }))
   })
@@ -234,7 +235,7 @@ export async function deleteDraftAlbum(pool: ConnectionPool, studioId: string, u
   })
 }
 
-export async function publishAlbum(pool: ConnectionPool, studioId: string, userId: string, albumId: string): Promise<{ customerToken: string }> {
+export async function publishAlbum(pool: ConnectionPool, studioId: string, userId: string, albumId: string, metadata: AnalyticsMetadataOptions = {}): Promise<AlbumAnalyticsMetadata & { customerToken: string; photoCount: number }> {
   return withDatabaseContext(pool, { studioId, userId, scope: 'member' }, async client => {
     await requireAlbumPermission(client, studioId, userId, 'album.publish')
     const album = await client.query<{ id: string; photo_count: number; duration_days: number }>(
@@ -244,7 +245,7 @@ export async function publishAlbum(pool: ConnectionPool, studioId: string, userI
     await client.query("UPDATE albums SET status = 'PUBLISHED', published_at = now(), expires_at = now() + ($1::integer * interval '1 day'), updated_at = now() WHERE id = $2", [album.rows[0].duration_days, albumId])
     await client.query('INSERT INTO album_tokens (id, album_id, scope, token_hash) VALUES ($1, $2, $3, $4)', [randomUUID(), albumId, 'customer', token.tokenHash])
     await recordStudioMetric(client, studioId, albumId, 'album_published')
-    return { customerToken: token.token }
+    return { ...albumAnalyticsMetadata(albumId, metadata), customerToken: token.token, photoCount: album.rows[0].photo_count }
   })
 }
 

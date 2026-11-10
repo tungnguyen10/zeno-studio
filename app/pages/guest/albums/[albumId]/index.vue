@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { onMounted, ref } from 'vue'
 import { authClient } from '~/lib/auth-client'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
@@ -7,6 +9,7 @@ const route = useRoute()
 const albumId = String(route.params.albumId)
 const apiRoot = `/api/guest/albums/${albumId}`
 const ready = ref(false)
+const analytics = ref<AnalyticsIdentity>()
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
@@ -22,7 +25,7 @@ onMounted(async () => {
       adminLink.value = `${location.origin}${route.path}#admin-${token}`
       history.replaceState(history.state, '', `${location.pathname}${location.search}`)
     }
-    await $fetch(apiRoot)
+    analytics.value = (await $fetch<{ analytics?: AnalyticsIdentity }>(apiRoot)).analytics
     ready.value = true
   } catch (cause) { error.value = studioAlbumErrorMessage(cause) }
 })
@@ -39,8 +42,8 @@ async function share() {
   finally { busy.value = false }
 }
 
-async function copy(link: string) {
-  try { await navigator.clipboard.writeText(link); message.value = 'Đã sao chép link.' }
+async function copy(link: string, kind: 'customer' | 'admin') {
+  try { await navigator.clipboard.writeText(link); if (kind === 'customer') trackAnalyticsEvent({ name: 'album_shared', analytics: analytics.value, actor_type: 'guest_admin', screen_name: 'album_manage', share_method: 'clipboard', share_content: 'link', share_channel: 'copy_link' }); message.value = 'Đã sao chép link.' }
   catch { message.value = 'Không sao chép được. Bạn có thể chọn và sao chép link bên dưới.' }
 }
 
@@ -89,12 +92,12 @@ async function claim() {
         <p v-if="message" role="status" class="mt-4 text-sm text-brand">{{ message }}</p>
         <div v-if="customerLink" class="mt-4 rounded-xl bg-tint p-4">
           <p class="font-semibold">Link khách</p><a :href="customerLink" target="_blank" rel="noopener noreferrer" translate="no" class="focus-ring mt-2 block rounded break-all text-sm text-brand underline">{{ customerLink }}</a>
-          <UiButton variant="secondary" size="sm" class="mt-3" @click="copy(customerLink)">Sao chép link khách</UiButton>
+          <UiButton variant="secondary" size="sm" class="mt-3" @click="copy(customerLink, 'customer')">Sao chép link khách</UiButton>
         </div>
         <div v-if="adminLink" class="mt-4 rounded-xl bg-tint p-4">
           <p class="font-semibold">Lưu link quản trị</p><p class="mt-1 text-sm">Không thể khôi phục link này trước khi nhận album vào tài khoản.</p>
           <a :href="adminLink" translate="no" class="focus-ring mt-2 block rounded break-all text-sm text-brand underline">{{ adminLink }}</a>
-          <UiButton variant="secondary" size="sm" class="mt-3" @click="copy(adminLink)">Sao chép link quản trị</UiButton>
+          <UiButton variant="secondary" size="sm" class="mt-3" @click="copy(adminLink, 'admin')">Sao chép link quản trị</UiButton>
         </div>
       </div>
     </section>

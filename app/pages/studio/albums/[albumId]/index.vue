@@ -25,6 +25,8 @@ onMounted(() => { void store.ensureStudios(studioId) })
       <StudioAlbumShareActions
         compact
         :album-title="workspace.title"
+        :analytics="workspace.analytics"
+        :photo-count="workspace.photoCount"
         :studio-id="studioId"
         :album-id="albumId"
         :status="effectiveStatus({ status: workspace.status as AlbumStatus, expiresAt: workspace.expiresAt })"

@@ -31,5 +31,5 @@ export default defineEventHandler(async event => {
   return studioApi(() => createGuestAlbum(getAppPool(), source, {
     title: body.title!, folderUrl: body.folderUrl!, expiresInDays: (body.expiresInDays ?? 15) as 15 | 30,
     limit: body.limit ?? { kind: 'unlimited' },
-  }))
+  }, { analyticsIdSecret: useRuntimeConfig(event).analyticsIdSecret }))
 })

@@ -18,5 +18,5 @@ export default defineEventHandler(async event => {
   return studioApi(async () => ({ album: await createAlbum(getAppPool(), source, {
     studioId, userId: user.id, folderUrl: body.folderUrl!, title: body.title!, expiresInDays: body.expiresInDays ?? 15,
     limit: body.limit ?? { kind: 'unlimited' },
-  }) }))
+  }, { analyticsIdSecret: useRuntimeConfig(event).analyticsIdSecret }) }))
 })

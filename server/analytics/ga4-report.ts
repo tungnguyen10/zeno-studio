@@ -1,10 +1,8 @@
 import { safePage } from '../../app/lib/analytics-model'
 
-export const GA4_EVENT_NAMES = [
-  'album_created', 'album_published', 'album_opened', 'gallery_view_changed',
-  'photo_selected', 'photo_unselected', 'photo_note_saved', 'selection_finalized',
-  'selection_reopened', 'file_match_completed',
-] as const
+import { ANALYTICS_EVENT_NAMES } from '../../shared/domain/analytics'
+
+export const GA4_EVENT_NAMES = ANALYTICS_EVENT_NAMES
 
 export class Ga4UpstreamError extends Error {
   constructor(readonly status: number) { super('GA4 report unavailable') }
@@ -64,11 +62,20 @@ export async function fetchGa4SiteReport(
   catch { throw new Error('GA4 property timezone is not configured') }
   const dateRanges = [{ startDate: `${days - 1}daysAgo`, endDate: 'today' }]
   const endpoint = `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`
+  const environmentFilter = { filter: {
+    fieldName: 'customEvent:environment',
+    stringFilter: { matchType: 'EXACT', value: 'production', caseSensitive: true },
+  } }
   async function run(body: Record<string, unknown>): Promise<Ga4ReportResponse> {
     const response = await fetcher(endpoint, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ dateRanges, ...body }),
+      body: JSON.stringify({
+        dateRanges, ...body,
+        dimensionFilter: body.dimensionFilter
+          ? { andGroup: { expressions: [environmentFilter, body.dimensionFilter] } }
+          : environmentFilter,
+      }),
       signal: AbortSignal.timeout(8000),
     })
     if (!response.ok) throw new Ga4UpstreamError(response.status)

@@ -14,3 +14,19 @@ describe('analytics runtime enable gate', () => {
     expect(isAnalyticsEnabled(true, id)).toBe(false)
   })
 })
+
+import { analyticsCommonContext, analyticsDeploymentEnvironment, analyticsAppVersion } from '../../app/lib/analytics-config'
+describe('deployment context', () => {
+  it('distinguishes preview production builds and validates explicit overrides', () => {
+    expect(analyticsDeploymentEnvironment(undefined, 'preview')).toBe('staging')
+    expect(analyticsDeploymentEnvironment(undefined, 'production')).toBe('production')
+    expect(analyticsDeploymentEnvironment(undefined, 'development')).toBe('development')
+    expect(analyticsDeploymentEnvironment('invalid', undefined)).toBe('development')
+    expect(analyticsDeploymentEnvironment('staging', 'production')).toBe('staging')
+  })
+  it('only allows deployment SHA or local version and fixed taxonomy', () => {
+    expect(analyticsAppVersion(undefined, 'abcdef1234567890')).toBe('abcdef1')
+    expect(analyticsAppVersion('private string', undefined)).toBe('local')
+    expect(analyticsCommonContext('staging', 'abcdef1')).toEqual({ environment: 'staging', app_version: 'abcdef1', taxonomy_version: 'zeno_v2' })
+  })
+})

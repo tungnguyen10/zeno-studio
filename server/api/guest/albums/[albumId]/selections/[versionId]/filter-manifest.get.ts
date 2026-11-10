@@ -1,3 +1,4 @@
+import { albumAnalyticsMetadata } from '../../../../../../analytics/identity'
 import { getAppPool } from '../../../../../../db/pool'
 import { getManagedSelectionResults } from '../../../../../../albums/selection'
 import { guestManager, guestNoStore } from '../../../../../../utils/guest-api'
@@ -12,6 +13,8 @@ export default defineEventHandler(async event => {
   }
   const result = await studioApi(() => getManagedSelectionResults(getAppPool(), manager, manager.albumId, { versionId }))
   return {
+    ...albumAnalyticsMetadata(manager.albumId, { analyticsIdSecret: useRuntimeConfig(event).analyticsIdSecret }),
+    cycle: result.cycle,
     albumId: manager.albumId,
     selectionVersionId: result.selectionVersionId,
     versionNumber: result.versionNumber,

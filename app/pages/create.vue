@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { trackAnalyticsEvent } from '~/lib/analytics-events'
+import { newAnalyticsAttemptId, trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onMounted, ref } from 'vue'
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+import { photoCountBucket, normalizeAnalyticsError } from '~/lib/analytics-model'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 import { publicPage } from '~~/shared/site'
 
@@ -20,32 +22,38 @@ const message = ref('')
 const customerLink = ref('')
 const adminLink = ref('')
 const createdTitle = ref('')
+const createdAnalytics = ref<AnalyticsIdentity>()
 const afterCreate = 'Tạo xong bạn nhận 2 link: link gửi khách và link quản trị bí mật — hãy lưu link quản trị, vì không lấy lại được nếu mất.'
-onMounted(() => { hydrated.value = true })
+onMounted(() => { hydrated.value = true; trackAnalyticsEvent({ name: 'album_creation_started', creation_flow: 'guest', actor_type: 'guest_admin', screen_name: 'album_create', entry_point: 'quick_create_page' }) })
 
 async function create() {
   if (busy.value) return
   busy.value = true
   error.value = ''
   message.value = ''
+  const attempt_id = newAnalyticsAttemptId()
+  const started = performance.now()
+  trackAnalyticsEvent({ name: 'album_creation_submitted', creation_flow: 'guest', actor_type: 'guest_admin', screen_name: 'album_create', attempt_id, source_method: 'google_drive' })
   try {
-    const result = await $fetch<{ id: string; adminToken: string; customerToken: string }>('/api/guest/albums', {
+    const result = await $fetch<{ id: string; adminToken: string; customerToken: string; status: string; photoCount: number; analytics?: AnalyticsIdentity }>('/api/guest/albums', {
       method: 'POST', body: {
         title: title.value, folderUrl: folderUrl.value, expiresInDays: expiresInDays.value,
         limit: limited.value ? { kind: 'maximum', count: maxCount.value } : { kind: 'unlimited' },
       },
     })
-    trackAnalyticsEvent({ name: 'album_created', creation_flow: 'guest' })
-    trackAnalyticsEvent({ name: 'album_published', creation_flow: 'guest' })
+    createdAnalytics.value = result.analytics
+    const context = { analytics: result.analytics, creation_flow: 'guest' as const, actor_type: 'guest_admin' as const, screen_name: 'album_create' as const }
+    trackAnalyticsEvent({ name: 'album_created', ...context, attempt_id, source_method: 'google_drive', duration_ms: Math.round(performance.now() - started), photo_count_bucket: photoCountBucket(result.photoCount), event_id: `album_created:${result.analytics?.albumId}` })
+    if (result.status === 'PUBLISHED') trackAnalyticsEvent({ name: 'album_published', ...context, photo_count_bucket: photoCountBucket(result.photoCount), event_id: `album_published:${result.analytics?.albumId}` })
     customerLink.value = `${location.origin}/album/${result.id}?token=${result.customerToken}`
     adminLink.value = `${location.origin}/guest/albums/${result.id}#admin-${result.adminToken}`
     createdTitle.value = title.value
-  } catch (cause) { error.value = studioAlbumErrorMessage(cause) }
+  } catch (cause) { trackAnalyticsEvent({ name: 'album_creation_failed', creation_flow: 'guest', actor_type: 'guest_admin', screen_name: 'album_create', attempt_id, ...normalizeAnalyticsError(cause) }); error.value = studioAlbumErrorMessage(cause) }
   finally { busy.value = false }
 }
 
-async function copy(link: string, label: string) {
-  try { await navigator.clipboard.writeText(link); message.value = `Đã sao chép ${label}.` }
+async function copy(link: string, label: string, kind: 'customer' | 'admin') {
+  try { await navigator.clipboard.writeText(link); if (kind === 'customer') trackAnalyticsEvent({ name: 'album_shared', analytics: createdAnalytics.value, actor_type: 'guest_admin', screen_name: 'album_create', share_method: 'clipboard', share_content: 'link', share_channel: 'copy_link' }); message.value = `Đã sao chép ${label}.` }
   catch { message.value = `Không sao chép được ${label}. Bạn có thể mở link ở trên và sao chép trực tiếp.` }
 }
 </script>
@@ -92,12 +100,12 @@ async function copy(link: string, label: string) {
           <div class="rounded-2xl border border-line bg-white p-4 sm:p-5">
             <h2 class="text-base font-semibold sm:text-lg">Link gửi khách</h2>
             <p class="mt-1 text-sm text-pretty text-muted">Gửi link này để khách xem, chọn và ghi chú ảnh.</p>
-            <StudioAlbumShareLink :link="customerLink" copy-label="Sao chép link khách" class="mt-3" @copy="copy(customerLink, 'link khách')" />
+            <StudioAlbumShareLink :link="customerLink" copy-label="Sao chép link khách" class="mt-3" @copy="copy(customerLink, 'link khách', 'customer')" />
           </div>
           <div class="rounded-2xl border border-line-strong bg-white p-4 sm:p-5">
             <h2 class="text-base font-semibold sm:text-lg">Link quản trị bí mật</h2>
             <p class="mt-1 text-sm text-pretty text-muted">Chỉ người có link này mới quản lý album. Hãy lưu lại; hiện chưa thể lấy lại nếu mất.</p>
-            <StudioAlbumShareLink :link="adminLink" label="Link quản trị" copy-label="Sao chép link quản trị" class="mt-3" @copy="copy(adminLink, 'link quản trị')" />
+            <StudioAlbumShareLink :link="adminLink" label="Link quản trị" copy-label="Sao chép link quản trị" class="mt-3" @copy="copy(adminLink, 'link quản trị', 'admin')" />
           </div>
         </div>
         <p role="status" class="text-sm text-brand">{{ message }}</p>

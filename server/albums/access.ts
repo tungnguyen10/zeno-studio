@@ -1,3 +1,4 @@
+import { albumAnalyticsMetadata, type AnalyticsMetadataOptions, type AlbumAnalyticsMetadata } from '../analytics/identity'
 import { withDatabaseContext, type ConnectionPool } from '../db/context'
 import { hashAccessToken, issueAccessToken } from '../security/access-token'
 import { StudioOperationError } from '../studios/error'
@@ -21,7 +22,7 @@ export interface GalleryPhoto {
   sortOrder: number
 }
 
-export async function getAlbumOverview(pool: ConnectionPool, access: AlbumAccess): Promise<{
+export async function getAlbumOverview(pool: ConnectionPool, access: AlbumAccess, metadata: AnalyticsMetadataOptions = {}): Promise<AlbumAnalyticsMetadata & {
   id: string; title: string; status: string; currentCycle: number; expiresAt: Date; joined: boolean; canJoin: boolean
   settings: { limitKind: string; limitMin: number | null; limitMax: number | null }
   download: DownloadCapabilities
@@ -37,6 +38,7 @@ export async function getAlbumOverview(pool: ConnectionPool, access: AlbumAccess
       currentCycle: album.rows[0].current_cycle, expiresAt: album.rows[0].expires_at,
     })
     return {
+      ...albumAnalyticsMetadata(album.rows[0].id, metadata),
       id: album.rows[0].id, title: album.rows[0].title, status: album.rows[0].status, currentCycle: album.rows[0].current_cycle, expiresAt: album.rows[0].expires_at,
       joined: access.participantId !== null,
       canJoin: access.scope === 'customer' && access.participantId === null,

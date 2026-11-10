@@ -63,7 +63,7 @@ export async function getSelectionState(pool: ConnectionPool, access: AlbumAcces
   })
 }
 
-export async function setPhotoSelection(pool: ConnectionPool, access: AlbumAccess, photoId: string, selected: boolean, expectedVersion: number): Promise<{ status: SaveStatus; version: number; selected: boolean; count: number }> {
+export async function setPhotoSelection(pool: ConnectionPool, access: AlbumAccess, photoId: string, selected: boolean, expectedVersion: number): Promise<{ status: SaveStatus; version: number; selected: boolean; count: number; cycle: number; changed: boolean }> {
   const participantId = requireParticipant(access)
   if (!Number.isInteger(expectedVersion) || expectedVersion < 0 || typeof selected !== 'boolean') throw new StudioOperationError('Phiên bản hoặc lựa chọn không hợp lệ', 400)
   return withDatabaseContext(pool, { albumId: access.albumId, scope: access.scope, participantId }, async client => {
@@ -75,19 +75,19 @@ export async function setPhotoSelection(pool: ConnectionPool, access: AlbumAcces
     const current = await client.query<{ photo_id: string }>('SELECT photo_id FROM selections WHERE list_id = $1', [list.id])
     const currentIds = new Set(current.rows.map(row => row.photo_id))
     const isSelected = currentIds.has(photoId)
-    if (list.version !== expectedVersion) return { status: 'conflict', version: list.version, selected: isSelected, count: currentIds.size }
-    if (selected === isSelected) return { status: 'saved', version: list.version, selected, count: currentIds.size }
+    if (list.version !== expectedVersion) return { cycle: album.current_cycle, changed: false, status: 'conflict', version: list.version, selected: isSelected, count: currentIds.size }
+    if (selected === isSelected) return { cycle: album.current_cycle, changed: false, status: 'saved', version: list.version, selected, count: currentIds.size }
     if (selected && !canSelectAnother(selectionLimit(album), currentIds.size)) {
-      return { status: 'limit_reached', version: list.version, selected: false, count: currentIds.size }
+      return { cycle: album.current_cycle, changed: false, status: 'limit_reached', version: list.version, selected: false, count: currentIds.size }
     }
     if (selected) await client.query('INSERT INTO selections (album_id, list_id, photo_id, selected_by) VALUES ($1, $2, $3, $4)', [access.albumId, list.id, photoId, participantId])
     else await client.query('DELETE FROM selections WHERE list_id = $1 AND photo_id = $2', [list.id, photoId])
     const next = await client.query<{ version: number }>('UPDATE selection_lists SET version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [list.id])
-    return { status: 'saved', version: next.rows[0]!.version, selected, count: currentIds.size + (selected ? 1 : -1) }
+    return { cycle: album.current_cycle, changed: true, status: 'saved', version: next.rows[0]!.version, selected, count: currentIds.size + (selected ? 1 : -1) }
   })
 }
 
-export async function savePhotoNote(pool: ConnectionPool, access: AlbumAccess, photoId: string, body: string, expectedVersion: number): Promise<{ status: 'saved' | 'conflict'; version: number; body: string }> {
+export async function savePhotoNote(pool: ConnectionPool, access: AlbumAccess, photoId: string, body: string, expectedVersion: number): Promise<{ status: 'saved' | 'conflict'; version: number; body: string; cycle: number; changed: boolean }> {
   const participantId = requireParticipant(access)
   if (!Number.isInteger(expectedVersion) || expectedVersion < 0 || typeof body !== 'string' || body.length > 5000) throw new StudioOperationError('Nội dung hoặc phiên bản ghi chú không hợp lệ', 400)
   return withDatabaseContext(pool, { albumId: access.albumId, scope: access.scope, participantId }, async client => {
@@ -103,8 +103,8 @@ export async function savePhotoNote(pool: ConnectionPool, access: AlbumAccess, p
     const note = await client.query<{ id: string; body: string; version: number }>(
       'SELECT id, body, version FROM photo_notes WHERE photo_id = $1 AND participant_id = $2 FOR UPDATE', [photoId, participantId])
     const previous = note.rows[0]
-    if ((previous?.version ?? 0) !== expectedVersion) return { status: 'conflict', version: previous?.version ?? 0, body: previous?.body ?? '' }
-    if (previous?.body === body) return { status: 'saved', version: previous.version, body }
+    if ((previous?.version ?? 0) !== expectedVersion) return { cycle: album.current_cycle, changed: false, status: 'conflict', version: previous?.version ?? 0, body: previous?.body ?? '' }
+    if (previous?.body === body) return { cycle: album.current_cycle, changed: false, status: 'saved', version: previous.version, body }
     const noteId = previous?.id ?? randomUUID()
     const version = expectedVersion + 1
     if (previous) await client.query('UPDATE photo_notes SET body = $1, version = $2, updated_at = now() WHERE id = $3', [body, version, noteId])
@@ -114,11 +114,11 @@ export async function savePhotoNote(pool: ConnectionPool, access: AlbumAccess, p
         [noteId, access.albumId, photoId, participantId, body, version])
       if (!inserted.rows[0]) {
         const latest = await client.query<{ body: string; version: number }>('SELECT body, version FROM photo_notes WHERE photo_id = $1 AND participant_id = $2', [photoId, participantId])
-        return { status: 'conflict', version: latest.rows[0]?.version ?? 0, body: latest.rows[0]?.body ?? '' }
+        return { cycle: album.current_cycle, changed: false, status: 'conflict', version: latest.rows[0]?.version ?? 0, body: latest.rows[0]?.body ?? '' }
       }
     }
     await client.query('INSERT INTO photo_note_revisions (id, album_id, note_id, version, body) VALUES ($1, $2, $3, $4, $5)', [randomUUID(), access.albumId, noteId, version, body])
-    return { status: 'saved', version, body }
+    return { cycle: album.current_cycle, changed: true, status: 'saved', version, body }
   })
 }
 
@@ -144,12 +144,12 @@ function adjustmentIds(value: unknown): string[] {
   return value as string[]
 }
 
-export async function finalizeStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string, adjustments?: FinalizeAdjustments): Promise<{ versionNumber: number; count: number }> {
+export async function finalizeStudioSelection(pool: ConnectionPool, studioId: string, userId: string, albumId: string, adjustments?: FinalizeAdjustments): Promise<{ versionNumber: number; count: number; cycle: number }> {
   return finalizeManagedSelection(pool, { kind: 'member', studioId, userId }, albumId, adjustments)
 }
 
 // The final set is the customer's shared list plus `include`, minus `exclude`, so 10k-photo albums never ship full id lists.
-export async function finalizeManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string, adjustments: FinalizeAdjustments = {}): Promise<{ versionNumber: number; count: number }> {
+export async function finalizeManagedSelection(pool: ConnectionPool, manager: AlbumManager, albumId: string, adjustments: FinalizeAdjustments = {}): Promise<{ versionNumber: number; count: number; cycle: number }> {
   const include = adjustmentIds(adjustments.include)
   const exclude = adjustmentIds(adjustments.exclude)
   return withManagedAlbum(pool, manager, albumId, 'selection.finalize', async (client, session) => {
@@ -183,7 +183,7 @@ export async function finalizeManagedSelection(pool: ConnectionPool, manager: Al
     await client.query("UPDATE selection_rounds SET status = 'CLOSED' WHERE id = $1", [album.round_id])
     await client.query("UPDATE albums SET status = 'FINALIZED', updated_at = now() WHERE id = $1", [albumId])
     await recordStudioMetric(client, session.studioId, albumId, 'selection_finalized')
-    return { versionNumber, count: selected.length }
+    return { versionNumber, count: selected.length, cycle: album.current_cycle }
   })
 }
 
@@ -216,7 +216,7 @@ export async function reopenManagedSelection(pool: ConnectionPool, manager: Albu
 }
 
 export interface SelectionResultItem { photoId: string; filename: string; notes: { text: string }[] }
-export interface SelectionResults { selectionVersionId: string; finalizedAt: string; versionNumber: number; total: number; notesCount: number; items: SelectionResultItem[]; nextCursor: string | null }
+export interface SelectionResults { cycle: number; selectionVersionId: string; finalizedAt: string; versionNumber: number; total: number; notesCount: number; items: SelectionResultItem[]; nextCursor: string | null }
 export interface ResultPageOptions { limit?: number; cursor?: string; versionId?: string; search?: string; notesFilter?: 'all' | 'with' | 'without' }
 
 function parseResultCursor(value: string): { filename: string; id: string; versionId: string; search: string; notesFilter: string } {
@@ -239,8 +239,8 @@ export async function getManagedSelectionResults(pool: ConnectionPool, manager: 
   const search = page?.search ?? ''
   const notesFilter = page?.notesFilter ?? 'all'
   return withManagedAlbum(pool, manager, albumId, 'album.view', async client => {
-    const version = await client.query<{ id: string; version_number: number; finalized_at: Date; total: number; notes_count: number }>(
-      `SELECT v.id, v.version_number, v.finalized_at,
+    const version = await client.query<{ id: string; version_number: number; cycle: number; finalized_at: Date; total: number; notes_count: number }>(
+      `SELECT v.id, v.version_number, v.cycle, v.finalized_at,
         (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id) AS total,
         (SELECT count(*)::integer FROM selection_version_items i WHERE i.selection_version_id = v.id AND jsonb_array_length(i.notes) > 0) AS notes_count
        FROM selection_versions v WHERE v.album_id = $1 AND ($2::uuid IS NULL OR v.id = $2::uuid)
@@ -260,7 +260,7 @@ export async function getManagedSelectionResults(pool: ConnectionPool, manager: 
     const mapped = rows.map(row => ({ photoId: row.photo_id, filename: row.filename, notes: row.notes.map(note => ({ text: note.text })) }))
     const last = mapped.at(-1)
     return {
-      selectionVersionId: versionId, finalizedAt: version.rows[0].finalized_at.toISOString(),
+      cycle: version.rows[0].cycle, selectionVersionId: versionId, finalizedAt: version.rows[0].finalized_at.toISOString(),
       versionNumber: version.rows[0].version_number, total: version.rows[0].total, notesCount: version.rows[0].notes_count, items: mapped,
       nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ filename: last.filename, id: last.photoId, versionId, search, notesFilter })).toString('base64url') : null,
     }

@@ -40,7 +40,7 @@ const menuItems = computed((): Array<{ key: AlbumManageAction; label: string }> 
       <template v-if="!album.archivedAt">
         <UiButton v-if="step.kind === 'finalize'" :to="detailTo" size="sm">{{ NEXT_STEP_LABELS.finalize }}</UiButton>
         <UiButton v-else-if="step.kind === 'results'" :to="resultsTo" size="sm">{{ NEXT_STEP_LABELS.results }}</UiButton>
-        <StudioAlbumShareActions compact :album-title="album.title" :primary="sharePrimary" :studio-id="studioId" :album-id="album.id" :status="status" :can-publish="canPublish" :can-share="canShare" @published="emit('published')" />
+        <StudioAlbumShareActions screen-name="studio_home" compact :album-title="album.title" :primary="sharePrimary" :studio-id="studioId" :album-id="album.id" :analytics="album.analytics" :photo-count="album.photoCount" :status="status" :can-publish="canPublish" :can-share="canShare" @published="emit('published')" />
       </template>
       <UiButton v-if="album.archivedAt || step.kind !== 'finalize'" :to="detailTo" variant="secondary" size="sm">Chi tiết</UiButton>
       <UiMenu v-if="menuItems.length" icon-only class="ml-auto" :label="`Tùy chọn ${album.title}`" :items="menuItems" @select="emit('manage', $event)" />

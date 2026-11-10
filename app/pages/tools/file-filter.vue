@@ -160,7 +160,7 @@ function runPreview() {
   report.value = null
   missingCopied.value = false
   const { matched, missing, ambiguous } = preview.value
-  trackAnalyticsEvent({ name: 'file_match_completed', matched_count: matched.length, missing_count: missing.length, ambiguous_count: ambiguous.length })
+  trackAnalyticsEvent({ name: 'file_match_completed', context: 'standalone', screen_name: 'file_filter', matched_count: matched.length, missing_count: missing.length, ambiguous_count: ambiguous.length })
   if (ambiguous.length) notify(`Có ${ambiguous.length} tên trùng — chọn file đúng ở bước 3 trước khi copy.`, 'warn')
   else if (missing.length) notify(`Khớp ${matched.length} file, ${missing.length} tên không tìm thấy.`, 'warn')
   else notify(`Khớp đủ ${matched.length} file. Sẵn sàng copy.`, 'success')

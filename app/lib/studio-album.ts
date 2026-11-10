@@ -1,6 +1,9 @@
 import type { AlbumStatus } from '~~/shared/domain/album-status'
 
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+
 export interface StudioAlbum {
+  analytics?: AnalyticsIdentity
   id: string
   title: string
   status: AlbumStatus

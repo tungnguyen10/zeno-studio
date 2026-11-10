@@ -89,3 +89,19 @@ Vercel Production `dpl_64pioMGDSRvdekcTGErH43X5y87G` Ready và đã gắn alias 
 `NUXT_PUBLIC_STUDIO_GALLERY_ANALYTICS_ENABLED` là cờ **riêng**, mặc định tắt cả khi GA4 tag đã bật. Theo chỉ đạo mới nhất, đặt `true` ở Production trong release này. API và client đều kiểm cờ; API vẫn kiểm quyền album, RLS và rate limit. Số liệu workflow vẫn đầy đủ từ database; lịch sử gallery trước khi bật cờ không thể khôi phục theo studio.
 
 Migration 024–025 đã được thử trên branch tạm từ Neon `production` rồi áp lên Production; schedule `album-expiry` đã bật để dọn aggregate sau 120 ngày và rate rows sau một ngày. Sau release mới, đối chiếu 7/30/90 ngày với GA4 UI, thử 403 cross-studio, 320px/desktop, workflow tổng hợp, tự động gửi GA4 và payload chỉ số. Không chạy fixture live test trên Production. Lưu deployment ID và kết quả smoke sau phát hành.
+
+
+## GA4 taxonomy zeno_v2 — preflight trước release
+
+Bản thích ứng event tracking ngày 10/11/2026 có [taxonomy và checklist riêng](./analytics-event-tracking.md). Code mới chưa đồng nghĩa Production đã deploy hoặc GA4 đã nhận event mới.
+
+- Thêm private `NUXT_ANALYTICS_ID_SECRET` (secret ngẫu nhiên ít nhất 32 ký tự), ổn định giữa các lần deploy và độc lập Better Auth. Không đưa secret vào public runtime config.
+- Đặt `NUXT_PUBLIC_ANALYTICS_ENVIRONMENT=production` trên Production; QA Preview dùng `staging` và measurement ID test. Build fallback từ `VERCEL_ENV`.
+- `NUXT_PUBLIC_ANALYTICS_APP_VERSION` dùng short release SHA (fallback `VERCEL_GIT_COMMIT_SHA`); Production không dùng `local`.
+- Chạy `node scripts/check-analytics-config.mjs` trong môi trường release trước deploy. Script không truy cập Neon/Google và chỉ in tên cấu hình thiếu/sai.
+- Đăng ký event-scoped custom dimension `environment` **trước khi đưa report admin mới vào sử dụng**, cùng các dimensions liệt kê trong taxonomy. Bốn query báo cáo hiện lọc Production; dữ liệu lịch sử chưa có environment sẽ không nằm trong kết quả. Không fallback sang report không lọc nếu Google từ chối dimension chưa đăng ký.
+- Giữ Enhanced Measurement tắt và page view thủ công; giữ gate bộ đếm gallery Studio độc lập với GA4. Thiếu HMAC secret không được chặn nghiệp vụ hoặc rò raw ID.
+- Key events v2: `album_created`, `album_published`, `album_shared`, `selection_finalized`. Lưu evidence cấu hình, Tag Assistant và DebugView; không đánh dấu nghiệm thu chỉ dựa vào mock tests.
+- Chưa cấu hình BigQuery/export trong thay đổi code này. End-to-end nối Studio–Khách theo album và lịch sử North Star dài hạn thuộc P1.
+
+Không tạo fixture album Production chỉ để QA và không gửi test tự động vào property Production. Release/deploy vẫn là thao tác vận hành riêng.

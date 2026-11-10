@@ -3,14 +3,14 @@ import { PGlite } from '@electric-sql/pglite'
 import { readFile } from 'node:fs/promises'
 import { withDatabaseContext } from '../../server/db/context'
 import { archiveStudioAlbum, createAlbum, createAlbumShareLink, deleteDraftAlbum, getStudioAlbums, publishAlbum, restoreStudioAlbum, updateStudioAlbum } from '../../server/albums/album'
-import { joinAlbum, listAlbumPhotos, resolveAlbumAccess } from '../../server/albums/access'
+import { getAlbumOverview, joinAlbum, listAlbumPhotos, resolveAlbumAccess } from '../../server/albums/access'
 import { finalizeStudioSelection, setPhotoSelection } from '../../server/albums/selection'
 import { DriveSourceError } from '../../server/photo-sources/google-drive'
 import { ensureStudio } from '../../server/studios/studio'
 import type { PhotoSourceAdapter } from '../../server/photo-sources/photo-source'
 
 const db = await PGlite.create()
-for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql', '017_guest_albums.sql', '019_shared_customer_participant.sql', '020_album_archive.sql', '021_album_download.sql']) {
+for (const name of ['000_auth.sql', '001_core.sql', '002_workflow.sql', '003_rls.sql', '004_expiry.sql', '005_album_owner_guard.sql', '006_auth_column_names.sql', '007_studio_membership_context.sql', '008_studio_invitations.sql', '009_studio_bootstrap_guard.sql', '010_album_source_details.sql', '011_album_token_access.sql', '012_selection_cycles.sql', '013_participant_rls.sql', '016_photo_thumbnails.sql', '017_guest_albums.sql', '019_shared_customer_participant.sql', '020_album_archive.sql', '021_album_download.sql', '022_album_download_public_settings.sql']) {
   await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'))
 }
 await db.exec(await readFile(new URL('../../db/migrations/025_studio_analytics.sql', import.meta.url), 'utf8'))
@@ -32,6 +32,19 @@ const source: PhotoSourceAdapter = {
 }
 
 describe('studio album lifecycle', () => {
+  it('exposes authorized identity consistently while omitting it without a secret', async () => {
+    const studio = await ensureStudio(pool, 'analytics-owner', 'Analytics studio')
+    const metadata = { analyticsIdSecret: 'fixed-test-secret' }
+    const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'analytics-owner', title: 'Identity', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'unlimited' } }, metadata)
+    expect(album.analytics?.albumId).toMatch(/^alb_[a-f0-9]{64}$/)
+    expect((await getStudioAlbums(pool, studio.id, 'analytics-owner', metadata))[0]?.analytics).toEqual(album.analytics)
+    expect((await getStudioAlbums(pool, studio.id, 'analytics-owner'))[0]).not.toHaveProperty('analytics')
+    const published = await publishAlbum(pool, studio.id, 'analytics-owner', album.id, metadata)
+    expect(published).toMatchObject({ analytics: album.analytics, photoCount: 2 })
+    const access = (await resolveAlbumAccess(pool, published.customerToken))!
+    expect(await getAlbumOverview(pool, access, metadata)).toMatchObject({ analytics: album.analytics, currentCycle: 1 })
+  })
+
   it('edits draft settings and only the title after publication', async () => {
     const studio = await ensureStudio(pool, 'settings-owner', 'Settings studio')
     const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'settings-owner', folderUrl: 'https://drive.google.com/drive/folders/folder123', title: 'Before', expiresInDays: 15, limit: { kind: 'maximum', count: 2 } })

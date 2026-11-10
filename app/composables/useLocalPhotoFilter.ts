@@ -1,3 +1,4 @@
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
 import { trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { matchLocalPhotos, type MatchOptions, type PhotoMatchResult } from '~~/shared/domain/file-matching'
@@ -9,6 +10,8 @@ import { copyLocalFiles, type CopyJobItem, type CopyOutcome } from '~~/app/servi
 import { writeFilterReports, writeOutputMarker } from '~~/app/services/local-filter/reportExporter'
 
 export interface FilterManifest {
+  analytics?: AnalyticsIdentity
+  cycle: number
   albumId: string
   selectionVersionId: string
   versionNumber: number
@@ -188,7 +191,7 @@ export function useLocalPhotoFilter(manifest: FilterManifest, reportMatch?: (cou
       if (current.signal.aborted) return
       phase.value = 'preview'
       trackAnalyticsEvent({
-        name: 'file_match_completed',
+        name: 'file_match_completed', context: 'album', analytics: manifest.analytics, version_number: manifest.versionNumber, cycle: manifest.cycle, screen_name: 'file_filter',
         matched_count: preview.value.matched.length,
         missing_count: preview.value.missing.length,
         ambiguous_count: preview.value.ambiguous.length,

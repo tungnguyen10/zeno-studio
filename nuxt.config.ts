@@ -43,12 +43,15 @@ export default defineNuxtConfig({
     driveVerified: '',
     googleClientId: '',
     googleClientSecret: '',
+    analyticsIdSecret: '',
     ga4PropertyId: '',
     ga4PropertyTimezone: '',
     ga4ServiceAccountJson: '',
     public: {
       // Absolute origin for canonical, sitemap and structured data; falls back to the request origin.
       siteUrl: '',
+      analyticsEnvironment: process.env.VERCEL_ENV === 'production' ? 'production' : process.env.VERCEL_ENV === 'preview' ? 'staging' : 'development',
+      analyticsAppVersion: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) || 'local',
       ga4Enabled: '',
       ga4MeasurementId: '',
       studioGalleryAnalyticsEnabled: '',

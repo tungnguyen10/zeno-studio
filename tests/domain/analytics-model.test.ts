@@ -17,8 +17,9 @@ describe('safe GA4 metadata', () => {
   })
 
   it('allowlists event properties and discards injected fields', () => {
-    const event = { name: 'album_created', creation_flow: 'guest', albumId: 'secret' } as const
-    expect(buildAnalyticsEvent(event).params).toEqual({ creation_flow: 'guest' })
-    expect(buildAnalyticsEvent({ name: 'photo_selected', selected_count: -1 }).params).toEqual({})
+    const analytics = { albumId: `alb_${'a'.repeat(64)}` }
+    const event = { name: 'album_shared', share_method: 'clipboard', share_content: 'link', share_channel: 'copy_link', analytics, albumId: 'secret' } as const
+    expect(buildAnalyticsEvent(event)?.params).toEqual({ album_id: analytics.albumId, share_method: 'clipboard', share_content: 'link', share_channel: 'copy_link' })
+    expect(buildAnalyticsEvent({ name: 'photo_selected', analytics, selected_count: -1 })).toBeNull()
   })
 })

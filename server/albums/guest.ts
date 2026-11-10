@@ -1,3 +1,4 @@
+import { albumAnalyticsMetadata, type AnalyticsMetadataOptions, type AlbumAnalyticsMetadata } from '../analytics/identity'
 import { randomUUID } from 'node:crypto'
 import { recordStudioMetric } from '../analytics/studio-writer'
 import type { ConnectionPool } from '../db/context'
@@ -12,7 +13,7 @@ import { withManagedAlbum } from './manager'
 
 type GuestCreateInput = { title: string; folderUrl: string; expiresInDays: 15 | 30; limit: SelectionLimit }
 
-export async function createGuestAlbum(_pool: ConnectionPool, _source: PhotoSourceAdapter, _input: GuestCreateInput): Promise<{ id: string; status: 'PUBLISHED'; photoCount: number; adminToken: string; customerToken: string }> {
+export async function createGuestAlbum(_pool: ConnectionPool, _source: PhotoSourceAdapter, _input: GuestCreateInput, metadata: AnalyticsMetadataOptions = {}): Promise<AlbumAnalyticsMetadata & { id: string; status: 'PUBLISHED'; photoCount: number; adminToken: string; customerToken: string }> {
   validateAlbumInput(_input)
   let folder: ReturnType<typeof parseGoogleDriveFolderLink>
   try { folder = parseGoogleDriveFolderLink(_input.folderUrl) }
@@ -32,7 +33,7 @@ export async function createGuestAlbum(_pool: ConnectionPool, _source: PhotoSour
     await client.query('INSERT INTO album_tokens (id, album_id, scope, token_hash) VALUES ($1, $2, $3, $4), ($5, $2, $6, $7)',
       [randomUUID(), albumId, 'guest_admin', admin.tokenHash, randomUUID(), 'customer', customer.tokenHash])
   })
-  return { id: albumId, status: 'PUBLISHED', photoCount: photos.length, adminToken: admin.token, customerToken: customer.token }
+  return { ...albumAnalyticsMetadata(albumId, metadata), id: albumId, status: 'PUBLISHED', photoCount: photos.length, adminToken: admin.token, customerToken: customer.token }
 }
 
 export async function createGuestShareLink(_pool: ConnectionPool, _albumId: string, _adminToken: string): Promise<{ customerToken: string }> {

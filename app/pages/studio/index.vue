@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { trackAnalyticsEvent } from '~/lib/analytics-events'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ALBUM_FILTERS, countByFilter, filterAlbums, sortAlbums, type AlbumFilter, type AlbumSort } from '~~/shared/domain/album-status'
 import type { AlbumManageAction, StudioAlbum } from '~/lib/studio-album'
 import { useStudioStore } from '~/stores/studio'
@@ -13,6 +14,9 @@ const route = useRoute()
 const albums = ref<StudioAlbum[]>([])
 const albumsLoading = ref(false)
 const albumsLoaded = ref(false)
+let homeViewed = false
+let active = true
+onBeforeUnmount(() => { active = false })
 const albumsError = ref('')
 const filter = ref<AlbumFilter>('all')
 const query = ref('')
@@ -46,15 +50,21 @@ async function loadAlbums() {
   albumsError.value = ''
   try {
     const result = await $fetch<{ albums: StudioAlbum[] }>(`/api/studio/${id}/albums`)
-    if (store.studio?.id !== id) return
+    if (!active || store.studio?.id !== id) return
     albums.value = result.albums
     albumsLoaded.value = true
+    await nextTick()
+    if (active && store.studio?.id === id && !homeViewed) {
+      homeViewed = true
+      trackAnalyticsEvent({ name: 'studio_home_viewed', screen_name: 'studio_home', actor_type: 'studio' })
+    }
   } catch (error) {
     if (store.studio?.id === id) albumsError.value = error instanceof Error ? error.message : 'Không tải được album'
   } finally { if (store.studio?.id === id) albumsLoading.value = false }
 }
 
 watch(() => store.studio?.id, () => {
+  homeViewed = false
   albums.value = []
   albumsLoaded.value = false
   filter.value = 'all'

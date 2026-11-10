@@ -57,11 +57,17 @@ describe('Google Analytics Data API', () => {
     }
     const report = await fetchGa4SiteReport('123456', 'Asia/Ho_Chi_Minh', 7, 'test-access-token', fetcher as typeof fetch)
     expect(calls).toHaveLength(4)
+    const environmentFilter = { filter: { fieldName: 'customEvent:environment', stringFilter: { matchType: 'EXACT', value: 'production', caseSensitive: true } } }
+    for (const call of calls as Array<{ dimensionFilter: unknown; dimensions?: Array<{ name: string }> }>) {
+      if (call.dimensions?.[0]?.name === 'eventName') {
+        expect(call.dimensionFilter).toMatchObject({ andGroup: { expressions: [environmentFilter, { filter: { fieldName: 'eventName' } }] } })
+      } else expect(call.dimensionFilter).toEqual(environmentFilter)
+    }
     expect(calls.every(call => (call as { dateRanges: Array<{ startDate: string; endDate: string }> }).dateRanges[0]?.startDate === '6daysAgo')).toBe(true)
     expect(report).toMatchObject({ days: 7, timezone: 'Asia/Ho_Chi_Minh', activeUsers: 12, pageViews: 34 })
     expect(report.trend).toEqual([{ date: '2026-10-27', activeUsers: 4, pageViews: 11 }])
     expect(report.pages).toEqual([{ path: '/studio', views: 18 }, { path: '/album/:albumId', views: 7 }])
-    expect(report.events).toHaveLength(10)
+    expect(report.events.some(event => event.name === 'album_creation_submitted')).toBe(true)
     expect(report.events.find(item => item.name === 'album_created')?.count).toBe(3)
     expect(report.events.find(item => item.name === 'album_published')?.count).toBe(0)
     expect(JSON.stringify(report)).not.toContain('secret')
@@ -85,7 +91,7 @@ describe('Google Analytics Data API', () => {
     }) as typeof fetch
     const report = await fetchGa4SiteReport('123', 'Asia/Ho_Chi_Minh', 7, 'token', fetcher)
     expect(report).toMatchObject({ activeUsers: 0, pageViews: 0, trend: [], pages: [] })
-    expect(report.events).toHaveLength(10)
+    expect(report.events.some(event => event.name === 'album_creation_submitted')).toBe(true)
     expect(report.events.every(event => event.count === 0)).toBe(true)
   })
 })

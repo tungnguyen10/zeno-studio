@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { trackAnalyticsEvent } from '~/lib/analytics-events'
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+import { normalizeAnalyticsError, photoCountBucket } from '~/lib/analytics-model'
+import { newAnalyticsAttemptId, trackAnalyticsEvent } from '~/lib/analytics-events'
 import { reportGalleryOpen } from '~/lib/studio-analytics'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { DownloadCapabilities } from '~~/shared/domain/download-policy'
@@ -18,12 +20,14 @@ import { useAlbumDownload } from '~/composables/useAlbumDownload'
 import { useOriginalCache } from '~/composables/useOriginalCache'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; status: 'READY' | 'MISSING' | 'BROKEN'; sortOrder: number; selected: boolean }
-type Overview = { id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
-type SaveResult = { status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
+type Overview = { analytics?: AnalyticsIdentity; id: string; title: string; status: string; currentCycle: number; expiresAt: string; joined: boolean; canJoin: boolean; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; download?: DownloadCapabilities }
+type SaveResult = { cycle: number; changed: boolean; status: 'saved' | 'conflict' | 'limit_reached'; version: number; selected: boolean; count: number }
 const route = useRoute()
 const analyticsConfig = useRuntimeConfig().public
 const galleryReady = ref(false)
 let reportedOpen = false
+let active = true
+let entryGeneration = 0
 const albumId = String(route.params.albumId)
 const root = `/api/album/${albumId}`
 const originals = useOriginalCache(root)
@@ -125,7 +129,9 @@ const limitHint = computed(() => {
 
 async function loadSelection() {
   if (!overview.value?.joined || overview.value.status !== 'PUBLISHED') return
+  const cycle = overview.value.currentCycle
   const result = await $fetch<{ version: number; selectedPhotoIds?: string[] }>(`${root}/selection`, { query: selectionLoaded.value ? { since: selectionVersion.value } : {} })
+  if (overview.value?.currentCycle !== cycle) return
   selectionVersion.value = result.version
   if (result.selectedPhotoIds) selectedIds.value = result.selectedPhotoIds
   selectionLoaded.value = true
@@ -165,30 +171,39 @@ async function loadOverview(token: string | null): Promise<Overview> {
 }
 
 async function enter() {
+  const generation = ++entryGeneration
+  const current = () => active && generation === entryGeneration
   loading.value = true
   error.value = ''
   try {
     const token = typeof route.query.token === 'string' ? route.query.token : null
-    overview.value = await loadOverview(token)
+    const loaded = await loadOverview(token)
+    if (!current()) return
+    overview.value = loaded
     if (overview.value.canJoin) {
       try { await joinAlbum() }
       catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể vào album' }
     }
+    if (!current()) return
     const selectionPromise = loadSelection().catch(() => { status.value = 'Chưa đồng bộ được lựa chọn. Đang thử lại…' })
     await loadPhotos()
+    if (!current()) return
     loading.value = false
     await selectionPromise
+    if (!current()) return
     if (!paged.error.value && !error.value) {
       galleryReady.value = true
-      trackAnalyticsEvent({ name: 'album_opened' })
+      await nextTick()
+      if (!current()) return
+      trackAnalyticsEvent({ name: 'album_opened', analytics: overview.value?.analytics, actor_type: 'customer', screen_name: 'guest_album', cycle: overview.value?.currentCycle, photo_count_bucket: photoCountBucket(paged.total.value), guest_auth_type: 'token' })
     }
-    if (import.meta.client) {
+    if (current() && import.meta.client) {
       pollTimer = setInterval(() => {
         if (document.visibilityState === 'visible' && !busy.value && !pendingSelections.value && (!focusPhoto.value || !selectionLoaded.value)) void refreshAlbumState().catch(() => { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' })
       }, 4000)
     }
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Link album không hợp lệ hoặc đã hết hạn' }
-  finally { loading.value = false }
+  } catch (cause) { if (current()) error.value = cause instanceof Error ? cause.message : 'Link album không hợp lệ hoặc đã hết hạn' }
+  finally { if (current()) loading.value = false }
 }
 
 async function joinAlbum() {
@@ -217,10 +232,11 @@ function setSelected(photoId: string, selected: boolean) {
 // The heart flips instantly; saves run one at a time so each carries the version returned by the previous one.
 function toggle(photo: Photo) {
   if (!canSelect.value) return
+  const cycle = overview.value?.currentCycle
   const wanted = !selectedSet.value.has(photo.id)
   setSelected(photo.id, wanted)
   pendingSelections.value++
-  selectionQueue = selectionQueue.then(() => saveSelection(photo.id, wanted)).finally(() => { pendingSelections.value-- })
+  selectionQueue = selectionQueue.then(() => saveSelection(photo.id, wanted, cycle)).finally(() => { pendingSelections.value-- })
 }
 
 function showDownloadSheet() {
@@ -233,17 +249,31 @@ async function prepareCurrentDownload() {
   await prepareDownload(() => selectionQueue)
 }
 
-async function saveSelection(photoId: string, wanted: boolean) {
+async function saveSelection(photoId: string, wanted: boolean, queuedCycle: number | undefined) {
+  if (overview.value?.currentCycle !== queuedCycle) return
+  const context = { analytics: overview.value?.analytics, cycle: queuedCycle, actor_type: 'customer' as const, screen_name: 'guest_album' as const }
+  const attempt_id = newAnalyticsAttemptId()
+  const expectedVersion = selectionVersion.value
   try {
-    const result = await $fetch<SaveResult>(`${root}/selection/${photoId}`, { method: 'PUT', body: { selected: wanted, expectedVersion: selectionVersion.value } })
+    const result = await $fetch<SaveResult>(`${root}/selection/${photoId}`, { method: 'PUT', body: { selected: wanted, expectedVersion } })
     if (result.status === 'saved') {
-      trackAnalyticsEvent({ name: wanted ? 'photo_selected' : 'photo_unselected', selected_count: result.count })
+      if (result.changed) {
+        trackAnalyticsEvent({ name: 'guest_selection_started', ...context, cycle: result.cycle, selection_count: result.count })
+        trackAnalyticsEvent({ name: result.selected ? 'photo_selected' : 'photo_unselected', ...context, cycle: result.cycle, selected_count: result.count })
+      }
+      if (overview.value?.currentCycle !== result.cycle) return
       selectionVersion.value = result.version
-      setSelected(photoId, wanted)
+      setSelected(photoId, result.selected)
       return
     }
+    trackAnalyticsEvent({ name: 'guest_selection_save_rejected', ...context, cycle: result.cycle, attempt_id, outcome: result.status })
+    if (overview.value?.currentCycle !== result.cycle) return
     status.value = result.status === 'limit_reached' ? `Đã đạt giới hạn ${limitLabel.value}` : 'Lựa chọn đã thay đổi ở thiết bị khác. Đã đồng bộ lại.'
-  } catch (cause) { status.value = cause instanceof Error ? cause.message : 'Lưu thất bại. Vui lòng thử lại.' }
+  } catch (cause) {
+    trackAnalyticsEvent({ name: 'guest_selection_save_failed', ...context, attempt_id, ...normalizeAnalyticsError(cause) })
+    if (overview.value?.currentCycle !== queuedCycle) return
+    status.value = cause instanceof Error ? cause.message : 'Lưu thất bại. Vui lòng thử lại.'
+  }
   selectionLoaded.value = false
   try { await loadSelection() }
   catch { status.value = 'Mất kết nối đồng bộ. Đang thử lại…' }
@@ -335,9 +365,12 @@ async function saveNote(): Promise<boolean> {
 
 async function persistNote(photoId: string, text: string): Promise<boolean> {
   status.value = 'Đang lưu ghi chú…'
+  const context = { analytics: overview.value?.analytics, cycle: overview.value?.currentCycle, actor_type: 'customer' as const, screen_name: 'guest_album' as const }
+  const expectedVersion = noteVersion.value
   try {
-    const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string }>(`${root}/notes/${photoId}`, { method: 'PUT', body: { text, expectedVersion: noteVersion.value } })
-    if (note.status === 'saved') trackAnalyticsEvent({ name: 'photo_note_saved' })
+    const note = await $fetch<{ status: 'saved' | 'conflict'; version: number; body: string; changed: boolean; cycle: number }>(`${root}/notes/${photoId}`, { method: 'PUT', body: { text, expectedVersion } })
+    if (note.status === 'saved' && note.changed) trackAnalyticsEvent({ name: 'photo_note_saved', ...context, cycle: note.cycle })
+    if (overview.value?.currentCycle !== note.cycle) return true
     if (focusPhoto.value?.id !== photoId) return true
     noteVersion.value = note.version
     noteSavedText.value = note.body
@@ -349,6 +382,7 @@ async function persistNote(photoId: string, text: string): Promise<boolean> {
     status.value = 'Đã lưu ghi chú'
     return true
   } catch (cause) {
+    if (overview.value?.currentCycle !== context.cycle) return false
     status.value = cause instanceof Error ? cause.message : 'Lưu ghi chú thất bại'
     return false
   }
@@ -545,6 +579,8 @@ watch(galleryReady, ready => {
     .catch(() => { status.value = 'Không ghi được lượt mở album vào thống kê studio.' })
 })
 onBeforeUnmount(() => {
+  active = false
+  entryGeneration++
   if (pollTimer) clearInterval(pollTimer)
   clearTimeout(noteSaveTimer)
   clearTimeout(statusTimer)
@@ -590,7 +626,7 @@ onBeforeUnmount(() => {
         <template v-else>
           <div class="mb-3 mt-5 flex items-center justify-between gap-3 px-1 sm:mb-4 sm:mt-6 sm:px-0">
             <p class="text-sm font-semibold text-muted">{{ filter === 'selected' ? 'Ảnh đã chọn' : '' }}</p>
-            <GalleryLayoutSwitch v-model="layout" @changed="next => trackAnalyticsEvent({ name: 'gallery_view_changed', layout: next, surface: 'customer' })" />
+            <GalleryLayoutSwitch v-model="layout" @changed="next => trackAnalyticsEvent({ name: 'gallery_view_changed', analytics: overview?.analytics, cycle: overview?.currentCycle, actor_type: 'customer', screen_name: 'guest_album', layout: next, surface: 'customer' })" />
           </div>
           <p v-if="overview.status === 'PUBLISHED' && !selectionLoaded" role="status" class="mb-3 px-1 text-xs text-muted sm:px-0">Đang đồng bộ lựa chọn…</p>
           <div v-if="!paged.started.value" role="status" aria-label="Đang tải ảnh" class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">

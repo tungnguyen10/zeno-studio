@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { trackAnalyticsEvent } from '~/lib/analytics-events'
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+import { normalizeAnalyticsError } from '~/lib/analytics-model'
+import { newAnalyticsAttemptId, trackAnalyticsEvent } from '~/lib/analytics-events'
 import { computed, onMounted, ref } from 'vue'
 import type { DownloadSettings } from '~~/shared/domain/download-policy'
 import { ALBUM_STATUS_LABELS, effectiveStatus, type AlbumStatus } from '~~/shared/domain/album-status'
@@ -13,9 +15,10 @@ import PhotoGallery from './PhotoGallery.vue'
 import PhotoTile from './PhotoTile.vue'
 
 type Photo = { id: string; sourceFileId: string; filename: string; width: number | null; height: number | null; sortOrder: number; selected: boolean; previouslyFinalized: boolean }
-type Workspace = { id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; previousCount: number; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; downloadSettings: DownloadSettings; canEditDownloadSettings: boolean; photoCount: number; selectedCount: number }
+type Workspace = { analytics?: AnalyticsIdentity; currentCycle: number; id: string; title: string; status: string; expiresAt: string; canFinalize: boolean; hasResults: boolean; previousCount: number; settings: { limitKind: string; limitMin: number | null; limitMax: number | null }; downloadSettings: DownloadSettings; canEditDownloadSettings: boolean; photoCount: number; selectedCount: number }
 const props = withDefaults(defineProps<{ apiRoot: string; backTo: string; backLabel?: string; resultsTo: string; canPublish?: boolean; canShare?: boolean }>(), { backLabel: 'Quay lại', canPublish: false, canShare: false })
 const workspace = ref<Workspace | null>(null)
+const actor = computed(() => props.apiRoot.startsWith('/api/guest/') ? 'guest_admin' as const : 'studio' as const)
 // Studio edits are stored as differences from the customer's list so huge albums never ship full id arrays.
 const included = ref(new Set<string>())
 const excluded = ref(new Set<string>())
@@ -102,12 +105,16 @@ async function finalize() {
   busy.value = true
   message.value = ''
   error.value = ''
+  const context = { analytics: workspace.value.analytics, cycle: workspace.value.currentCycle, actor_type: actor.value, screen_name: 'album_manage' as const, attempt_id: newAnalyticsAttemptId() }
+  trackAnalyticsEvent({ name: 'selection_finalize_submitted', ...context })
+  let committed = false
   try {
-    const result = await $fetch<{ versionNumber: number }>(`${props.apiRoot}/finalize`, { method: 'POST', body: { include: [...included.value], exclude: [...excluded.value] } })
-    trackAnalyticsEvent({ name: 'selection_finalized', surface: props.apiRoot.startsWith('/api/guest/') ? 'guest_admin' : 'studio' })
+    const result = await $fetch<{ versionNumber: number; count: number; cycle: number }>(`${props.apiRoot}/finalize`, { method: 'POST', body: { include: [...included.value], exclude: [...excluded.value] } })
+    committed = true
+    trackAnalyticsEvent({ name: 'selection_finalized', ...context, surface: context.actor_type, cycle: result.cycle, version_number: result.versionNumber, selection_count: result.count, event_id: `selection_finalized:${context.analytics?.albumId}:${result.versionNumber}` })
     await load()
     message.value = `Đã chốt phiên bản ${result.versionNumber}.`
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Không thể chốt ảnh' }
+  } catch (cause) { if (!committed) trackAnalyticsEvent({ name: 'selection_finalize_failed', ...context, ...normalizeAnalyticsError(cause) }); error.value = cause instanceof Error ? cause.message : 'Không thể chốt ảnh' }
   finally { busy.value = false }
 }
 
@@ -117,8 +124,9 @@ async function reopen() {
   message.value = ''
   error.value = ''
   try {
-    await $fetch(`${props.apiRoot}/reopen`, { method: 'POST' })
-    trackAnalyticsEvent({ name: 'selection_reopened', surface: props.apiRoot.startsWith('/api/guest/') ? 'guest_admin' : 'studio' })
+    const analytics = workspace.value?.analytics
+    const result = await $fetch<{ cycle: number }>(`${props.apiRoot}/reopen`, { method: 'POST' })
+    trackAnalyticsEvent({ name: 'selection_reopened', analytics, actor_type: actor.value, screen_name: 'album_manage', cycle: result.cycle, event_id: `selection_reopened:${analytics?.albumId}:${result.cycle}`, surface: actor.value })
     await load()
     message.value = `Đã mở vòng chọn mới và giữ ${workspace.value?.previousCount ?? 0} ảnh từ bộ chốt trước.`
   }
@@ -230,7 +238,7 @@ onMounted(() => { void load() })
 
         <div class="mt-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <UiTabs label="Lọc ảnh" :items="filterTabs" :current="filter" class="min-w-0 flex-1" @select="filter = $event" />
-          <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" @changed="next => trackAnalyticsEvent({ name: 'gallery_view_changed', layout: next, surface: 'studio' })" />
+          <GalleryLayoutSwitch v-model="layout" class="self-start sm:self-auto" @changed="next => trackAnalyticsEvent({ name: 'gallery_view_changed', analytics: workspace?.analytics, cycle: workspace?.currentCycle, actor_type: actor, screen_name: 'album_manage', layout: next, surface: 'studio' })" />
         </div>
 
         <p v-if="canChoose" class="mt-4 text-sm text-pretty text-muted">Bấm vào ảnh để thêm hoặc bỏ khỏi bộ chốt. Ảnh khách đã chọn được đánh dấu sẵn; ghi chú được đóng băng trong phiên bản kết quả.</p>

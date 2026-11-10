@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { trackAnalyticsEvent } from '~/lib/analytics-events'
-import { ref, watch } from 'vue'
+import { newAnalyticsAttemptId, trackAnalyticsEvent } from '~/lib/analytics-events'
+import { nextTick, ref, watch } from 'vue'
+import type { AnalyticsIdentity } from '~~/shared/domain/analytics'
+import { photoCountBucket, normalizeAnalyticsError } from '~/lib/analytics-model'
 import { studioAlbumErrorMessage } from '~/lib/studio-album-error'
 
 const props = defineProps<{ studioId: string }>()
@@ -14,28 +16,34 @@ const days = ref<15 | 30>(15)
 const durationOptions = [{ value: 15, label: '15 ngày' }, { value: 30, label: '30 ngày' }] as const
 const busy = ref(false)
 const error = ref('')
-const created = ref<{ id: string; title: string; photoCount: number } | null>(null)
+const created = ref<{ id: string; title: string; photoCount: number; analytics?: AnalyticsIdentity } | null>(null)
 
-watch(open, value => {
+watch(open, async value => {
   if (!value) return
   title.value = ''
   folderUrl.value = ''
   error.value = ''
   created.value = null
+  await nextTick()
+  if (open.value) trackAnalyticsEvent({ name: 'album_creation_started', creation_flow: 'studio', actor_type: 'studio', screen_name: 'album_create', entry_point: 'studio_create_dialog' })
 })
 
 async function submit() {
+  if (busy.value) return
+  const attempt_id = newAnalyticsAttemptId()
+  const started = performance.now()
+  trackAnalyticsEvent({ name: 'album_creation_submitted', creation_flow: 'studio', actor_type: 'studio', screen_name: 'album_create', attempt_id, source_method: 'google_drive' })
   busy.value = true
   error.value = ''
   try {
-    const result = await $fetch<{ album: { id: string; title: string; photoCount: number } }>(`/api/studio/${props.studioId}/albums`, {
+    const result = await $fetch<{ album: { id: string; title: string; photoCount: number; analytics?: AnalyticsIdentity } }>(`/api/studio/${props.studioId}/albums`, {
       method: 'POST',
       body: { title: title.value, folderUrl: folderUrl.value, expiresInDays: days.value, limit: { kind: 'maximum', count: limit.value } },
     })
-    trackAnalyticsEvent({ name: 'album_created', creation_flow: 'studio' })
+    trackAnalyticsEvent({ name: 'album_created', analytics: result.album.analytics, creation_flow: 'studio', actor_type: 'studio', screen_name: 'album_create', attempt_id, source_method: 'google_drive', duration_ms: Math.round(performance.now() - started), photo_count_bucket: photoCountBucket(result.album.photoCount), event_id: `album_created:${result.album.analytics?.albumId}` })
     created.value = result.album
     emit('changed')
-  } catch (cause) { error.value = studioAlbumErrorMessage(cause) }
+  } catch (cause) { trackAnalyticsEvent({ name: 'album_creation_failed', creation_flow: 'studio', actor_type: 'studio', screen_name: 'album_create', attempt_id, ...normalizeAnalyticsError(cause) }); error.value = studioAlbumErrorMessage(cause) }
   finally { busy.value = false }
 }
 
@@ -54,7 +62,7 @@ async function submit() {
         </div>
       </div>
       <div class="grid min-w-0 gap-2">
-        <StudioAlbumShareActions :studio-id="studioId" :album-id="created.id" status="DRAFT" can-publish :can-share="false" primary @published="emit('changed')" />
+        <StudioAlbumShareActions screen-name="album_create" :studio-id="studioId" :album-id="created.id" :analytics="created.analytics" :photo-count="created.photoCount" status="DRAFT" can-publish :can-share="false" primary @published="emit('changed')" />
       </div>
       <div class="grid grid-cols-2 gap-2 border-t border-line pt-4">
         <UiButton :to="`/studio/albums/${created.id}?studio=${studioId}`" variant="secondary" size="sm">Mở album</UiButton>

@@ -18,6 +18,7 @@ type Event = { body: unknown; node: { req: { socket: { remoteAddress: string } }
 let handler: (event: Event) => Promise<unknown>
 
 beforeAll(async () => {
+  vi.stubGlobal('useRuntimeConfig', () => ({ analyticsIdSecret: 'test-analytics-secret' }))
   vi.stubGlobal('defineEventHandler', (fn: typeof handler) => fn)
   vi.stubGlobal('readBody', (event: Event) => Promise.resolve(event.body))
   vi.stubGlobal('getHeader', () => undefined)
@@ -56,5 +57,6 @@ describe('public guest creation HTTP boundary', () => {
     expect(mocks.consume).toHaveBeenCalledWith({}, '127.0.0.1', 'test-secret')
     expect(mocks.source).toHaveBeenCalledOnce()
     expect(mocks.create).toHaveBeenCalledOnce()
+    expect(mocks.create).toHaveBeenCalledWith({}, {}, valid, { analyticsIdSecret: 'test-analytics-secret' })
   })
 })

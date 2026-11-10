@@ -14,6 +14,7 @@ await db.exec(await readFile(new URL('../../db/migrations/025_studio_analytics.s
 await db.exec('SET ROLE app_runtime')
 const pool = { async connect() { return { query: (sql: string, values?: unknown[]) => db.query(sql, values), release() {} } } }
 afterAll(async () => { await db.close() })
+const metadata = { analyticsIdSecret: 'fixed-test-secret' }
 const source: PhotoSourceAdapter = {
   async listPhotos() { return { items: Array.from({ length: 3 }, (_, index) => ({ id: `source-${index}`, filename: `${index}.JPG`, mimeType: 'image/jpeg' })) } },
   async readPhoto() { return new Response() },
@@ -24,10 +25,11 @@ describe('customer album access', () => {
     const studio = await ensureStudio(pool, 'gallery-owner', 'Gallery Studio')
     const album = await createAlbum(pool, source, { studioId: studio.id, userId: 'gallery-owner', title: 'Gallery', folderUrl: 'https://drive.google.com/drive/folders/folder123', expiresInDays: 15, limit: { kind: 'unlimited' } })
     expect(await resolveAlbumAccess(pool, 'invalid')).toBeNull()
-    const { customerToken } = await publishAlbum(pool, studio.id, 'gallery-owner', album.id)
+    const published = await publishAlbum(pool, studio.id, 'gallery-owner', album.id, metadata)
+    const { customerToken } = published
     const access = await resolveAlbumAccess(pool, customerToken)
     expect(access).toEqual({ albumId: album.id, scope: 'customer', participantId: null })
-    expect(await getAlbumOverview(pool, access!)).toMatchObject({ joined: false, canJoin: true, settings: { limitKind: 'unlimited' } })
+    expect(await getAlbumOverview(pool, access!, metadata)).toMatchObject({ analytics: published.analytics, currentCycle: 1, joined: false, canJoin: true, settings: { limitKind: 'unlimited' } })
     const first = await listAlbumPhotos(pool, access!, 2)
     expect(first.items.map(item => item.filename)).toEqual(['0.JPG', '1.JPG'])
     expect(first.nextCursor).toBeTruthy()

@@ -22,6 +22,11 @@ const eventLabels: Record<string, string> = {
   gallery_view_changed: 'Đổi cách xem gallery', photo_selected: 'Chọn ảnh', photo_unselected: 'Bỏ chọn ảnh',
   photo_note_saved: 'Lưu ghi chú', selection_finalized: 'Chốt bộ ảnh', selection_reopened: 'Mở lại bộ ảnh',
   file_match_completed: 'Đối chiếu file',
+  studio_home_viewed: 'Mở dashboard studio', album_creation_started: 'Mở form tạo album',
+  album_creation_submitted: 'Gửi yêu cầu tạo album', album_creation_failed: 'Tạo album thất bại',
+  album_shared: 'Sao chép link khách thành công', guest_selection_started: 'Bắt đầu chọn ảnh',
+  guest_selection_save_failed: 'Lưu lựa chọn thất bại', guest_selection_save_rejected: 'Lựa chọn bị từ chối',
+  selection_finalize_submitted: 'Gửi yêu cầu chốt', selection_finalize_failed: 'Chốt bộ ảnh thất bại',
 }
 const format = new Intl.NumberFormat('vi-VN')
 const asOfLabel = computed(() => report.value
@@ -66,7 +71,7 @@ watch(days, () => { if (import.meta.client) void load() })
         <button type="button" class="focus-ring mt-3 min-h-10 rounded-full bg-brand px-4 text-sm font-semibold text-white" @click="load">Thử lại</button>
       </div>
       <template v-else-if="report">
-        <p class="text-xs text-muted">Lấy lúc {{ asOfLabel }} · Múi giờ {{ report.timezone }} · Hôm nay có thể chưa đủ dữ liệu.</p>
+        <p class="text-xs text-muted">Chỉ dữ liệu Production có nhãn môi trường; dữ liệu cũ chưa có nhãn không nằm trong báo cáo. Số sự kiện là số lần phát, không phải tỷ lệ chuyển đổi theo album. Lấy lúc {{ asOfLabel }} · Múi giờ {{ report.timezone }} · Hôm nay có thể chưa đủ dữ liệu.</p>
         <AnalyticsMetricCards :items="metrics" />
         <div class="grid gap-3 lg:grid-cols-2">
           <AnalyticsDailyBars title="Người dùng hoạt động theo ngày" :points="usersByDay" unit="người dùng" />
