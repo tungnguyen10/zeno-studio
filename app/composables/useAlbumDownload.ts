@@ -57,12 +57,15 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     transferMessage.value = error.value
     void onForbidden?.()
   }
-  function assertResponse(response: Response) {
+  async function assertResponse(response: Response) {
     if (response.status === 403) { invalidateRights(); throw new Error('Quyền tải đã thay đổi') }
-    if (!response.ok) throw new Error(response.status === 429 ? 'Đã đạt giới hạn tải. Vui lòng thử lại sau.' : 'Không tải được ảnh gốc từ Drive')
+    if (response.ok) return
+    if (response.status === 429) throw new Error('Đã đạt giới hạn tải. Vui lòng thử lại sau.')
+    const body = await response.json().catch(() => null) as { statusMessage?: string; message?: string } | null
+    throw new Error(body?.statusMessage || body?.message || 'Không tải được ảnh gốc từ Drive')
   }
   async function boundedFile(response: Response, signal: AbortSignal, remainingBytes: number): Promise<File> {
-    assertResponse(response)
+    await assertResponse(response)
     const length = Number(response.headers.get('content-length'))
     if (Number.isFinite(length) && length > remainingBytes) throw new TooLargeError('Ảnh vượt giới hạn chia sẻ trên thiết bị')
     if (!response.body) throw new Error('Drive không trả về ảnh gốc')
@@ -392,7 +395,7 @@ export function useAlbumDownload(apiRoot: string, onForbidden?: () => void | Pro
     try {
       const response = await fetch(`${apiRoot}/download/zip`, { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ticket: part.ticket }), signal: activeController.signal })
-      assertResponse(response)
+      await assertResponse(response)
       if (!response.body) throw new Error('Drive không trả về phần ZIP')
       writable = await handle?.createWritable()
       const chunks: Uint8Array[] = []
