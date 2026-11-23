@@ -51,3 +51,15 @@ Benchmark bộ lọc cục bộ trên dữ liệu giả lập trong Node 24 (kh�
 Code P0 hoàn tất và đã kiểm chứng ngày 10/11/2026: `npm run typecheck`, `npm run build` đạt; Vitest 61 file/309 test đạt; `npm run test:e2e:analytics` Chromium 51 đạt, 1 bỏ qua; bài Local mặc định tắt không lỗi. Theo [plan thích ứng](./superpowers/plans/2026-11-10-adapt-ga4-event-tracking.md), taxonomy tại [event tracking](./analytics-event-tracking.md). Phạm vi: bổ sung funnel create/share/autosave/finalize, ID album giả danh, context môi trường/phiên bản, chống trùng, QA privacy và bộ lọc report Production. Giữ autosave và mốc chốt snapshot hiện có; không thêm upload trực tiếp hay nút khách xác nhận.
 
 Chưa deploy bản này, chưa thay đổi cấu hình GA4/Vercel và chưa có evidence DebugView cho taxonomy mới. BigQuery/end-to-end theo album là P1; không thay thế trạng thái nghiệm thu Production ở các release trước.
+
+## Homepage V4 và demo chọn ảnh — triển khai 23/11/2026
+
+Theo [đặc tả homepage V4](./homepage-v4-spec.md). Đã có trên branch `feat/homepage-v4`, chưa deploy.
+
+- **Hero và quy trình:** copy V4, một CTA chính `/create`, header "Trải nghiệm chọn ảnh" + "Đăng nhập" (`/studio`), container 48/32/24/16px theo breakpoint 1100/760/350, headline dùng container units. Bốn bước quy trình dùng chung `WORKFLOW_STEPS` (JSON-LD và `llms.txt` theo nội dung mới). Phần "Dành cho ai", FAQ và CTA cuối trang giữ nguyên.
+- **Demo:** dựng bằng DOM thay cho Canvas của prototype (theo mục 7.2), dùng lại `BrandLogo`, `GalleryLayoutSwitch`, `PhotoTile`, `SelectionIsland` và `gallery-layout.ts`. Màn hình được layout ở 390×720 rồi scale vào khung tối đa 350px. Autoplay và chế độ tự chọn dùng chung reducer `app/lib/homepage-demo/selection.ts`; storyboard 18 giây chỉ điều phối action và cuộn, tọa độ cuộn/chạm tính từ card thật. Một vòng `requestAnimationFrame`, dừng khi tab ẩn hoặc khung hiện dưới 65%; reduced motion hiện ảnh tĩnh ở mốc 15,9 s.
+- **Tự chọn ảnh:** chọn/bỏ chọn, lọc, trạng thái rỗng, bốn layout, preview (Esc, giữ focus, trả focus về ảnh), Làm lại, ZIP `.webp` tạo trong trình duyệt. State chỉ nằm trong bộ nhớ trang, không gọi API, không ghi `zeno-gallery-layout`.
+- **Asset:** 24 WebP (171.534 byte) trích từ prototype, khớp SHA-256 trong `public/images/demo/provenance.json` (nguồn Unsplash qua Nestrovix/lumiere-studio).
+- **Thay đổi component sản phẩm:** `SelectionIsland` thêm hai prop tùy chọn `compactFilter` và `downloadDisabled`; mặc định giữ nguyên hành vi trang album.
+
+Kiểm chứng tại máy: Vitest 62 file/330 test, `npm run typecheck`, `npm run build` đạt; `tests/e2e/homepage-demo.spec.ts` 16/16 trên Chromium và mobile-chrome (Pixel 7); toàn bộ E2E Chromium 139 đạt, 51 bỏ qua theo cấu hình analytics. Chưa chạy WebKit, Safari iOS/Chrome Android thật, chưa đo Lighthouse/FPS và chưa audit accessibility toàn diện. Nút tim trong khung điện thoại đo được khoảng 37 CSS px ở viewport 390px do scale (đạt mức 24px của WCAG 2.5.8, dưới 44px); cần kiểm lại trên thiết bị thật.

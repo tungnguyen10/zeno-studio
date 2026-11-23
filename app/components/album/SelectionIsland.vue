@@ -9,6 +9,9 @@ const props = defineProps<{
   filterSelected: boolean
   download?: DownloadCapabilities
   basketCount: number
+  /** Icon-only filter regardless of viewport, for hosts narrower than the page (e.g. a phone mock-up). */
+  compactFilter?: boolean
+  downloadDisabled?: boolean
 }>()
 const emit = defineEmits<{ download: []; toggleFilter: [] }>()
 const canDownload = computed(() => !!props.download && (props.download.canSelected || props.download.canAll))
@@ -40,12 +43,13 @@ const count = computed(() => props.status === 'PUBLISHED' ? props.selectedCount 
         <path v-if="filterSelected" d="M3.5 5h13M3.5 10h13M3.5 15h13" />
         <path v-else d="M3.5 5h13l-5 6v4.5l-3 1.5v-6l-5-6Z" stroke-linejoin="round" />
       </svg>
-      <span class="hidden min-[400px]:inline">{{ filterSelected ? 'Xem tất cả' : 'Xem ảnh đã chọn' }}</span>
+      <span class="hidden" :class="!compactFilter && 'min-[400px]:inline'">{{ filterSelected ? 'Xem tất cả' : 'Xem ảnh đã chọn' }}</span>
     </button>
     <button
       v-if="canDownload"
       type="button"
       class="relative inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 text-sm font-semibold text-brand transition-colors hover:bg-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+      :disabled="downloadDisabled || undefined"
       @click="emit('download')"
     >
       <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="size-4 shrink-0"><path d="M10 3.5v9M6 9l4 4 4-4M4 16.5h12" /></svg>

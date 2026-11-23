@@ -40,9 +40,10 @@ export function publicPage(path: string): PublicPage {
 }
 
 export const WORKFLOW_STEPS = [
-  { title: 'Chọn ảnh dễ hơn', body: 'Khách chọn và ghi chú trên từng ảnh ngay từ điện thoại, không cần tạo tài khoản.' },
-  { title: 'Chốt bộ ảnh', body: 'Người quản trị kiểm tra lựa chọn chung và chốt thành một phiên bản cố định.' },
-  { title: 'Lọc file trên máy', body: 'Xuất tên file và ghi chú, rồi tìm và copy RAW/JPEG theo bộ ảnh đã chốt.' },
+  { label: 'Tạo album', title: 'Bắt đầu từ Google Drive', body: 'Dùng thư mục ảnh đã bật chia sẻ bằng liên kết.' },
+  { label: 'Khách chọn', title: 'Chọn ngay trên điện thoại', body: 'Mở link, chạm tim và xem lại những ảnh yêu thích.' },
+  { label: 'Studio chốt', title: 'Rõ bộ ảnh cần xử lý', body: 'Studio kiểm tra và chốt danh sách lựa chọn.' },
+  { label: 'Lọc file', title: 'Lọc RAW/JPEG trên máy', body: 'Đối chiếu tên file từ danh sách đã chốt.' },
 ]
 
 export const FAQS = [

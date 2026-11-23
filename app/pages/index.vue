@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, useTemplateRef } from 'vue'
+import SelectionDemo from '~/components/home/SelectionDemo.vue'
 import { FAQS, ORGANIZATION, SITE_DESCRIPTION, SITE_NAME, WORKFLOW_STEPS as STEPS, publicPage } from '~~/shared/site'
+
+// Homepage container from the V4 spec: 48px sides above 1100px, 32px from 761px, 24px below, 16px under 350px.
+const CONTAINER = 'mx-auto w-full max-w-7xl px-6 max-[349px]:px-4 min-[761px]:px-8 min-[1101px]:px-12'
 
 const page = publicPage('/')
 useSeoMeta({
@@ -62,15 +65,6 @@ useHead({
   }],
 })
 
-const HERO_PHOTOS = [
-  { src: '/images/hero/bride.jpg', width: 480, height: 720, aspect: 'aspect-[.88]', position: 'object-[50%_20%]', heart: true },
-  { src: '/images/hero/bouquet.jpg', width: 480, height: 720, aspect: 'aspect-[.88]', position: 'object-[50%_60%]', heart: true },
-  { src: '/images/hero/couple.jpg', width: 720, height: 478, aspect: 'aspect-[1.35]', position: 'object-left', heart: false },
-  { src: '/images/hero/hands.jpg', width: 720, height: 480, aspect: 'aspect-[1.35]', position: 'object-center', heart: false },
-]
-const heroLoaded = ref(HERO_PHOTOS.map(() => false))
-const heroImages = useTemplateRef<HTMLImageElement[]>('heroImages')
-
 const AUDIENCES = [
   {
     title: 'Cho studio',
@@ -89,63 +83,40 @@ const AUDIENCES = [
     ],
   },
 ]
-
-// SSR images can finish loading before hydration attaches @load.
-onMounted(() => {
-  heroImages.value?.forEach(img => {
-    const index = HERO_PHOTOS.findIndex(photo => img.src.endsWith(photo.src))
-    if (index >= 0 && img.complete && img.naturalWidth) heroLoaded.value[index] = true
-  })
-})
 </script>
 
 <template>
   <div class="min-h-dvh bg-canvas text-ink">
     <SiteHeader>
       <nav aria-label="Điều hướng chính" class="flex items-center gap-2 sm:gap-3">
-        <NuxtLink to="/tools/file-filter" class="focus-ring hidden min-h-11 items-center rounded-full border border-line-strong px-4 transition-colors hover:border-brand sm:inline-flex">Lọc file trên máy</NuxtLink>
-        <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full bg-brand px-4 text-white transition-colors hover:bg-brand-dark">Vào studio</NuxtLink>
+        <a href="#zeno-demo" class="focus-ring hidden min-h-11 items-center rounded-full px-3 text-muted transition-colors hover:text-brand sm:inline-flex">Trải nghiệm chọn ảnh</a>
+        <NuxtLink to="/studio" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong bg-white px-4 transition-colors hover:border-brand">Đăng nhập</NuxtLink>
       </nav>
     </SiteHeader>
 
     <main>
-      <section class="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-8 sm:px-8 sm:pt-14 lg:grid-cols-[1.1fr_.9fr] lg:pb-28 lg:pt-20">
-        <div>
-          <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-line-strong bg-tint px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[.16em] text-brand sm:mb-5 sm:px-4 sm:py-2 sm:text-xs">Quy trình ảnh liền mạch</p>
-          <h1 class="max-w-3xl text-[2.5rem] font-semibold leading-[1.08] tracking-[-.04em] text-balance sm:text-6xl lg:text-[5.1rem]">Từ bộ ảnh đầu tiên đến lời <em class="font-serif font-normal text-brand-soft">“ưng rồi”.</em></h1>
-          <p class="mt-5 max-w-xl text-base leading-7 text-pretty text-muted sm:mt-7 sm:text-lg sm:leading-8">Một nơi để khách chọn ảnh và ghi chú. Studio chốt bộ ảnh, xuất danh sách và lọc đúng file RAW/JPEG trên máy.</p>
-          <div class="mt-7 grid gap-2.5 sm:mt-9 sm:flex sm:flex-wrap sm:gap-3">
-            <NuxtLink to="/create" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full bg-brand px-6 font-semibold text-white shadow-lg shadow-brand/15 transition-colors hover:bg-brand-dark">Tạo album nhanh <span aria-hidden="true">&nbsp;↗</span></NuxtLink>
-            <NuxtLink to="/studio" class="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-line-strong bg-white px-6 font-semibold transition-colors hover:border-brand-soft">Mở studio</NuxtLink>
-          </div>
-          <p class="mt-6 text-sm text-muted sm:mt-8">Khách không cần tạo tài khoản · Hoạt động tốt trên điện thoại</p>
+      <section aria-labelledby="hero-title" class="grid items-center gap-10 pb-16 pt-10 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(0,350px)] min-[761px]:gap-5 min-[761px]:pt-14 min-[1101px]:gap-12 lg:pb-24 lg:pt-20" :class="CONTAINER">
+        <div class="@container">
+          <p class="text-xs font-semibold uppercase tracking-[.16em] text-brand-soft sm:text-sm">Dành cho photographers</p>
+          <h1 id="hero-title" class="mt-4 text-[min(11cqw,5.5rem)] font-semibold leading-[1.04] tracking-[-.04em]">
+            <span class="block whitespace-nowrap">Khách chọn nhanh.</span>
+            <span class="block whitespace-nowrap text-brand">Bạn nhẹ việc.</span>
+          </h1>
+          <p class="mt-5 text-base leading-7 text-muted sm:mt-6 sm:text-lg sm:leading-8">Gửi album từ Google Drive.<br>Nhận rõ ảnh khách chọn.</p>
+          <NuxtLink to="/create" class="focus-ring mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-7 font-semibold text-white shadow-lg shadow-brand/15 transition-colors hover:bg-brand-dark sm:mt-8 sm:w-auto">Tạo album miễn phí</NuxtLink>
+          <p class="mt-4 text-sm text-muted">Khách không cần tài khoản.</p>
         </div>
-
-        <div aria-hidden="true" class="relative mx-auto w-full max-w-[520px]">
-          <div class="absolute -left-6 -top-8 size-36 rounded-full bg-[#dce8d0] blur-3xl" />
-          <div class="relative rounded-3xl border border-line bg-white p-3 shadow-[0_35px_90px_-35px_rgba(39,55,35,.34)] sm:rounded-[2rem] sm:p-5">
-            <div class="flex items-center justify-between gap-2 px-2 pb-3 text-xs text-muted sm:pb-4"><span class="truncate font-semibold text-brand">Album · Mai & Quang</span><span class="shrink-0">124 ảnh · Đang chọn</span></div>
-            <div class="grid grid-cols-2 gap-2 sm:gap-3">
-              <div v-for="(photo, index) in HERO_PHOTOS" :key="photo.src" class="photo-placeholder rounded-2xl" :class="photo.aspect" :data-loading="heroLoaded[index] ? undefined : ''">
-                <img ref="heroImages" :src="photo.src" alt="" :width="photo.width" :height="photo.height" :fetchpriority="index === 0 ? 'high' : undefined" decoding="async" class="size-full object-cover transition-opacity duration-500" :class="[photo.position, heroLoaded[index] ? 'opacity-100' : 'opacity-0']" @load="heroLoaded[index] = true">
-                <span v-if="photo.heart" class="absolute left-3 top-3 grid size-8 place-items-center rounded-full bg-white/90 text-heart shadow-sm">♥</span>
-              </div>
-            </div>
-            <div class="mt-3 flex items-center justify-between rounded-2xl bg-tint px-4 py-3 text-sm sm:mt-4"><span><strong class="text-brand">18 ảnh</strong> đã chọn</span><span class="font-semibold text-brand">Xem lựa chọn →</span></div>
-          </div>
-          <div class="absolute -bottom-7 left-2 rounded-2xl border border-line bg-white px-4 py-3 shadow-xl sm:-left-12"><span class="block text-xs text-muted">Ghi chú ảnh #024</span><span class="mt-1 block text-sm font-medium">“Chỉnh sáng nhẹ giúp mình nhé”</span></div>
-        </div>
+        <SelectionDemo />
       </section>
 
-      <section aria-labelledby="how-title" class="bg-tint py-14 sm:py-20">
-        <div class="mx-auto max-w-7xl px-4 sm:px-8">
-          <p class="text-xs font-semibold uppercase tracking-[.2em] text-brand-soft sm:text-sm">Cách hoạt động</p>
-          <h2 id="how-title" class="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-balance sm:text-4xl">Một workflow, trọn hành trình</h2>
-          <ol class="mt-8 grid gap-3 sm:gap-4 md:grid-cols-3">
+      <section id="quy-trinh" aria-labelledby="workflow-title" class="bg-tint py-14 sm:py-20">
+        <div :class="CONTAINER">
+          <h2 id="workflow-title" class="max-w-2xl text-2xl font-semibold tracking-tight text-balance sm:text-4xl">Từ album đến bộ ảnh cần làm.</h2>
+          <ol class="mt-8 grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
             <li v-for="(step, index) in STEPS" :key="step.title" class="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
-              <span class="text-sm font-semibold text-brand-soft tabular-nums">0{{ index + 1 }}</span>
-              <h3 class="mt-4 text-xl font-semibold tracking-tight sm:mt-8 sm:text-2xl">{{ step.title }}</h3>
-              <p class="mt-2 leading-7 text-pretty text-muted sm:mt-3">{{ step.body }}</p>
+              <span class="text-xs font-semibold uppercase tracking-[.12em] text-brand-soft tabular-nums">0{{ index + 1 }} / {{ step.label }}</span>
+              <h3 class="mt-4 text-xl font-semibold tracking-tight sm:mt-6">{{ step.title }}</h3>
+              <p class="mt-2 leading-7 text-pretty text-muted">{{ step.body }}</p>
             </li>
           </ol>
         </div>
