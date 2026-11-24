@@ -40,7 +40,7 @@ test.describe('homepage V4 hero', () => {
     await expect(hero.getByRole('link', { name: 'Tạo album miễn phí' })).toHaveAttribute('href', '/create')
     await expect(hero.getByRole('link')).toHaveCount(1)
     await expect(hero.getByText('Khách không cần tài khoản.')).toBeVisible()
-    await expect(hero.getByText('Demo tự chạy · 24 ảnh mẫu')).toBeVisible()
+    await expect(hero.getByRole('group', { name: 'Chế độ trải nghiệm' })).toBeVisible()
     await expect(page.getByRole('navigation', { name: 'Điều hướng chính' }).getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute('href', '/studio')
     await expect(page.getByRole('heading', { level: 2, name: 'Từ album đến bộ ảnh cần làm.' })).toBeVisible()
     await expect(page.locator('#quy-trinh li')).toHaveText([/Bắt đầu từ Google Drive/, /Chọn ngay trên điện thoại/, /Rõ bộ ảnh cần xử lý/, /Lọc RAW\/JPEG trên máy/])

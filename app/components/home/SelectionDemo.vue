@@ -9,7 +9,6 @@ import {
   STORYBOARD_CAPTIONS,
   STORYBOARD_DURATION,
   STORYBOARD_REDUCED_MOTION_TIME,
-  formatStoryboardClock,
   storyboardFrame,
   type StoryboardGeometry,
 } from '~/lib/homepage-demo/storyboard'
@@ -18,6 +17,7 @@ type Mode = 'demo' | 'manual'
 
 const SCREEN_ID = 'zeno-demo-screen'
 const SCREEN_DESCRIPTION = 'Mô phỏng giao diện chọn ảnh hiện tại của Zeno: album 24 ảnh xếp so le, chạm tim hồng để chọn 5 ảnh qua nhiều đoạn cuộn, rồi lọc ảnh đã chọn bằng thanh nổi.'
+const MANUAL_HINT = 'Thử chạm tim, cuộn và đổi bố cục.'
 const RESTING_GEOMETRY: StoryboardGeometry = { scrollTo: () => 0, resultScroll: 0 }
 // The phone screen is laid out as a 390×720 viewport (the spec's reference phone) and scaled
 // to the frame, so columns, island and switch keep the album page's proportions.
@@ -49,8 +49,7 @@ let lastTime: number | null = null
 const running = computed(() => mode.value === 'demo' && ready.value && !userPaused.value && onScreen.value && !pageHidden.value)
 const frame = computed(() => storyboardFrame(elapsed.value, screen.value?.geometry ?? RESTING_GEOMETRY))
 const caption = computed(() => STORYBOARD_CAPTIONS[frame.value.phase])
-const clock = computed(() => formatStoryboardClock(elapsed.value))
-const progress = computed(() => `${((elapsed.value / STORYBOARD_DURATION) * 100).toFixed(2)}%`)
+const progress = computed(() => ((elapsed.value / STORYBOARD_DURATION) * 100).toFixed(2))
 
 function tick(now: number) {
   if (!running.value) { raf = 0; lastTime = null; return }
@@ -119,7 +118,8 @@ async function setMode(next: Mode) {
   if (next === mode.value) return
   if (next === 'manual') {
     mode.value = 'manual'
-    status.value = 'Đã dừng demo tự chạy. Bạn có thể tự chọn ảnh trong album mẫu.'
+    // The status region then shows MANUAL_HINT, which is announced as the mode change.
+    status.value = ''
     await nextTick()
     screen.value?.restoreScroll(manualScroll)
   }
@@ -216,7 +216,19 @@ onBeforeUnmount(() => {
 
 <template>
   <figure id="zeno-demo" class="mx-auto flex w-full max-w-[350px] flex-col items-center" :data-demo-mode="mode" :data-hydrated="hydrated || undefined" :data-demo-running="running" :data-demo-count="screenState.selected.length">
-    <p class="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-brand-soft">{{ mode === 'demo' ? 'Demo tự chạy · 24 ảnh mẫu' : 'Tự chọn ảnh · 24 ảnh mẫu' }}</p>
+    <div class="mb-3 grid grid-cols-2 rounded-full border border-line bg-white p-0.5 text-sm font-semibold shadow-sm" role="group" aria-label="Chế độ trải nghiệm">
+      <button
+        v-for="option in ([{ value: 'demo', label: 'Xem demo' }, { value: 'manual', label: 'Tự chọn ảnh' }] as const)"
+        :key="option.value"
+        type="button"
+        class="focus-ring min-h-11 rounded-full px-4 transition-colors"
+        :class="mode === option.value ? 'bg-brand text-white' : 'text-muted hover:bg-tint'"
+        :aria-pressed="mode === option.value"
+        @click="setMode(option.value)"
+      >
+        {{ option.label }}
+      </button>
+    </div>
     <div ref="device" class="w-full rounded-[2.6rem] bg-brand-dark p-2 shadow-[0_35px_90px_-35px_rgba(39,55,35,.45)]">
       <div
         :id="SCREEN_ID"
@@ -244,42 +256,38 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <figcaption class="mt-4 w-full">
-      <div class="grid grid-cols-2 rounded-full border border-line bg-white p-0.5 text-sm font-semibold" role="group" aria-label="Chế độ trải nghiệm">
+    <figcaption class="mt-3 flex min-h-11 w-full items-center gap-3">
+      <template v-if="mode === 'demo'">
         <button
-          v-for="option in ([{ value: 'demo', label: 'Xem demo' }, { value: 'manual', label: 'Tự chọn ảnh' }] as const)"
-          :key="option.value"
           type="button"
-          class="focus-ring min-h-11 rounded-full px-3 transition-colors"
-          :class="mode === option.value ? 'bg-brand text-white' : 'text-muted hover:bg-tint'"
-          :aria-pressed="mode === option.value"
-          @click="setMode(option.value)"
+          class="focus-ring relative grid size-11 shrink-0 place-items-center rounded-full bg-white text-brand transition-colors hover:bg-tint"
+          :aria-label="userPaused ? 'Phát demo' : 'Tạm dừng'"
+          :title="userPaused ? 'Phát demo' : 'Tạm dừng'"
+          :aria-controls="SCREEN_ID"
+          @click="togglePlayback"
         >
-          {{ option.label }}
+          <svg aria-hidden="true" viewBox="0 0 44 44" class="absolute inset-0 size-full -rotate-90" fill="none" stroke-width="2">
+            <circle cx="22" cy="22" r="21" class="stroke-line-strong" />
+            <circle cx="22" cy="22" r="21" class="stroke-brand" pathLength="100" :stroke-dasharray="`${progress} 100`" />
+          </svg>
+          <svg v-if="userPaused" aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="size-4 translate-x-px"><path d="M6 4.2v11.6a.7.7 0 0 0 1.06.6l9.2-5.8a.7.7 0 0 0 0-1.2l-9.2-5.8A.7.7 0 0 0 6 4.2Z" /></svg>
+          <svg v-else aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="size-4"><path d="M5.5 4h3v12h-3zM11.5 4h3v12h-3z" /></svg>
         </button>
-      </div>
+        <p class="min-w-0 flex-1 text-sm leading-5 text-pretty text-muted" aria-hidden="true" data-demo-caption>{{ caption }}</p>
+        <button
+          type="button"
+          class="focus-ring grid size-11 shrink-0 place-items-center rounded-full border border-line-strong bg-white text-brand transition-colors hover:border-brand"
+          aria-label="Phát lại"
+          title="Phát lại"
+          :aria-controls="SCREEN_ID"
+          @click="replay"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M4 10a6 6 0 1 0 1.8-4.3M4 3.5v3h3" /></svg>
+        </button>
+      </template>
 
-      <div v-if="mode === 'demo'" class="mt-3">
-        <p class="min-h-10 text-center text-sm text-pretty text-muted" aria-hidden="true" data-demo-caption>{{ caption }}</p>
-        <div class="mt-2 h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
-          <span class="block h-full rounded-full bg-brand" :style="{ width: progress }" />
-        </div>
-        <div class="mt-3 flex items-center justify-between gap-3">
-          <div class="flex gap-2">
-            <button type="button" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong bg-white px-4 text-sm font-semibold transition-colors hover:border-brand" :aria-controls="SCREEN_ID" @click="togglePlayback">{{ userPaused ? 'Phát demo' : 'Tạm dừng' }}</button>
-            <button type="button" class="focus-ring inline-flex min-h-11 items-center rounded-full border border-line-strong bg-white px-4 text-sm font-semibold transition-colors hover:border-brand" :aria-controls="SCREEN_ID" @click="replay">Phát lại</button>
-          </div>
-          <span class="text-xs text-muted tabular-nums" aria-hidden="true">{{ clock }}</span>
-        </div>
-      </div>
-
-      <div v-else class="mt-3 text-center">
-        <p class="text-sm text-pretty text-muted">Chạm tim, cuộn album và thử bốn bố cục. Tải xuống nhận ZIP ảnh mẫu đã chọn.</p>
-        <p class="mt-1 text-xs text-muted">Lựa chọn chỉ nằm trong bản demo này.</p>
-        <button type="button" class="focus-ring mt-3 inline-flex min-h-11 items-center rounded-full border border-line-strong bg-white px-5 text-sm font-semibold transition-colors hover:border-brand" :aria-controls="SCREEN_ID" @click="resetManual">Làm lại</button>
-      </div>
-
-      <p role="status" aria-live="polite" class="mt-2 min-h-5 text-center text-xs text-muted" :class="mode === 'demo' && 'sr-only'" data-demo-status>{{ status }}</p>
+      <p role="status" aria-live="polite" :class="mode === 'demo' ? 'sr-only' : 'min-w-0 flex-1 text-sm leading-5 text-pretty text-muted'" data-demo-status>{{ mode === 'manual' ? status || MANUAL_HINT : status }}</p>
+      <button v-if="mode === 'manual'" type="button" class="focus-ring inline-flex min-h-11 shrink-0 items-center rounded-full border border-line-strong bg-white px-4 text-sm font-semibold transition-colors hover:border-brand" :aria-controls="SCREEN_ID" @click="resetManual">Làm lại</button>
     </figcaption>
   </figure>
 </template>

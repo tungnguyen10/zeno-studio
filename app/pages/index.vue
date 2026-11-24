@@ -65,6 +65,21 @@ useHead({
   }],
 })
 
+// Decorative hearts and sparkles around the hero phone; positions are relative to the phone column.
+const HERO_HEARTS = [
+  { left: '-11%', top: '34%', size: 20, delay: '0s', duration: '6.5s' },
+  { left: '-15%', top: '60%', size: 14, delay: '2.4s', duration: '7.5s' },
+  { left: '-8%', top: '82%', size: 12, delay: '4.8s', duration: '6s' },
+  { left: '104%', top: '28%', size: 16, delay: '1.2s', duration: '7s' },
+  { left: '107%', top: '54%', size: 24, delay: '3.6s', duration: '8s' },
+  { left: '103%', top: '76%', size: 12, delay: '5.4s', duration: '6.5s' },
+]
+const HERO_SPARKS = [
+  { left: '-7%', top: '12%', size: 18, delay: '0s' },
+  { left: '106%', top: '10%', size: 12, delay: '1.4s' },
+  { left: '110%', top: '90%', size: 16, delay: '2.6s' },
+]
+
 const AUDIENCES = [
   {
     title: 'Cho studio',
@@ -95,19 +110,94 @@ const AUDIENCES = [
     </SiteHeader>
 
     <main>
-      <section aria-labelledby="hero-title" class="grid items-center gap-10 pb-16 pt-10 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(0,350px)] min-[761px]:gap-5 min-[761px]:pt-14 min-[1101px]:gap-12 lg:pb-24 lg:pt-20" :class="CONTAINER">
-        <div class="@container">
-          <p class="text-xs font-semibold uppercase tracking-[.16em] text-brand-soft sm:text-sm">Dành cho photographers</p>
-          <h1 id="hero-title" class="mt-4 text-[min(11cqw,5.5rem)] font-semibold leading-[1.04] tracking-[-.04em]">
-            <span class="block whitespace-nowrap">Khách chọn nhanh.</span>
-            <span class="block whitespace-nowrap text-brand">Bạn nhẹ việc.</span>
-          </h1>
-          <p class="mt-5 text-base leading-7 text-muted sm:mt-6 sm:text-lg sm:leading-8">Gửi album từ Google Drive.<br>Nhận rõ ảnh khách chọn.</p>
-          <NuxtLink to="/create" class="focus-ring mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-7 font-semibold text-white shadow-lg shadow-brand/15 transition-colors hover:bg-brand-dark sm:mt-8 sm:w-auto">Tạo album miễn phí</NuxtLink>
-          <p class="mt-4 text-sm text-muted">Khách không cần tài khoản.</p>
+      <div class="relative isolate overflow-x-clip">
+        <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+          <div class="absolute inset-0 opacity-70 bg-[radial-gradient(var(--color-line-strong)_1px,transparent_1.5px)] bg-size-[24px_24px] mask-[radial-gradient(ellipse_75%_65%_at_70%_45%,black,transparent)]" />
+          <div class="absolute -right-40 -top-48 size-152 rounded-full bg-radial from-gold/20 to-transparent to-70% motion-safe:animate-hero-drift" />
+          <div class="absolute -bottom-40 -left-48 size-136 rounded-full bg-radial from-brand-soft/20 to-transparent to-70% motion-safe:animate-hero-drift [animation-direction:alternate-reverse]" />
         </div>
-        <SelectionDemo />
-      </section>
+
+        <!-- Two-column phone shrinks (288–350px) so the whole device fits under the header on short laptop screens. -->
+        <section
+          aria-labelledby="hero-title"
+          class="grid items-center gap-10 pb-16 pt-10 min-[761px]:grid-cols-[minmax(0,1fr)_auto] min-[761px]:items-start min-[761px]:gap-5 min-[1101px]:gap-12 lg:pb-24 [--hero-phone-w:clamp(288px,calc((100svh-207px)*0.5417+16px),350px)] [--hero-phone-h:calc((var(--hero-phone-w)-16px)*720/390+16px)]"
+          :class="CONTAINER"
+        >
+          <!-- Centre the copy on the device itself (62px mode switch above it), not on the taller figure with controls. -->
+          <div class="@container min-[761px]:mt-[calc(62px+var(--hero-phone-h)/2)] min-[761px]:-translate-y-1/2">
+            <p class="inline-flex items-center gap-2 rounded-full border border-line bg-white/80 py-1.5 pl-2.5 pr-3.5 text-xs font-semibold uppercase tracking-[.16em] text-brand-soft shadow-sm backdrop-blur motion-safe:animate-hero-rise">
+              <span aria-hidden="true" class="relative flex size-2">
+                <span class="absolute inline-flex size-full rounded-full bg-gold opacity-70 motion-safe:animate-ping" />
+                <span class="relative inline-flex size-2 rounded-full bg-gold" />
+              </span>
+              Dành cho photographers
+            </p>
+            <!-- Underline offsets are em-based so the swoosh tracks "nhẹ việc" at every headline size. -->
+            <h1 id="hero-title" class="mt-5 text-[min(11cqw,5.5rem)] font-semibold leading-[1.04] tracking-[-.04em]">
+              <span class="block whitespace-nowrap motion-safe:animate-hero-rise" style="animation-delay: 60ms">Khách chọn nhanh.</span>
+              <span class="relative block w-fit whitespace-nowrap text-brand motion-safe:animate-hero-rise" style="animation-delay: 140ms">Bạn nhẹ việc.<svg aria-hidden="true" viewBox="0 0 200 12" preserveAspectRatio="none" fill="none" class="absolute bottom-[-0.2em] left-[1.84em] h-[.16em] w-[calc(100%-2.2em)] text-gold"><path d="M3 8.5C45 3.5 120 1.5 197 5.5" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" class="motion-safe:animate-hero-draw" /></svg></span>
+            </h1>
+            <ul class="mt-7 space-y-3 text-base text-muted sm:text-lg">
+              <li class="flex items-center gap-3 motion-safe:animate-hero-rise" style="animation-delay: 240ms">
+                <span aria-hidden="true" class="grid size-9 shrink-0 place-items-center rounded-full bg-tint text-brand">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" class="size-4.5"><path d="M2.75 6.25a1.5 1.5 0 0 1 1.5-1.5h3.4l1.6 1.75h6.5a1.5 1.5 0 0 1 1.5 1.5v6.75a1.5 1.5 0 0 1-1.5 1.5H4.25a1.5 1.5 0 0 1-1.5-1.5Z" /></svg>
+                </span>
+                Gửi album từ Google Drive.
+              </li>
+              <li class="flex items-center gap-3 motion-safe:animate-hero-rise" style="animation-delay: 320ms">
+                <span aria-hidden="true" class="grid size-9 shrink-0 place-items-center rounded-full bg-heart-soft text-heart">
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="size-4.5"><path d="M10 17.3 8.8 16.2C4.6 12.4 2 10 2 7.1 2 4.7 3.9 2.8 6.3 2.8c1.4 0 2.7.6 3.7 1.7 1-1.1 2.3-1.7 3.7-1.7C16.1 2.8 18 4.7 18 7.1c0 2.9-2.6 5.3-6.8 9.1L10 17.3Z" /></svg>
+                </span>
+                Nhận rõ ảnh khách chọn.
+              </li>
+            </ul>
+            <div class="mt-8 flex flex-col gap-4 motion-safe:animate-hero-rise @md:flex-row @md:items-center @md:gap-5" style="animation-delay: 420ms">
+              <NuxtLink to="/create" class="focus-ring group inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-7 font-semibold text-white shadow-lg shadow-brand/20 transition-[background-color,box-shadow] hover:bg-brand-dark hover:shadow-xl hover:shadow-brand/25 @md:w-auto">
+                Tạo album miễn phí
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"><path d="M4 10h11M11 5.5 15.5 10 11 14.5" /></svg>
+              </NuxtLink>
+              <p class="inline-flex items-center justify-center gap-2 text-sm text-muted @md:justify-start">
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 text-brand-soft"><path d="m4.5 10.5 3.5 3.5 7.5-8" /></svg>
+                Khách không cần tài khoản.
+              </p>
+            </div>
+          </div>
+
+          <div class="relative isolate mx-auto w-full max-w-87.5 motion-safe:animate-hero-pop min-[761px]:w-(--hero-phone-w)" style="animation-delay: 150ms">
+            <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+              <div class="absolute left-1/2 top-1/2 aspect-square w-[140%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-radial from-gold/15 via-tint/70 to-transparent to-70%" />
+              <div class="absolute left-1/2 top-1/2 aspect-square w-[155%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-line-strong/50" />
+              <div class="absolute left-1/2 top-1/2 aspect-square w-[122%] -translate-x-1/2 -translate-y-1/2">
+                <div class="relative size-full rounded-full border border-dashed border-line-strong motion-safe:animate-hero-spin">
+                  <span class="absolute left-1/2 top-0 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold shadow-[0_0_0_4px_rgb(232_172_34/0.18)]" />
+                  <span class="absolute bottom-0 left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-heart/70" />
+                </div>
+              </div>
+              <svg
+                v-for="(heart, index) in HERO_HEARTS"
+                :key="`heart-${index}`"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="absolute text-heart opacity-40 motion-safe:animate-hero-heart"
+                :style="{ left: heart.left, top: heart.top, width: `${heart.size}px`, height: `${heart.size}px`, animationDelay: heart.delay, animationDuration: heart.duration }"
+              >
+                <path d="M10 17.3 8.8 16.2C4.6 12.4 2 10 2 7.1 2 4.7 3.9 2.8 6.3 2.8c1.4 0 2.7.6 3.7 1.7 1-1.1 2.3-1.7 3.7-1.7C16.1 2.8 18 4.7 18 7.1c0 2.9-2.6 5.3-6.8 9.1L10 17.3Z" />
+              </svg>
+              <svg
+                v-for="(spark, index) in HERO_SPARKS"
+                :key="`spark-${index}`"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="absolute text-gold motion-safe:animate-hero-twinkle"
+                :style="{ left: spark.left, top: spark.top, width: `${spark.size}px`, height: `${spark.size}px`, animationDelay: spark.delay }"
+              >
+                <path d="M10 0c.6 5.2 4.8 9.4 10 10-5.2.6-9.4 4.8-10 10-.6-5.2-4.8-9.4-10-10 5.2-.6 9.4-4.8 10-10Z" />
+              </svg>
+            </div>
+            <SelectionDemo />
+          </div>
+        </section>
+      </div>
 
       <section id="quy-trinh" aria-labelledby="workflow-title" class="bg-tint py-14 sm:py-20">
         <div :class="CONTAINER">

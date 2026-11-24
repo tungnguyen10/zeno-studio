@@ -32,7 +32,6 @@ Hai nhóm người dùng liên quan:
 | Subline dòng 2 | Nhận rõ ảnh khách chọn. |
 | CTA chính | Tạo album miễn phí |
 | Dòng hỗ trợ | Khách không cần tài khoản. |
-| Nhãn demo | Demo tự chạy · 24 ảnh mẫu |
 | Tiêu đề phần quy trình | Từ album đến bộ ảnh cần làm. |
 
 CTA tạo album trỏ đến `https://studio.zenocorp.vn/create`; đăng nhập trỏ đến `https://studio.zenocorp.vn/studio`. Logo prototype dẫn về đầu trang. Khi đưa vào Nuxt, dùng navigation nội bộ tương ứng.
@@ -41,7 +40,9 @@ CTA tạo album trỏ đến `https://studio.zenocorp.vn/create`; đăng nhập 
 
 Desktop đặt copy bên trái, điện thoại bên phải. Headline có hai dòng, trong đó dòng lợi ích cho photographer dùng màu brand. Chỉ một CTA có độ nhấn cao trong khối hero. Subline giải thích nguồn album và kết quả, không liệt kê toàn bộ tính năng.
 
-Điện thoại là visual chính của hero. Không đặt thêm một demo cùng nội dung ở ngay bên dưới. Nhãn, caption và điều khiển phát nằm ngoài màn hình điện thoại để tách hướng dẫn trình diễn khỏi UI sản phẩm.
+Điện thoại là visual chính của hero. Không đặt thêm một demo cùng nội dung ở ngay bên dưới. Điều khiển nằm ngoài màn hình điện thoại để tách hướng dẫn trình diễn khỏi UI sản phẩm: công tắc Xem demo/Tự chọn ảnh ở trên điện thoại; một hàng bên dưới gồm nút Tạm dừng/Phát demo có vòng tiến độ, caption và nút Phát lại (chế độ tự chọn: gợi ý/trạng thái và nút Làm lại). Trên desktop/tablet, khung điện thoại co theo chiều cao màn hình (288–350px) để nằm trọn dưới header; copy căn giữa theo thân điện thoại.
+
+Trang trí hero chỉ là lớp nền `aria-hidden`, không bắt sự kiện: lưới chấm, vầng sáng vàng logo/xanh brand, vòng quỹ đạo, tim và lấp lánh quanh điện thoại (nằm sau điện thoại). Chuyển động gồm copy hiện dần, điện thoại trượt lên, gạch chân vàng dưới “nhẹ việc” và nền trôi chậm; tất cả chỉ chạy khi `prefers-reduced-motion: no-preference`. Hiệu ứng vào không dùng scale để giữ vùng chạm 44px.
 
 Ở mobile, thứ tự là copy → CTA → dòng hỗ trợ → điện thoại. Giữ điện thoại đủ lớn để xem ảnh và nhận ra trạng thái chọn; không thu toàn bộ nội dung xuống để ép vừa một màn hình.
 

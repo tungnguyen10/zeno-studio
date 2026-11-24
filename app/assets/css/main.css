@@ -19,6 +19,44 @@
   --color-warn-soft: #fff8e9;
   --color-warn-line: #e9d6b3;
   --color-night: #121612;
+  /* Logo gold; homepage accent only. */
+  --color-gold: #e8ac22;
+
+  /* Homepage hero motion; always applied through `motion-safe:`. */
+  --animate-hero-rise: hero-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-hero-pop: hero-pop 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-hero-draw: hero-draw 0.9s cubic-bezier(0.65, 0, 0.35, 1) 0.7s both;
+  --animate-hero-heart: hero-heart 7s ease-out infinite both;
+  --animate-hero-spin: hero-spin 60s linear infinite;
+  --animate-hero-drift: hero-drift 18s ease-in-out infinite alternate;
+  --animate-hero-twinkle: hero-twinkle 3.6s ease-in-out infinite;
+
+  @keyframes hero-rise {
+    from { opacity: 0; transform: translateY(14px); }
+  }
+  @keyframes hero-pop {
+    from { opacity: 0; transform: translateY(28px); }
+  }
+  @keyframes hero-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes hero-heart {
+    0% { opacity: 0; transform: translateY(0) scale(0.6); }
+    15% { opacity: 0.9; }
+    70% { opacity: 0.5; }
+    100% { opacity: 0; transform: translateY(-130px) scale(1.15) rotate(14deg); }
+  }
+  @keyframes hero-spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes hero-drift {
+    to { transform: translate3d(-48px, 32px, 0) scale(1.08); }
+  }
+  @keyframes hero-twinkle {
+    0%, 100% { opacity: 0.25; transform: scale(0.7) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1) rotate(45deg); }
+  }
 }
 
 :root {
